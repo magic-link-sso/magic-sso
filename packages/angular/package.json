@@ -1,0 +1,70 @@
+{
+    "name": "@magic-link-sso/angular",
+    "version": "0.9.0",
+    "description": "Magic Link SSO helpers for Angular SSR apps",
+    "keywords": [
+        "angular",
+        "auth",
+        "jwt",
+        "magic-link",
+        "sso",
+        "ssr"
+    ],
+    "homepage": "https://github.com/magic-link-sso/magic-sso#readme",
+    "bugs": {
+        "url": "https://github.com/magic-link-sso/magic-sso/issues"
+    },
+    "license": "MIT",
+    "author": {
+        "name": "Wojciech Polak"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/magic-link-sso/magic-sso.git",
+        "directory": "packages/angular"
+    },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./core": {
+            "types": "./dist/lib/core.d.ts",
+            "default": "./dist/lib/core.js"
+        }
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "scripts": {
+        "build": "pnpm run clean && tsc -p tsconfig.json",
+        "build:watch": "tsc -p tsconfig.json --watch",
+        "clean": "rm -rf dist tsconfig.tsbuildinfo",
+        "format": "oxfmt .",
+        "format:check": "oxfmt --check .",
+        "lint": "oxlint .",
+        "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "jose": "^6.2.2"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "typescript": "~5.9.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

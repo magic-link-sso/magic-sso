@@ -1,0 +1,108 @@
+[server]
+appPort = 3000
+appUrl = "http://localhost:3000"
+logLevel = "info"
+# Choose "json" for structured logs or "pretty" for human-friendly local output.
+logFormat = "json"
+# Set to false if another app or reverse proxy should own GET / instead.
+serveRootLandingPage = true
+# Set this when running behind a trusted reverse proxy so HTTPS-aware headers
+# such as HSTS can be emitted correctly.
+trustProxy = false
+verifyTokenStoreDir = ".magic-sso/verification-tokens"
+signInEmailRateLimitStoreDir = ".magic-sso/signin-email-rate-limit"
+
+[server.securityState]
+# Keep "file" for a single instance. Switch to "redis" when multiple
+# Magic Link SSO server instances must share replay protection and sign-in
+# throttling state.
+adapter = "file"
+# redisUrl = "redis://127.0.0.1:6379/0"
+keyPrefix = "magic-sso"
+
+[auth]
+jwtSecret = "replace-me-with-a-long-random-jwt-secret"
+jwtExpiration = "1h"
+csrfSecret = "replace-me-with-a-different-long-random-csrf-secret"
+emailSecret = "replace-me-with-a-different-long-random-email-secret"
+previewSecret = "replace-me-with-a-different-long-random-preview-secret"
+emailExpiration = "15m"
+
+[cookie]
+name = "magic-sso"
+httpOnly = true
+sameSite = "lax"
+# Set to true in production when the server is reached over HTTPS.
+secure = false
+
+[email]
+from = "owner@example.com"
+signature = "Magic Link SSO"
+
+[email.smtp]
+host = "smtp.example.com"
+port = 587
+user = "smtp-user"
+pass = "smtp-password"
+secure = false
+
+[rateLimit]
+windowMs = 600000
+healthzMax = 60
+signInEmailMax = 5
+signInMax = 20
+signInPageMax = 30
+verifyMax = 40
+
+[hostedAuth.branding]
+title = "Magic Link SSO"
+logoText = "SSO"
+
+[[sites]]
+id = "nextjs-local"
+origins = ["http://localhost:3001"]
+# Use "/*" for descendant paths only. It matches /verify-email/... but not
+# sibling paths like /verify-email-malicious.
+allowedRedirectUris = ["http://localhost:3001/verify-email", "http://localhost:3001/*"]
+allowedEmails = ["nextjs-admin@example.com"]
+
+[[sites.accessRules]]
+email = "nextjs-user@example.com"
+scopes = ["gallery:album-a", "gallery:album-b"]
+
+[sites.hostedAuth.branding]
+title = "Northwind Portal"
+logoText = "NW"
+
+[[sites]]
+id = "nuxt-local"
+origins = ["http://localhost:3002"]
+allowedRedirectUris = ["http://localhost:3002/verify-email", "http://localhost:3002/*"]
+
+[[sites.accessRules]]
+email = "nuxt-user@example.com"
+scopes = ["reports"]
+
+[sites.hostedAuth.branding]
+title = "Contoso Console"
+logoText = "CC"
+
+[[sites]]
+id = "angular-local"
+origins = ["http://localhost:3004"]
+allowedRedirectUris = ["http://localhost:3004/verify-email", "http://localhost:3004/*"]
+allowedEmails = ["angular-user@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Adventure Works Ops"
+logoText = "AW"
+
+[[sites]]
+id = "django-local"
+origins = ["http://localhost:8000"]
+allowedRedirectUris = ["http://localhost:8000/verify-email", "http://localhost:8000/*"]
+allowedEmails = ["django-user@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Fabrikam Admin"
+logoText = "FA"

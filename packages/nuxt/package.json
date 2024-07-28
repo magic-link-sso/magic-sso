@@ -1,0 +1,76 @@
+{
+    "name": "@magic-link-sso/nuxt",
+    "version": "0.9.0",
+    "description": "Magic Link SSO for Nuxt",
+    "keywords": [
+        "auth",
+        "jwt",
+        "magic-link",
+        "nuxt",
+        "sso"
+    ],
+    "homepage": "https://github.com/magic-link-sso/magic-sso#readme",
+    "bugs": {
+        "url": "https://github.com/magic-link-sso/magic-sso/issues"
+    },
+    "license": "MIT",
+    "author": {
+        "name": "Wojciech Polak"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/magic-link-sso/magic-sso.git",
+        "directory": "packages/nuxt"
+    },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./server": {
+            "types": "./dist/runtime/server/index.d.ts",
+            "default": "./dist/runtime/server/index.js"
+        }
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "scripts": {
+        "build": "pnpm run clean && tsc -p tsconfig.json",
+        "build:watch": "tsc -p tsconfig.json --watch",
+        "clean": "rm -rf dist tsconfig.tsbuildinfo",
+        "format": "oxfmt .",
+        "format:check": "oxfmt --check .",
+        "lint": "oxlint .",
+        "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@nuxt/kit": "^4.4.2",
+        "h3": "^1.15.11",
+        "jose": "^6.2.2",
+        "nitropack": "^2.13.3"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "nuxt": "^4.4.2",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5"
+    },
+    "peerDependencies": {
+        "nuxt": "^4.2.0"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

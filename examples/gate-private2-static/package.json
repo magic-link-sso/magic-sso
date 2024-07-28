@@ -1,0 +1,24 @@
+{
+    "name": "example-app-gate-private2-static",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "build": "node -e \"console.log('private2-static is static; no build step needed.')\"",
+        "dev": "serve -s public -l tcp://0.0.0.0:${PORT:-3008}",
+        "format": "oxfmt package.json tsconfig.json vitest.config.ts .env.example README.md Dockerfile Caddyfile public tests",
+        "format:check": "oxfmt --check package.json tsconfig.json vitest.config.ts .env.example README.md Dockerfile Caddyfile public tests",
+        "lint": "oxlint tests vitest.config.ts",
+        "start": "serve -s public -l tcp://0.0.0.0:${PORT:-3008}",
+        "test": "vitest run --config vitest.config.ts",
+        "typecheck": "tsc -p tsconfig.json --noEmit"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "serve": "^14.2.6",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

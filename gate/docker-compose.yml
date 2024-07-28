@@ -1,0 +1,139 @@
+# SSO TOML render values used by the Docker Compose bootstrap step
+x-sso-render-env: &sso-render-env
+  MAGICSSO_SERVER_URL: http://${SSO_PUBLIC_HOST:-sso.localhost}:${PUBLIC_PROXY_PORT:-4306}
+  MAGICSSO_JWT_SECRET: ${MAGICSSO_JWT_SECRET:-gate-dev-jwt-secret-1234567890abcd}
+  MAGICSSO_COOKIE_NAME: ${MAGICSSO_COOKIE_NAME:-magic-sso}
+  MAGICSSO_COOKIE_MAX_AGE: ${MAGICSSO_COOKIE_MAX_AGE:-3600}
+  MAGICSSO_DEV_CSRF_SECRET: ${MAGICSSO_DEV_CSRF_SECRET:-gate-dev-csrf-secret-1234567890abc}
+  MAGICSSO_DEV_EMAIL_SECRET: ${MAGICSSO_DEV_EMAIL_SECRET:-gate-dev-email-secret-1234567890ab}
+  MAGICSSO_PREVIEW_SECRET: ${MAGICSSO_PREVIEW_SECRET:-gate-dev-preview-secret-123456789}
+  MAILPIT_SMTP_HOST: ${MAILPIT_SMTP_HOST:-mailpit}
+  MAILPIT_SMTP_PASS: ${MAILPIT_SMTP_PASS:-mailpit}
+  MAILPIT_SMTP_PORT: ${MAILPIT_SMTP_PORT:-1025}
+  MAILPIT_SMTP_USER: ${MAILPIT_SMTP_USER:-mailpit}
+  PRIVATE1_ALLOWED_EMAIL: ${PRIVATE1_ALLOWED_EMAIL:-private1@example.com}
+  PRIVATE1_PUBLIC_HOST: ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
+  PRIVATE2_ALLOWED_EMAIL: ${PRIVATE2_ALLOWED_EMAIL:-private2@example.com}
+  PRIVATE2_PUBLIC_HOST: ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
+  PUBLIC_PROXY_PORT: ${PUBLIC_PROXY_PORT:-4306}
+  SSO_PUBLIC_HOST: ${SSO_PUBLIC_HOST:-sso.localhost}
+
+# Gate TOML render values used by the Docker Compose bootstrap step.
+# These are the only env names the Gate container sees before startup.
+x-gate-render-env: &gate-render-env
+  MAGIC_GATE_RENDER_DIRECT_USE: ${MAGIC_GATE_RENDER_DIRECT_USE:-true}
+  MAGIC_GATE_RENDER_COOKIE_MAX_AGE: ${MAGIC_GATE_RENDER_COOKIE_MAX_AGE:-3600}
+  MAGIC_GATE_RENDER_COOKIE_NAME: ${MAGIC_GATE_RENDER_COOKIE_NAME:-magic-sso}
+  MAGIC_GATE_RENDER_JWT_SECRET: ${MAGIC_GATE_RENDER_JWT_SECRET:-gate-dev-jwt-secret-1234567890abcd}
+  MAGIC_GATE_RENDER_PREVIEW_SECRET: ${MAGIC_GATE_RENDER_PREVIEW_SECRET:-gate-dev-preview-secret-123456789}
+  MAGIC_GATE_RENDER_MODE: ${MAGIC_GATE_RENDER_MODE:-subdomain}
+  MAGIC_GATE_RENDER_NAMESPACE: ${MAGIC_GATE_RENDER_NAMESPACE:-/_magicgate}
+  MAGIC_GATE_RENDER_SERVER_URL: ${MAGIC_GATE_RENDER_SERVER_URL:-http://${SSO_PUBLIC_HOST:-sso.localhost}:${PUBLIC_PROXY_PORT:-4306}}
+  MAGIC_GATE_RENDER_REQUEST_TIMEOUT_MS: ${MAGIC_GATE_RENDER_REQUEST_TIMEOUT_MS:-10000}
+  MAGIC_GATE_RENDER_RATE_LIMIT_MAX: ${MAGIC_GATE_RENDER_RATE_LIMIT_MAX:-240}
+  MAGIC_GATE_RENDER_RATE_LIMIT_WINDOW_MS: ${MAGIC_GATE_RENDER_RATE_LIMIT_WINDOW_MS:-60000}
+  MAGIC_GATE_RENDER_TRUST_PROXY: ${MAGIC_GATE_RENDER_TRUST_PROXY:-true}
+  MAGIC_GATE_RENDER_WS_ENABLED: ${MAGIC_GATE_RENDER_WS_ENABLED:-true}
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - '${MAILPIT_HTTP_PORT:-8025}:8025'
+
+  magic-sso:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      MAGICSSO_CONFIG_FILE: /app/server/magic-sso.toml
+      <<: *sso-render-env
+    restart: unless-stopped
+    volumes:
+      - ./dev/magic-sso.toml.template:/app/server/magic-sso.toml.template:ro
+      - ./dev/render-magic-sso-config.mjs:/app/server/render-magic-sso-config.mjs:ro
+    command: >
+      sh -c "node /app/server/render-magic-sso-config.mjs && node dist/main.js"
+    depends_on:
+      - mailpit
+
+  private1-upstream:
+    build:
+      context: ..
+      dockerfile: examples/gate-private1-app/Dockerfile
+    environment:
+      PORT: ${PRIVATE1_UPSTREAM_PORT:-3007}
+    restart: unless-stopped
+
+  private2-static:
+    build:
+      context: ..
+      dockerfile: examples/gate-private2-static/Dockerfile
+    environment:
+      PORT: ${PRIVATE2_UPSTREAM_PORT:-3008}
+    restart: unless-stopped
+    volumes:
+      - ../examples/gate-private2-static/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../examples/gate-private2-static/public:/srv:ro
+
+  magic-gate-private1:
+    build:
+      context: ..
+      dockerfile: gate/Dockerfile
+    environment:
+      MAGIC_GATE_CONFIG_FILE: /app/gate/magic-gate.toml
+      <<: *gate-render-env
+      MAGIC_GATE_RENDER_PUBLIC_ORIGIN: http://${PRIVATE1_PUBLIC_HOST:-private1.localhost}:${PUBLIC_PROXY_PORT:-4306}
+      MAGIC_GATE_RENDER_UPSTREAM_URL: http://private1-upstream:${PRIVATE1_UPSTREAM_PORT:-3007}
+    restart: unless-stopped
+    volumes:
+      - ./dev/magic-gate.toml.template:/app/gate/magic-gate.toml.template:ro
+      - ./dev/render-magic-gate-config.mjs:/app/gate/render-magic-gate-config.mjs:ro
+    command: >
+      sh -c "node /app/gate/render-magic-gate-config.mjs && node dist/main.js"
+    depends_on:
+      - private1-upstream
+      - magic-sso
+
+  magic-gate-private2:
+    build:
+      context: ..
+      dockerfile: gate/Dockerfile
+    environment:
+      MAGIC_GATE_CONFIG_FILE: /app/gate/magic-gate.toml
+      <<: *gate-render-env
+      MAGIC_GATE_RENDER_PUBLIC_ORIGIN: http://${PRIVATE2_PUBLIC_HOST:-private2.localhost}:${PUBLIC_PROXY_PORT:-4306}
+      MAGIC_GATE_RENDER_UPSTREAM_URL: http://private2-static:${PRIVATE2_UPSTREAM_PORT:-3008}
+    restart: unless-stopped
+    volumes:
+      - ./dev/magic-gate.toml.template:/app/gate/magic-gate.toml.template:ro
+      - ./dev/render-magic-gate-config.mjs:/app/gate/render-magic-gate-config.mjs:ro
+    command: >
+      sh -c "node /app/gate/render-magic-gate-config.mjs && node dist/main.js"
+    depends_on:
+      - private2-static
+      - magic-sso
+
+  public-proxy:
+    image: caddy:2-alpine
+    environment:
+      PRIVATE1_PUBLIC_HOST: ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
+      PRIVATE2_PUBLIC_HOST: ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
+      PUBLIC_PROXY_PORT: ${PUBLIC_PROXY_PORT:-4306}
+      SSO_PUBLIC_HOST: ${SSO_PUBLIC_HOST:-sso.localhost}
+    ports:
+      - '${PUBLIC_PROXY_PORT:-4306}:${PUBLIC_PROXY_PORT:-4306}'
+    restart: unless-stopped
+    volumes:
+      - ./dev/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - magic-gate-private1
+      - magic-gate-private2
+      - magic-sso
+    networks:
+      default:
+        aliases:
+          - ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
+          - ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
+          - ${SSO_PUBLIC_HOST:-sso.localhost}

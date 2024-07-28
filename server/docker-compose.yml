@@ -1,0 +1,21 @@
+services:
+  magic-sso:
+    image: ${APP_IMAGE:-ghcr.io/magic-link-sso/magic-sso/server:latest}
+    restart: unless-stopped
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    ports:
+      - '${PORT_HTTP:-3000}:3000'
+    read_only: true
+    tmpfs:
+      - /app/server/.magic-sso
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    env_file:
+      - .env
+    volumes:
+      - ${MAGICSSO_CONFIG_FILE:-./magic-sso.toml}:/app/server/magic-sso.toml:ro

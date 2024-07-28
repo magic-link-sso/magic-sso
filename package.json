@@ -1,0 +1,83 @@
+{
+    "name": "magic-sso-workspace",
+    "private": true,
+    "scripts": {
+        "audit": "pnpm run audit:js && pnpm run audit:python",
+        "audit:js": "pnpm audit -P",
+        "audit:python": "node scripts/audit-python.mjs",
+        "build": "turbo run build",
+        "check": "turbo run lint format:check build typecheck && pnpm run test && pnpm run python:check",
+        "changelog:preview": "node scripts/changelog.mjs preview",
+        "changelog:release": "node scripts/changelog.mjs release",
+        "deps:upgrade": "node scripts/upgrade-deps.mjs compatible",
+        "deps:upgrade:latest": "node scripts/upgrade-deps.mjs latest",
+        "dev:angular": "pnpm --filter example-app-angular dev",
+        "dev:angular:package": "pnpm --filter @magic-link-sso/angular build:watch",
+        "dev:django": "pnpm --filter example-app-django dev",
+        "dev:fastify": "pnpm --filter example-app-fastify dev",
+        "dev:gate": "pnpm --filter magic-sso-gate dev",
+        "dev:gate:stack": "docker compose --env-file gate/.env -f gate/docker-compose.yml up --build",
+        "dev:nextjs": "pnpm --filter example-app-nextjs dev",
+        "dev:nextjs:package": "pnpm --filter @magic-link-sso/nextjs build:watch",
+        "dev:nuxt": "pnpm --filter example-app-nuxt dev",
+        "dev:nuxt:package": "pnpm --filter @magic-link-sso/nuxt build:watch",
+        "dev:private1": "pnpm --filter example-app-gate-private1 dev",
+        "dev:private2": "pnpm --filter example-app-gate-private2-static dev",
+        "dev:server": "pnpm --filter magic-sso-server dev",
+        "dev:direct": "MAGICSSO_DIRECT_USE=true pnpm dev",
+        "dev": "turbo run dev --filter=magic-sso-server --filter=example-app-angular --filter=example-app-django --filter=example-app-fastify --filter=example-app-nextjs --filter=example-app-nuxt",
+        "docs:flow": "bash ./scripts/generate-flow-diagram-images.sh",
+        "format": "turbo run format",
+        "format:check": "turbo run format:check",
+        "lint": "turbo run lint",
+        "python:check": "make python-check",
+        "python:sync": "make python-sync",
+        "python:test": "make python-test",
+        "release:prepare": "node scripts/release-prepare.mjs",
+        "test": "pnpm run test:root && turbo run test",
+        "test:coverage": "pnpm --filter magic-sso-server test:coverage",
+        "test:e2e": "pnpm --filter magic-sso-e2e test:e2e",
+        "test:e2e:ui": "pnpm --filter magic-sso-e2e test:e2e:ui",
+        "test:js": "pnpm run test:root && turbo run test --filter=!example-app-django",
+        "test:gate": "pnpm --filter magic-sso-gate test",
+        "typecheck": "turbo run typecheck",
+        "test:root": "vitest run scripts/*.test.ts",
+        "version:bump": "node scripts/bump-version.mjs",
+        "prepare": "husky"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "git-cliff": "^2.12.0",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.4.0",
+        "npm-check-updates": "^20.0.2",
+        "oxfmt": "latest",
+        "oxlint": "latest",
+        "turbo": "latest",
+        "vitest": "^4.1.5"
+    },
+    "lint-staged": {
+        "*": "oxfmt --write --no-error-on-unmatched-pattern",
+        "*.{ts,html}": "oxlint -c .oxlintrc.json --fix --no-error-on-unmatched-pattern"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    },
+    "packageManager": "pnpm@10.30.3",
+    "pnpm": {
+        "overrides": {
+            "@hono/node-server@<1.19.13": ">=1.19.13",
+            "brace-expansion@>=2.0.0 <2.0.3": ">=2.0.3",
+            "defu@<=6.1.4": ">=6.1.5",
+            "hono@<4.12.12": ">=4.12.12",
+            "hono@>=4.0.0 <=4.12.11": ">=4.12.12",
+            "lodash@<=4.17.23": ">=4.18.0",
+            "lodash@>=4.0.0 <=4.17.23": ">=4.18.0",
+            "nodemailer@<=8.0.4": ">=8.0.5",
+            "vite@>=7.0.0 <=7.3.1": ">=7.3.2",
+            "vite@>=7.1.0 <=7.3.1": ">=7.3.2",
+            "vite@>=8.0.0 <=8.0.4": ">=8.0.5",
+            "postcss": "^8.5.10"
+        }
+    }
+}

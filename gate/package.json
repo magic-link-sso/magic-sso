@@ -1,0 +1,39 @@
+{
+    "name": "magic-sso-gate",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "tsx watch src/main.ts",
+        "format": "oxfmt package.json tsconfig.json vitest.config.ts .env.example .env.prod.example README.md magic-gate.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src tests",
+        "format:check": "oxfmt --check package.json tsconfig.json vitest.config.ts .env.example .env.prod.example README.md magic-gate.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src tests",
+        "lint": "oxlint src tests",
+        "start": "node dist/main.js",
+        "test": "vitest run --config vitest.config.ts",
+        "typecheck": "tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@fastify/cookie": "^11.0.2",
+        "@fastify/formbody": "^8.0.2",
+        "dotenv": "^17.4.2",
+        "fastify": "^5.8.5",
+        "ioredis": "^5.10.1",
+        "jose": "^6.2.2",
+        "magic-sso-example-ui": "workspace:*",
+        "smol-toml": "^1.6.1",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@fastify/websocket": "^11.2.0",
+        "@types/node": "^25.6.0",
+        "@types/ws": "^8.18.1",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.5",
+        "ws": "^8.20.0"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

@@ -1,0 +1,93 @@
+{
+    "$schema": "https://turbo.build/schema.json",
+    "tasks": {
+        "build": {
+            "dependsOn": ["^build"],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": ["dist/**", ".next/**", ".nuxt/**", ".output/**"]
+        },
+        "lint": {
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": []
+        },
+        "test": {
+            "dependsOn": ["^build"],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": []
+        },
+        "typecheck": {
+            "dependsOn": ["^build"],
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": []
+        },
+        "format": {
+            "cache": false,
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": []
+        },
+        "format:check": {
+            "inputs": [
+                "$TURBO_DEFAULT$",
+                "!.turbo/**",
+                "!node_modules/**",
+                "!.next/**",
+                "!.nuxt/**",
+                "!.output/**",
+                "!dist/**"
+            ],
+            "outputs": []
+        },
+        "dev": {
+            "cache": false,
+            "env": [
+                "MAGICSSO_COOKIE_NAME",
+                "MAGICSSO_DIRECT_USE",
+                "MAGICSSO_JWT_SECRET",
+                "MAGICSSO_PREVIEW_SECRET",
+                "MAGICSSO_PUBLIC_ORIGIN",
+                "MAGICSSO_SERVER_URL"
+            ],
+            "persistent": true
+        }
+    }
+}

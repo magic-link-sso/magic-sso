@@ -1,0 +1,28 @@
+{
+    "name": "magic-sso-e2e",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "format": "oxfmt .",
+        "format:check": "oxfmt --check .",
+        "lint": "oxlint .",
+        "mail-sink": "node src/smtp-sink.mjs",
+        "test": "vitest run tests/*.test.ts",
+        "test:e2e": "pnpm run test:e2e:indirect && pnpm run test:e2e:direct",
+        "test:e2e:direct": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.direct.config.ts",
+        "test:e2e:headed": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts --headed",
+        "test:e2e:indirect": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts",
+        "test:e2e:ui": "env -u NO_COLOR -u FORCE_COLOR PW_SLOWMO_MS=${PW_SLOWMO_MS:-700} playwright test --config playwright.indirect.config.ts --ui",
+        "typecheck": "tsc -p tsconfig.json"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.59.1",
+        "@types/node": "^25.6.0",
+        "mailparser": "latest",
+        "smtp-server": "latest",
+        "typescript": "^5.9.3"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

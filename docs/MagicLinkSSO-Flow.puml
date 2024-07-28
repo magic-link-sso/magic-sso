@@ -1,0 +1,80 @@
+@startuml MagicLinkSSO-Flow
+
+title Magic Link SSO Authentication Flow (Site + Scope Aware)
+
+actor User
+participant "Client App\n(Angular / Fastify /\nNext.js / Nuxt / Django)" as Client
+participant "SSO Server" as SSO
+participant "Email Server" as Email
+collections "Token Service\n(verification JWT signing,\naccess JWT signing,\n+ used-token replay cache)" as TokenService
+
+== Redirect Flow ==
+
+User -> Client: Access Protected Page (/protected)
+Client -> Client: Check auth cookie
+alt Cookie exists and is valid
+    Client -> User: Render protected content
+else Cookie missing or invalid
+    Client -> User: Redirect to SSO /signin\n?returnUrl=...&verifyUrl=...&scope=...
+    User -> SSO: Open /signin
+    SSO -> User: Render hosted sign-in page
+    User -> SSO: Submit email address\n(scope is optional app-provided context)
+    SSO -> SSO: Resolve site from returnUrl/verifyUrl\nand authorize email + requested scope
+    SSO -> TokenService: Sign verification token\n(JWT + iss + aud(siteId) + scope + jti)
+    SSO -> Email: Send magic link to configured verifyUrl?token=...
+    Email --> User: Receive magic link email
+
+    User -> Email: Click magic link
+    Email -> User: Open client /verify-email?token=...
+    User -> Client: GET /verify-email?token=...
+    Client -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
+    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
+    SSO --> Client: 200 JSON { email }
+    Client -> User: Render no-store confirmation page\n(preview token is not consumed)
+    Client -> SSO: POST /verify-email { token } (Accept: application/json)
+    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
+    SSO --> Client: 200 JSON { accessToken(email, scope) }
+    Client -> Client: Verify access token\n(expected iss + aud + signature)\nand set auth cookie
+    Client -> User: Redirect to protected page
+end
+
+== API Flow ==
+
+User -> Client: Access Protected Page (/protected)
+Client -> Client: Check auth cookie
+alt Cookie exists and is valid
+    Client -> User: Render protected content
+else Cookie missing or invalid
+    Client -> User: Render local login UI
+    User -> Client: Submit email address
+    Client -> SSO: POST /signin { email, returnUrl, verifyUrl, scope? }
+    SSO -> SSO: Resolve site from returnUrl/verifyUrl\nand authorize email + requested scope
+    SSO -> TokenService: Sign verification token\n(JWT + iss + aud(siteId) + scope + jti)
+    SSO -> Email: Send magic link to configured verifyUrl?token=...
+    Email --> User: Receive magic link email
+
+    User -> Email: Click magic link
+    Email -> User: Open client /verify-email?token=...
+    User -> Client: GET /verify-email?token=...
+    Client -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
+    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
+    SSO --> Client: 200 JSON { email }
+    Client -> User: Render no-store confirmation page\n(preview token is not consumed)
+    Client -> SSO: POST /verify-email { token } (Accept: application/json)
+    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
+    SSO --> Client: 200 JSON { accessToken(email, scope) }
+    Client -> Client: Verify access token\n(expected iss + aud + signature)\nand set auth cookie
+    Client -> User: Redirect to protected page
+end
+
+== Server-Managed Verify Flow ==
+
+User -> SSO: GET /verify-email?token=...
+SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
+SSO -> User: Render no-store confirmation page\nset temporary HttpOnly token cookie + CSRF cookie\nand remove token from URL
+User -> SSO: POST /verify-email\n(CSRF form token)
+SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
+SSO -> SSO: Clear temporary token cookie\nand set server auth cookie
+SSO -> User: Redirect to trusted returnUrl
+
+@enduml

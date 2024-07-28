@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>Magic Link SSO</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪄</text></svg>">
+    <style nonce="<%= cspNonce %>">
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --color-background: #f7f0e4;
+            --color-background-deep: #e6d3b0;
+            --color-text: #251807;
+            --color-muted: rgba(37, 24, 7, 0.72);
+            --color-panel: rgba(255, 250, 239, 0.84);
+            --color-border: rgba(111, 78, 33, 0.18);
+            --shadow-panel: 0 30px 80px rgba(111, 78, 33, 0.18);
+            font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-background: #140e08;
+                --color-background-deep: #2b1e11;
+                --color-text: #f7edd8;
+                --color-muted: rgba(247, 237, 216, 0.72);
+                --color-panel: rgba(36, 24, 13, 0.82);
+                --color-border: rgba(233, 196, 106, 0.16);
+                --shadow-panel: 0 32px 96px rgba(0, 0, 0, 0.42);
+            }
+        }
+
+        html {
+            background:
+                radial-gradient(circle at top, rgba(255, 255, 255, 0.48), transparent 42%),
+                linear-gradient(180deg, var(--color-background) 0%, var(--color-background-deep) 100%);
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 1.5rem;
+            color: var(--color-text);
+            text-align: center;
+            background:
+                radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.42), transparent 30%),
+                radial-gradient(circle at 50% 100%, rgba(111, 78, 33, 0.14), transparent 42%);
+        }
+
+        .landing-card {
+            width: min(100%, 32rem);
+            padding: clamp(2.5rem, 8vw, 4rem) 1.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 2rem;
+            background: var(--color-panel);
+            box-shadow: var(--shadow-panel);
+            backdrop-filter: blur(16px);
+        }
+
+        .landing-mark {
+            margin: 0;
+            font-size: clamp(8rem, 24vw, 15rem);
+            line-height: 1;
+            text-shadow:
+                0 0.08em 0 rgba(255, 255, 255, 0.45),
+                0 0.24em 0.55em rgba(111, 78, 33, 0.22);
+        }
+
+        .landing-title {
+            margin: 1rem 0 0;
+            font-size: clamp(2rem, 5vw, 3rem);
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+        }
+
+        .landing-copy {
+            margin: 1rem auto 0;
+            max-width: 24rem;
+            color: var(--color-muted);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <main class="landing-card" aria-labelledby="landing-title">
+        <p class="landing-mark" aria-hidden="true">🪄</p>
+        <h1 id="landing-title" class="landing-title">Magic Link SSO</h1>
+        <p class="landing-copy">
+            <%= branding.title %> is online and ready to power passwordless sign-in.
+        </p>
+    </main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!gate/
+!examples/gate-private1-app/
+!examples/gate-private2-static/
+!packages/example-ui/
+!server/

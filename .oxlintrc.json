@@ -1,0 +1,8 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "react", "nextjs", "import"],
+    "ignorePatterns": ["**/.next/**", "**/.turbo/**", "**/dist/**", "**/node_modules/**"],
+    "rules": {
+        "curly": ["error", "all"]
+    }
+}

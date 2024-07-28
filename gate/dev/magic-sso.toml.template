@@ -1,0 +1,60 @@
+[server]
+appPort = 3000
+appUrl = "http://${SSO_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}"
+logLevel = "info"
+logFormat = "pretty"
+serveRootLandingPage = false
+trustProxy = true
+verifyTokenStoreDir = "/tmp/magic-sso/verification-tokens"
+signInEmailRateLimitStoreDir = "/tmp/magic-sso/signin-email-rate-limit"
+
+[auth]
+jwtSecret = "${MAGICSSO_JWT_SECRET}"
+jwtExpiration = "1h"
+csrfSecret = "${MAGICSSO_DEV_CSRF_SECRET}"
+emailSecret = "${MAGICSSO_DEV_EMAIL_SECRET}"
+previewSecret = "${MAGICSSO_PREVIEW_SECRET}"
+emailExpiration = "15m"
+
+[cookie]
+name = "${MAGICSSO_COOKIE_NAME}"
+httpOnly = true
+sameSite = "lax"
+secure = false
+
+[email]
+from = "owner@example.com"
+signature = "Magic Link SSO"
+
+[email.smtp]
+host = "${MAILPIT_SMTP_HOST}"
+port = ${MAILPIT_SMTP_PORT}
+user = "${MAILPIT_SMTP_USER}"
+pass = "${MAILPIT_SMTP_PASS}"
+secure = false
+
+[[sites]]
+id = "private1"
+origins = ["http://${PRIVATE1_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}"]
+allowedRedirectUris = [
+    "http://${PRIVATE1_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/_magicgate/verify-email",
+    "http://${PRIVATE1_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/*",
+]
+allowedEmails = ["${PRIVATE1_ALLOWED_EMAIL}"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO private1"
+logoText = "P1"
+
+[[sites]]
+id = "private2"
+origins = ["http://${PRIVATE2_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}"]
+allowedRedirectUris = [
+    "http://${PRIVATE2_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/_magicgate/verify-email",
+    "http://${PRIVATE2_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/*",
+]
+allowedEmails = ["${PRIVATE2_ALLOWED_EMAIL}"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO private2"
+logoText = "P2"

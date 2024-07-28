@@ -1,0 +1,16 @@
+{
+    admin off
+    auto_https off
+}
+
+http://{$SSO_PUBLIC_HOST}:{$PUBLIC_PROXY_PORT} {
+    reverse_proxy magic-sso:3000
+}
+
+http://{$PRIVATE1_PUBLIC_HOST}:{$PUBLIC_PROXY_PORT} {
+    reverse_proxy magic-gate-private1:4000
+}
+
+http://{$PRIVATE2_PUBLIC_HOST}:{$PUBLIC_PROXY_PORT} {
+    reverse_proxy magic-gate-private2:4000
+}

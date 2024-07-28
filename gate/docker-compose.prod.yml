@@ -1,0 +1,18 @@
+services:
+  magic-gate:
+    image: ${MAGIC_GATE_IMAGE:-ghcr.io/magic-link-sso/magic-sso/gate:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      MAGIC_GATE_CONFIG_FILE: /app/gate/magic-gate.toml
+    ports:
+      - '4000:4000'
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./magic-gate.toml:/app/gate/magic-gate.toml:ro

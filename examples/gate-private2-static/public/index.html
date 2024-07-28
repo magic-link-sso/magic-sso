@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Magic Link SSO private2</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+    <script defer src="/assets/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <article>
+        <p class="eyebrow">Magic Link SSO Gate</p>
+        <h1>Your private2 static page is locked behind the gate.</h1>
+        <p>
+          This is plain HTML served by a tiny file server. The protected resource does not integrate
+          any authentication package, framework, or SSR flow.
+        </p>
+        <p id="asset-status">Waiting for static assets...</p>
+        <div class="toolbar">
+          <a href="/_magicgate/session">Open session JSON</a>
+          <form action="/_magicgate/logout" method="post">
+            <button type="submit">Logout</button>
+          </form>
+          <a class="secondary" href="/">Reload static page</a>
+        </div>
+      </article>
+    </main>
+  </body>
+</html>

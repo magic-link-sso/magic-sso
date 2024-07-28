@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title><%= copy.pageTitle %></title>
+    <style nonce="<%= cspNonce %>">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --color-background: #f5f5f5;
+            --color-text: #333;
+            --color-card-background: #fff;
+            --color-card-shadow: rgba(0, 0, 0, 0.1);
+            --color-border: #ccc;
+            --color-error-background: #f2dede;
+            --color-error-text: #a94442;
+            --color-button-background: #333;
+            --color-button-text: #fff;
+        }
+<% for (const [variableName, variableValue] of Object.entries(branding.verifyEmailCssVariables)) { %>
+        :root {
+            <%= variableName %>: <%= variableValue %>;
+        }
+<% } %>
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-background: #121212;
+                --color-text: #fff;
+                --color-card-background: #1e1e1e;
+                --color-card-shadow: rgba(0, 0, 0, 0.3);
+                --color-border: #444;
+                --color-error-background: #d32f2f;
+                --color-error-text: #ffebee;
+                --color-button-background: #eee;
+                --color-button-text: #1e1e1e;
+            }
+        }
+
+        body, html {
+            min-height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--color-background);
+            color: var(--color-text);
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+        }
+
+        .card {
+            width: min(92vw, 420px);
+            padding: 2rem;
+            border-radius: 10px;
+            background-color: var(--color-card-background);
+            box-shadow: 0 4px 14px var(--color-card-shadow);
+            border: 1px solid var(--color-border);
+            text-align: center;
+        }
+
+        .brand-lockup {
+            margin-bottom: 1rem;
+            display: grid;
+            gap: 0.75rem;
+            justify-items: center;
+        }
+
+        .brand-lockup--standalone {
+            margin-bottom: 1.25rem;
+        }
+
+        .brand-mark {
+            min-width: 3rem;
+            min-height: 3rem;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            color: var(--color-button-text);
+            background: var(--color-button-background);
+            overflow: hidden;
+        }
+
+        .brand-mark--text {
+            display: inline-grid;
+            justify-items: center;
+            gap: 0.5rem;
+            min-width: 0;
+            min-height: auto;
+            max-width: 100%;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            color: var(--color-text);
+            background: none;
+            place-items: unset;
+            overflow: visible;
+        }
+
+        .brand-mark--text::after {
+            content: "";
+            width: min(100%, 4.75rem);
+            height: 2px;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                rgba(51, 51, 51, 0) 0%,
+                var(--color-button-background) 50%,
+                rgba(51, 51, 51, 0) 100%
+            );
+        }
+
+        .brand-mark img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .brand-mark-text {
+            display: block;
+            max-width: 100%;
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: 0.02em;
+            text-align: center;
+            text-transform: none;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .eyebrow {
+            color: var(--color-text);
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            opacity: 0.72;
+        }
+
+        h1 {
+            margin-bottom: 1rem;
+        }
+
+        p {
+            line-height: 1.5;
+        }
+
+        .error {
+            padding: 0.9rem 1rem;
+            border-radius: 8px;
+            background-color: var(--color-error-background);
+            color: var(--color-error-text);
+        }
+
+        .actions {
+            margin-top: 1.5rem;
+        }
+
+        .account-preview {
+            margin-top: 1.25rem;
+            padding: 0.95rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--color-card-background) 85%, var(--color-background));
+            text-align: left;
+        }
+
+        .account-label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.72;
+        }
+
+        .account-value {
+            font-size: 1rem;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--color-button-background);
+            color: var(--color-button-text);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .support-copy {
+            margin-top: 1.25rem;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
+        .support-copy a {
+            color: inherit;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <%
+        const normalizedLogoText = branding.logoText.trim().replace(/\s+/g, ' ').toLowerCase();
+        const normalizedBrandTitle = branding.title.trim().replace(/\s+/g, ' ').toLowerCase();
+        const showBrandTitle = Boolean(branding.logoImageUrl) || normalizedLogoText !== normalizedBrandTitle;
+    %>
+    <div class="card">
+        <div class="brand-lockup<% if (!showBrandTitle) { %> brand-lockup--standalone<% } %>">
+            <div class="brand-mark<% if (!branding.logoImageUrl) { %> brand-mark--text<% } %>">
+                <% if (branding.logoImageUrl) { %>
+                    <img src="<%= branding.logoImageUrl %>" alt="<%= branding.logoAlt %>">
+                <% } else { %>
+                    <span class="brand-mark-text"><%= branding.logoText %></span>
+                <% } %>
+            </div>
+            <% if (showBrandTitle) { %>
+                <p class="eyebrow"><%= branding.title %></p>
+            <% } %>
+        </div>
+        <h1><%= copy.title %></h1>
+        <% if (error) { %>
+            <div class="error"><%= error %></div>
+        <% } else { %>
+            <p><%= copy.helpText %></p>
+            <% if (email) { %>
+                <div class="account-preview">
+                    <span class="account-label"><%= copy.emailLabel %></span>
+                    <p class="account-value"><%= email %></p>
+                </div>
+            <% } %>
+            <form id="verifyForm" class="actions" method="post" action="/verify-email" referrerpolicy="no-referrer">
+                <% if (csrfToken) { %>
+                    <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
+                <% } %>
+                <button type="submit"><%= copy.continueButton %></button>
+            </form>
+            <script nonce="<%= cspNonce %>">
+                if (window.location.pathname === '/verify-email') {
+                    window.history.replaceState(null, '', '/verify-email');
+                }
+            </script>
+        <% } %>
+        <% if (branding.supportText || branding.supportLinkText) { %>
+            <p class="support-copy">
+                <% if (branding.supportText) { %>
+                    <%= branding.supportText %>
+                <% } %>
+                <% if (branding.supportLinkText && branding.supportLinkUrl) { %>
+                    <a href="<%= branding.supportLinkUrl %>" rel="noopener noreferrer"><%= branding.supportLinkText %></a>
+                <% } %>
+            </p>
+        <% } %>
+    </div>
+</body>
+</html>

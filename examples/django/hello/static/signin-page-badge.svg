@@ -1,0 +1,53 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="160" rx="36" fill="url(#background)" />
+  <circle cx="80" cy="80" r="56" fill="url(#glow)" opacity="0.45" />
+  <rect x="34" y="44" width="92" height="72" rx="18" fill="url(#card)" />
+  <path
+    d="M46 58L74.1177 78.0827C77.612 80.5786 82.388 80.5786 85.8823 78.0827L114 58"
+    stroke="#0F172A"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M55 102L72.5 87.5"
+    stroke="#0F172A"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.35"
+  />
+  <path
+    d="M105 102L87.5 87.5"
+    stroke="#0F172A"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.35"
+  />
+  <circle cx="115" cy="46" r="17" fill="#F8FAFC" />
+  <path
+    d="M110 46L113.5 49.5L120.5 42.5"
+    stroke="#7C3AED"
+    stroke-width="4.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M39 34L41.1924 38.8076L46 41L41.1924 43.1924L39 48L36.8076 43.1924L32 41L36.8076 38.8076L39 34Z"
+    fill="#F8FAFC"
+  />
+  <defs>
+    <linearGradient id="background" x1="18" y1="14" x2="146" y2="152" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A" />
+      <stop offset="0.48" stop-color="#2563EB" />
+      <stop offset="1" stop-color="#0EA5E9" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(80 74) rotate(90) scale(70)">
+      <stop stop-color="#F8FAFC" />
+      <stop offset="1" stop-color="#F8FAFC" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="card" x1="80" y1="44" x2="80" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC" />
+      <stop offset="1" stop-color="#DBEAFE" />
+    </linearGradient>
+  </defs>
+</svg>

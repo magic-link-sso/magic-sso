@@ -1,0 +1,25 @@
+@startuml MagicLinkSSO-Overview
+
+title Magic Link SSO Overview
+
+left to right direction
+
+actor User
+rectangle "Protected App\nor Private Resource" as App
+rectangle "Magic Link SSO" as SSO
+rectangle "Email Inbox" as Email
+
+User --> App : 1. Open protected page
+App --> SSO : 2. Start sign-in flow\n(framework integration or Gate)
+SSO --> Email : 3. Send magic link
+Email --> User : 4. Deliver sign-in link
+User --> App : 5. Return with verified session
+App --> User : 6. Serve protected page,\nAPI, or asset
+
+note bottom of App
+The protected target can be:
+- a framework app with direct integration
+- a private upstream behind Magic Link SSO Gate
+end note
+
+@enduml

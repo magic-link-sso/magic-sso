@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <rect width="100%" height="100%" fill="#090514" rx="32"/>
+  <defs>
+    <linearGradient id="neonCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F2FE"/>
+      <stop offset="100%" stop-color="#4FACFE"/>
+    </linearGradient>
+    <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF0844"/>
+      <stop offset="100%" stop-color="#FFB199"/>
+    </linearGradient>
+    <filter id="cyberGlow1">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="cyberGlow2">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g transform="translate(0 -12)">
+    <g transform="translate(200 180) scale(1.4) translate(-200 -180)">
+      <!-- Cyberpunk Envelope -->
+      <g filter="url(#cyberGlow1)" stroke-width="4" fill="none">
+        <rect x="80" y="110" width="240" height="150" rx="8" stroke="rgba(0, 242, 254, 0.4)"/>
+        <path d="M 80 110 L 200 180 L 320 110" stroke="url(#neonCyan)"/>
+        <!-- Cyber circuit lines on the envelope -->
+        <path d="M 80 260 L 140 220 L 140 200" stroke="rgba(255, 8, 68, 0.5)" stroke-width="2"/>
+        <path d="M 320 260 L 260 220 L 260 200" stroke="rgba(255, 8, 68, 0.5)" stroke-width="2"/>
+      </g>
+
+      <!-- Central Keyhole & Shield -->
+      <g filter="url(#cyberGlow2)">
+        <!-- Security Shield -->
+        <path d="M 200 135 L 230 150 L 230 190 C 230 215 200 235 200 235 C 200 235 170 215 170 190 L 170 150 Z" fill="#090514" stroke="url(#neonPink)" stroke-width="4"/>
+
+        <!-- Keyhole cutout -->
+        <circle cx="200" cy="170" r="12" fill="url(#neonCyan)"/>
+        <path d="M 192 175 L 208 175 L 210 205 L 190 205 Z" fill="url(#neonCyan)"/>
+
+        <!-- Magic Sparkles -->
+        <path d="M 200 100 L 202 110 L 212 112 L 202 114 L 200 124 L 198 114 L 188 112 L 198 110 Z" fill="#FFFFFF"/>
+        <path d="M 235 130 L 237 135 L 242 137 L 237 139 L 235 144 L 233 139 L 228 137 L 233 135 Z" fill="#FFFFFF"/>
+        <path d="M 165 130 L 167 135 L 172 137 L 167 139 L 165 144 L 163 139 L 158 137 L 163 135 Z" fill="#FFFFFF"/>
+      </g>
+    </g>
+
+    <!-- Typography -->
+    <text x="50%" y="90%" font-family="'Inter', system-ui, sans-serif" font-weight="900" font-size="32" fill="#FFFFFF" text-anchor="middle" letter-spacing="5">MAGIC LINK SSO</text>
+  </g>
+</svg>

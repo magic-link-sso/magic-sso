@@ -1,0 +1,27 @@
+[project]
+name = "example-app-django"
+version = "0.9.0"
+description = "Magic Link SSO Django Demo"
+readme = "README.md"
+requires-python = ">=3.12,<4"
+license = { text = "MIT" }
+authors = [{ name = "Wojciech Polak" }]
+dependencies = ["django>=6.0.4,<7", "magic-link-sso-django"]
+
+[dependency-groups]
+dev = ["pytest>=9.0.3,<10", "ruff>=0.15.12,<1", "ty>=0.0.32,<1"]
+
+[tool.uv.sources]
+magic-link-sso-django = { path = "../../packages/django", editable = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ty]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

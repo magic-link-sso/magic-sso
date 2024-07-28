@@ -1,0 +1,9 @@
+[project]
+name = "fixture-python"
+dependencies = ["django>=5.0.7", "magic-link-sso-django"]
+
+[dependency-groups]
+dev = ["pytest", "ruff", "ty"]
+
+[tool.uv.sources]
+magic-link-sso-django = { path = "../../packages/django", editable = true }

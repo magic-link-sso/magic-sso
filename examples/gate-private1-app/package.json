@@ -1,0 +1,30 @@
+{
+    "name": "example-app-gate-private1",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "tsx watch src/main.ts",
+        "format": "oxfmt package.json tsconfig.json .env.example README.md Dockerfile src",
+        "format:check": "oxfmt --check package.json tsconfig.json .env.example README.md Dockerfile src",
+        "lint": "oxlint src",
+        "start": "node dist/main.js",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@fastify/websocket": "^11.2.0",
+        "dotenv": "^17.4.2",
+        "fastify": "^5.8.5"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

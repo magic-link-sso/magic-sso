@@ -1,0 +1,8 @@
+{
+    "name": "example-app-django",
+    "private": true,
+    "scripts": {
+        "dev": "UV_CACHE_DIR=/tmp/uv-cache UV_TOOL_DIR=/tmp/uv-tools UV_STATE_DIR=/tmp/uv-state uv run python manage.py runserver",
+        "test": "PYTHONPATH=../../packages/django UV_CACHE_DIR=/tmp/uv-cache UV_TOOL_DIR=/tmp/uv-tools UV_STATE_DIR=/tmp/uv-state uv run pytest"
+    }
+}

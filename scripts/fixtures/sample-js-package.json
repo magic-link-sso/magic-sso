@@ -1,0 +1,16 @@
+{
+    "name": "fixture-package",
+    "private": true,
+    "dependencies": {
+        "caret-dep": "^1.2.3",
+        "exact-dep": "2.3.4",
+        "latest-dep": "latest",
+        "workspace-dep": "workspace:*"
+    },
+    "devDependencies": {
+        "tilde-dep": "~3.4.5"
+    },
+    "peerDependencies": {
+        "peer-dep": "^4.5.6"
+    }
+}

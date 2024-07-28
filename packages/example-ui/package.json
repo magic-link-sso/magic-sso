@@ -1,0 +1,38 @@
+{
+    "name": "magic-sso-example-ui",
+    "version": "0.9.0",
+    "private": true,
+    "description": "Shared UI assets for Magic Link SSO TypeScript examples",
+    "files": [
+        "assets",
+        "index.d.ts",
+        "index.js",
+        "styles.css"
+    ],
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        },
+        "./styles.css": "./styles.css",
+        "./assets/*": {
+            "types": "./svg.d.ts",
+            "default": "./assets/*"
+        }
+    },
+    "scripts": {
+        "format": "oxfmt package.json index.js index.d.ts index.test.ts svg.d.ts",
+        "format:check": "oxfmt --check package.json index.js index.d.ts index.test.ts svg.d.ts",
+        "lint": "oxlint index.js index.test.ts",
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

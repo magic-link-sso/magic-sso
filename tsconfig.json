@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "checkJs": false,
+        "exactOptionalPropertyTypes": true,
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "noEmit": true,
+        "noUncheckedIndexedAccess": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "target": "ES2024",
+        "types": ["node"]
+    },
+    "include": ["scripts/**/*.mjs", "scripts/**/*.ts"]
+}

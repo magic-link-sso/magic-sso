@@ -1,0 +1,28 @@
+packages:
+    - packages/example-ui
+    - server
+    - gate
+    - packages/angular
+    - packages/nextjs
+    - packages/nuxt
+    - examples/angular
+    - examples/django
+    - examples/fastify
+    - examples/gate-private1-app
+    - examples/gate-private2-static
+    - examples/nextjs
+    - examples/nuxt
+    - tests/e2e
+
+overrides:
+    '@hono/node-server@<1.19.13': '>=1.19.13'
+    brace-expansion@>=2.0.0 <2.0.3: '>=2.0.3'
+    defu@<=6.1.4: '>=6.1.5'
+    hono@<4.12.12: '>=4.12.12'
+    hono@>=4.0.0 <=4.12.11: '>=4.12.12'
+    lodash@<=4.17.23: '>=4.18.0'
+    lodash@>=4.0.0 <=4.17.23: '>=4.18.0'
+    nodemailer@<=8.0.4: '>=8.0.5'
+    vite@>=7.0.0 <=7.3.1: '>=7.3.2'
+    vite@>=7.1.0 <=7.3.1: '>=7.3.2'
+    vite@>=8.0.0 <=8.0.4: '>=8.0.5'

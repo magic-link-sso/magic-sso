@@ -1,0 +1,33 @@
+{
+    "name": "example-app-fastify",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "tsx watch src/main.ts",
+        "format": "oxfmt package.json tsconfig.json .env.example README.md src tests",
+        "format:check": "oxfmt --check package.json tsconfig.json .env.example README.md src tests",
+        "lint": "oxlint src tests",
+        "start": "node dist/main.js",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@fastify/cookie": "^11.0.2",
+        "@fastify/formbody": "^8.0.2",
+        "dotenv": "^17.4.2",
+        "fastify": "^5.8.5",
+        "jose": "^6.2.2",
+        "magic-sso-example-ui": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

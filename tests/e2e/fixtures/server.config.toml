@@ -1,0 +1,94 @@
+[server]
+appPort = 43100
+appUrl = "http://localhost:43100"
+logLevel = "error"
+
+[auth]
+csrfSecret = "test-csrf-secret-for-e2e-suite-123456"
+jwtSecret = "test-jwt-secret-for-e2e-suite-123456"
+emailSecret = "test-email-secret-for-e2e-suite-12345"
+previewSecret = "test-preview-secret-for-e2e-suite-123"
+
+[cookie]
+name = "magic-sso"
+secure = false
+
+[email]
+from = "noreply@example.com"
+
+[email.smtp]
+host = "127.0.0.1"
+port = 43125
+user = "test-user"
+pass = "test-password"
+secure = false
+
+[[sites]]
+id = "nextjs"
+origins = ["http://localhost:43101"]
+allowedRedirectUris = ["http://localhost:43101/verify-email", "http://localhost:43101/*"]
+allowedEmails = ["nextjs@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Next.js Example"
+logoText = "NX"
+
+[[sites]]
+id = "nuxt"
+origins = ["http://localhost:43102"]
+allowedRedirectUris = ["http://localhost:43102/verify-email", "http://localhost:43102/*"]
+allowedEmails = ["nuxt@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Nuxt Example"
+logoText = "NU"
+
+[[sites]]
+id = "angular"
+origins = ["http://localhost:43104"]
+allowedRedirectUris = ["http://localhost:43104/verify-email", "http://localhost:43104/*"]
+allowedEmails = ["angular@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Angular Example"
+logoText = "NG"
+
+[[sites]]
+id = "fastify"
+origins = ["http://localhost:43105"]
+allowedRedirectUris = ["http://localhost:43105/verify-email", "http://localhost:43105/*"]
+allowedEmails = ["fastify@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Fastify Example"
+logoText = "FT"
+
+[[sites]]
+id = "private1"
+origins = ["http://localhost:43106"]
+allowedRedirectUris = ["http://localhost:43106/_magicgate/verify-email", "http://localhost:43106/*"]
+allowedEmails = ["private1@example.com"]
+
+[sites.hostedAuth.branding]
+title = "private1 Example"
+logoText = "P1"
+
+[[sites]]
+id = "private2"
+origins = ["http://localhost:43109"]
+allowedRedirectUris = ["http://localhost:43109/_magicgate/verify-email", "http://localhost:43109/*"]
+allowedEmails = ["private2@example.com"]
+
+[sites.hostedAuth.branding]
+title = "private2 Example"
+logoText = "P2"
+
+[[sites]]
+id = "django"
+origins = ["http://localhost:43103"]
+allowedRedirectUris = ["http://localhost:43103/verify-email", "http://localhost:43103/*"]
+allowedEmails = ["django@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Django Example"
+logoText = "DJ"

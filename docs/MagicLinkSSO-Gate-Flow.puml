@@ -1,0 +1,76 @@
+@startuml MagicLinkSSO-Gate-Flow
+
+title Magic Link SSO Gate Flow
+
+actor User
+participant "Browser" as Browser
+participant "Magic Link SSO Gate" as Gate
+participant "SSO Server" as SSO
+participant "Email Server" as Email
+participant "Private Upstream\n(app or static site)" as Upstream
+
+== Anonymous Request ==
+
+User -> Browser: Open https://private.example.com/
+Browser -> Gate: GET /
+Gate -> Gate: Check auth cookie
+
+alt Cookie exists and is valid
+    Gate -> Upstream: Proxy request with forwarded identity headers
+    Upstream --> Gate: HTML / assets / API / SSE / websocket handshake
+    Gate --> Browser: Protected upstream response
+else Cookie missing or invalid
+    alt Direct-use enabled
+        Gate --> Browser: Redirect to https://sso.example.com/signin\nwith normalized returnUrl + verifyUrl
+        Browser -> SSO: GET /signin
+        SSO --> Browser: Hosted sign-in page
+        Browser -> SSO: Submit email address
+    else Local Gate login enabled
+        Gate --> Browser: Redirect to /_magicgate/login?returnUrl=...
+        Browser -> Gate: GET /_magicgate/login
+        Gate --> Browser: Local sign-in page
+        Browser -> Gate: POST /_magicgate/signin
+        Gate -> SSO: POST /signin\n{ email, normalized returnUrl, verifyUrl }
+    end
+
+    SSO -> SSO: Resolve site from returnUrl / verifyUrl\nand authorize email + default scope
+    SSO -> Email: Send magic link
+    Email --> User: Receive email
+
+    User -> Email: Click magic link
+    Email -> Browser: Open https://private.example.com/_magicgate/verify-email\n?token=...&returnUrl=...
+    Browser -> Gate: GET /_magicgate/verify-email?token=...
+    Gate -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
+    SSO --> Gate: 200 JSON { email }
+    Gate -> Gate: Validate preview JSON\nset temporary token cookie + signed CSRF cookie
+    Gate --> Browser: Confirmation page\nwith token removed from URL
+    Browser -> Gate: POST /_magicgate/verify-email\n{ csrfToken, returnUrl }
+    Gate -> Gate: Validate same-origin signal + CSRF\nand read token from temporary cookie
+    Gate -> SSO: POST /verify-email { token }
+    SSO --> Gate: 200 JSON { accessToken }
+    Gate -> Gate: Validate JWT locally\n(expected iss + aud + signature)
+    Gate -> Gate: Clear temporary cookies\nand set Gate-managed auth cookie
+    Gate --> Browser: Redirect to original returnUrl
+
+    Browser -> Gate: GET /
+    Gate -> Gate: Check auth cookie
+    Gate -> Upstream: Proxy request with forwarded identity headers
+    Upstream --> Gate: Protected response
+    Gate --> Browser: Protected upstream response
+end
+
+== Authenticated Follow-up ==
+
+Browser -> Gate: Subsequent request for asset / API / static file / SPA route
+Gate -> Gate: Validate auth cookie
+Gate -> Upstream: Proxy request with forwarded identity headers
+Upstream --> Gate: Response
+Gate --> Browser: Response
+
+note over Gate, Upstream
+The upstream can be a dynamic app-style service (`private1`) or a static site
+(`private2`). In both cases, authentication stays in Gate and the upstream
+remains unaware of the Magic Link SSO flow.
+end note
+
+@enduml

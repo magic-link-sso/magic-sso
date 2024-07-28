@@ -1,0 +1,30 @@
+{
+    "name": "example-app-nuxt",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; nuxt dev -p 3002'",
+        "build": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; nuxt build'",
+        "format": "oxfmt app server scripts tests nuxt.config.ts package.json tsconfig.json vitest.config.ts README.md",
+        "format:check": "oxfmt --check app server scripts tests nuxt.config.ts package.json tsconfig.json vitest.config.ts README.md",
+        "lint": "oxlint app server scripts tests nuxt.config.ts",
+        "start": "node scripts/ensure-env.mjs && sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; nuxt start'",
+        "test": "vitest run",
+        "typecheck": "nuxi prepare && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@magic-link-sso/nuxt": "workspace:*",
+        "magic-sso-example-ui": "workspace:*",
+        "nuxt": "^4.4.2",
+        "vue": "^3.5.33"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

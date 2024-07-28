@@ -1,0 +1,73 @@
+:root {
+    color-scheme: light;
+    font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+body {
+    margin: 0;
+    background: linear-gradient(160deg, #eff7f0 0%, #f8f5ed 100%);
+    color: #10251a;
+}
+
+main {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 4rem;
+}
+
+article {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(16, 37, 26, 0.12);
+    border-radius: 1.5rem;
+    padding: 2rem;
+    box-shadow: 0 1.25rem 4rem rgba(16, 37, 26, 0.08);
+}
+
+.eyebrow {
+    margin: 0 0 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.75rem;
+    color: #50725c;
+}
+
+h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    line-height: 1.05;
+}
+
+p {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: #2c4a37;
+}
+
+#asset-status {
+    font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+    color: #10251a;
+}
+
+.toolbar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+a,
+button {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.8rem 1rem;
+    background: #d4622b;
+    color: #fff;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+a.secondary {
+    background: #254734;
+}

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔑</text></svg>">
+    <title><%= mode === 'confirmation' ? copy.confirmationPageTitle : copy.pageTitle %></title>
+    <style nonce="<%= cspNonce %>">
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --color-background: #eef4ff;
+            --color-surface: rgba(255, 255, 255, 0.96);
+            --color-text: #172554;
+            --color-muted: #334155;
+            --color-border: #64748b;
+            --color-border-soft: #cbd5e1;
+            --color-field-background: #ffffff;
+            --color-button-background: #1d4ed8;
+            --color-button-background-hover: #1e40af;
+            --color-button-text: #ffffff;
+            --color-focus: #0f766e;
+            --color-success-background: #dcfce7;
+            --color-success-text: #166534;
+            --color-error-background: #fee2e2;
+            --color-error-text: #991b1b;
+            --shadow-panel: 0 24px 64px rgba(37, 99, 235, 0.16);
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+        }
+<% for (const [variableName, variableValue] of Object.entries(branding.signinCssVariables)) { %>
+        :root {
+            <%= variableName %>: <%= variableValue %>;
+        }
+<% } %>
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-background: #020617;
+                --color-surface: rgba(7, 18, 32, 0.84);
+                --color-text: #e2f6f4;
+                --color-muted: #a5c7cf;
+                --color-border: rgba(148, 163, 184, 0.42);
+                --color-border-soft: rgba(94, 234, 212, 0.16);
+                --color-field-background: rgba(15, 23, 42, 0.92);
+                --color-button-background: #67e8f9;
+                --color-button-background-hover: #5eead4;
+                --color-button-text: #04131f;
+                --color-focus: #67e8f9;
+                --color-success-background: rgba(16, 185, 129, 0.12);
+                --color-success-text: #bbf7d0;
+                --color-error-background: rgba(251, 113, 133, 0.12);
+                --color-error-text: #fecdd3;
+                --shadow-panel: 0 32px 100px rgba(2, 6, 23, 0.58);
+            }
+        }
+
+        html {
+            background-color: var(--color-background);
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--color-text);
+            background:
+                radial-gradient(circle at top, rgba(96, 165, 250, 0.2), transparent 42%),
+                var(--color-background);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background:
+                    radial-gradient(circle at top, rgba(45, 212, 191, 0.18), transparent 34%),
+                    linear-gradient(180deg, #020617 0%, #0f172a 100%);
+            }
+        }
+
+        .skip-link {
+            position: absolute;
+            left: 1rem;
+            top: 1rem;
+            transform: translateY(-200%);
+            padding: 0.75rem 1rem;
+            border-radius: 999px;
+            background-color: var(--color-button-background);
+            color: var(--color-button-text);
+            text-decoration: none;
+        }
+
+        .skip-link:focus {
+            transform: translateY(0);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .skip-link {
+                background-color: #5eead4;
+                color: #04131f;
+            }
+        }
+
+        .page-shell {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 2rem 1rem;
+        }
+
+        .form-container {
+            width: min(100%, 28rem);
+            padding: 2rem;
+            border: 1px solid var(--color-border-soft);
+            border-radius: 1.5rem;
+            background-color: var(--color-surface);
+            box-shadow: var(--shadow-panel);
+            backdrop-filter: blur(18px);
+        }
+
+        .brand-lockup {
+            margin-bottom: 1rem;
+            display: grid;
+            gap: 0.85rem;
+            justify-items: start;
+        }
+
+        .brand-lockup--standalone {
+            margin-bottom: 1.25rem;
+        }
+
+        .brand-mark {
+            min-width: 3rem;
+            min-height: 3rem;
+            display: grid;
+            place-items: center;
+            border: 1px solid var(--color-border-soft);
+            border-radius: 1rem;
+            color: var(--color-button-text);
+            background:
+                linear-gradient(135deg, var(--color-button-background), var(--color-button-background-hover));
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+            overflow: hidden;
+        }
+
+        .brand-mark--text {
+            display: inline-grid;
+            justify-items: start;
+            gap: 0.5rem;
+            min-width: 0;
+            min-height: auto;
+            max-width: 100%;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            color: var(--color-text);
+            background: none;
+            box-shadow: none;
+            place-items: unset;
+            overflow: visible;
+        }
+
+        .brand-mark--text::after {
+            content: "";
+            width: min(100%, 4.75rem);
+            height: 2px;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                var(--color-button-background) 0%,
+                rgba(29, 78, 216, 0) 100%
+            );
+        }
+
+        .brand-mark img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .brand-mark-text {
+            display: block;
+            max-width: 100%;
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: 0.02em;
+            text-align: left;
+            text-transform: none;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .eyebrow {
+            margin: 0 0 0.75rem;
+            color: var(--color-muted);
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 5vw, 2.7rem);
+            line-height: 1.05;
+        }
+
+        .lede {
+            margin: 1rem 0 0;
+            color: var(--color-muted);
+            line-height: 1.6;
+        }
+
+        .signin-form {
+            margin-top: 1.5rem;
+        }
+
+        .confirmation-panel {
+            margin-top: 1.5rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .field-group {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .field-label {
+            font-weight: 700;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: 0.9rem;
+            font: inherit;
+            color: var(--color-text);
+            background-color: var(--color-field-background);
+        }
+
+        input::placeholder {
+            color: var(--color-muted);
+            opacity: 1;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            input::placeholder {
+                color: #64748b;
+            }
+        }
+
+        .submit-button {
+            position: relative;
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.9rem 1rem;
+            border: 0;
+            border-radius: 999px;
+            font: inherit;
+            font-weight: 700;
+            color: var(--color-button-text);
+            background-color: var(--color-button-background);
+            cursor: pointer;
+        }
+
+        .button-content {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .button-spinner {
+            display: grid;
+            place-items: center;
+            width: 0;
+            height: 1rem;
+            margin-right: 0;
+            overflow: hidden;
+            transition:
+                width 150ms ease,
+                margin-right 150ms ease,
+                opacity 150ms ease;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 999px;
+            opacity: 0;
+        }
+
+        .submit-button.is-pending .button-spinner {
+            width: 1rem;
+            margin-right: 0.7rem;
+            opacity: 1;
+            animation: spin 900ms linear infinite;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .submit-button {
+                background-image: linear-gradient(135deg, #67e8f9, #5eead4);
+            }
+        }
+
+        .submit-button:hover {
+            background-color: var(--color-button-background-hover);
+        }
+
+        .submit-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.75;
+        }
+
+        :focus-visible {
+            outline: 3px solid var(--color-focus);
+            outline-offset: 3px;
+        }
+
+        .message {
+            margin-top: 1rem;
+            padding: 0.9rem 1rem;
+            border: 1px solid transparent;
+            border-radius: 1rem;
+            line-height: 1.5;
+        }
+
+        .message.success {
+            border-color: rgba(22, 101, 52, 0.2);
+            background-color: var(--color-success-background);
+            color: var(--color-success-text);
+        }
+
+        .message.error {
+            border-color: rgba(153, 27, 27, 0.2);
+            background-color: var(--color-error-background);
+            color: var(--color-error-text);
+        }
+
+        .support-copy {
+            margin: 1.25rem 0 0;
+            color: var(--color-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .support-copy a {
+            color: inherit;
+            font-weight: 700;
+        }
+
+        .secondary-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.9rem;
+            padding: 0.9rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: 999px;
+            color: var(--color-text);
+            font-weight: 700;
+            text-decoration: none;
+            background-color: transparent;
+        }
+
+        .secondary-link:hover {
+            background-color: rgba(148, 163, 184, 0.12);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .message.success {
+                border-color: rgba(16, 185, 129, 0.24);
+            }
+
+            .message.error {
+                border-color: rgba(251, 113, 133, 0.24);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%
+        const normalizedLogoText = branding.logoText.trim().replace(/\s+/g, ' ').toLowerCase();
+        const normalizedBrandTitle = branding.title.trim().replace(/\s+/g, ' ').toLowerCase();
+        const showBrandTitle = Boolean(branding.logoImageUrl) || normalizedLogoText !== normalizedBrandTitle;
+    %>
+    <a class="skip-link" href="#main-content"><%= copy.skipLink %></a>
+    <main class="page-shell" id="main-content">
+        <section class="form-container" aria-labelledby="signin-title">
+            <div class="brand-lockup<% if (!showBrandTitle) { %> brand-lockup--standalone<% } %>">
+                <div class="brand-mark<% if (!branding.logoImageUrl) { %> brand-mark--text<% } %>">
+                    <% if (branding.logoImageUrl) { %>
+                        <img src="<%= branding.logoImageUrl %>" alt="<%= branding.logoAlt %>">
+                    <% } else { %>
+                        <span class="brand-mark-text"><%= branding.logoText %></span>
+                    <% } %>
+                </div>
+                <% if (showBrandTitle) { %>
+                    <p class="eyebrow"><%= branding.title %></p>
+                <% } %>
+            </div>
+            <h1 id="signin-title"><%= mode === 'confirmation' ? copy.confirmationTitle : copy.title %></h1>
+            <p class="lede" id="signin-help"><%= mode === 'confirmation' ? copy.confirmationHelpText : copy.helpText %></p>
+
+            <% if (mode === 'form') { %>
+                <form
+                    id="signinForm"
+                    class="signin-form"
+                    method="post"
+                    aria-describedby="signin-help"
+                >
+                    <div class="field-group">
+                        <label class="field-label" for="email"><%= copy.emailLabel %></label>
+                        <input
+                            id="email"
+                            type="email"
+                            name="email"
+                            autocomplete="email"
+                            inputmode="email"
+                            spellcheck="false"
+                            placeholder="<%= copy.emailPlaceholder %>"
+                            aria-describedby="<%= error ? 'signin-help signin-feedback' : 'signin-help' %>"
+                            required
+                            autofocus
+                        >
+                    </div>
+                    <% if (csrfToken) { %>
+                        <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
+                    <% } %>
+                    <input type="hidden" name="returnUrl" value="<%= returnUrl %>">
+                    <% if (scope) { %>
+                        <input type="hidden" name="scope" value="<%= scope %>">
+                    <% } %>
+                    <% if (verifyUrl) { %>
+                        <input type="hidden" name="verifyUrl" value="<%= verifyUrl %>">
+                    <% } %>
+                    <button type="submit" id="signIn" class="submit-button">
+                        <span class="button-content">
+                            <span id="signIn-spinner" class="button-spinner" aria-hidden="true"></span>
+                            <span><%= copy.submitButton %></span>
+                        </span>
+                    </button>
+                </form>
+            <% } else { %>
+                <div class="confirmation-panel" role="status" aria-live="polite">
+                    <% if (useDifferentEmailHref) { %>
+                        <a class="secondary-link" href="<%= useDifferentEmailHref %>"><%= copy.useDifferentEmailButton %></a>
+                    <% } %>
+                </div>
+            <% } %>
+
+            <% if (message) { %>
+                <div class="message success" id="signin-feedback" role="status" aria-live="polite"><%= message %></div>
+            <% } %>
+            <% if (error) { %>
+                <div class="message error" id="signin-feedback" role="alert"><%= error %></div>
+            <% } %>
+            <% if (branding.supportText || branding.supportLinkText) { %>
+                <p class="support-copy">
+                    <% if (branding.supportText) { %>
+                        <%= branding.supportText %>
+                    <% } %>
+                    <% if (branding.supportLinkText && branding.supportLinkUrl) { %>
+                        <a href="<%= branding.supportLinkUrl %>" rel="noopener noreferrer"><%= branding.supportLinkText %></a>
+                    <% } %>
+                </p>
+            <% } %>
+        </section>
+    </main>
+    <% if (mode === 'form') { %>
+        <script nonce="<%= cspNonce %>">
+            const signInForm = document.getElementById('signinForm');
+            const signInButton = document.getElementById('signIn');
+            if (signInForm instanceof HTMLFormElement && signInButton instanceof HTMLButtonElement) {
+                signInForm.addEventListener('submit', () => {
+                    signInButton.classList.add('is-pending');
+                    signInButton.disabled = true;
+                    signInButton.setAttribute('aria-disabled', 'true');
+                });
+            }
+        </script>
+    <% } %>
+</body>
+</html>

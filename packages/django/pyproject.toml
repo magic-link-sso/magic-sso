@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magic-link-sso-django"
+version = "0.9.0"
+description = "A Django Magic Link SSO client"
+readme = "README.md"
+requires-python = ">=3.12,<4"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Wojciech Polak" }]
+keywords = ["auth", "django", "jwt", "magic-link", "sso"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Security",
+]
+dependencies = ["django>=5.0", "pyjwt>=2.8.0", "requests>=2.32.3"]
+
+[project.urls]
+Homepage = "https://github.com/magic-link-sso/magic-sso#readme"
+Documentation = "https://github.com/magic-link-sso/magic-sso/tree/main/packages/django"
+Repository = "https://github.com/magic-link-sso/magic-sso"
+Issues = "https://github.com/magic-link-sso/magic-sso/issues"
+
+[dependency-groups]
+dev = ["pytest", "ruff", "ty"]
+
+[tool.setuptools.packages.find]
+include = ["magic_sso_django*"]
+
+[tool.setuptools.package-data]
+magic_sso_django = ["templates/*.html", "migrations/*.py", "*.pyi", "py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ty]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

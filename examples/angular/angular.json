@@ -1,0 +1,88 @@
+{
+    "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+    "version": 1,
+    "newProjectRoot": "projects",
+    "projects": {
+        "example-app-angular": {
+            "projectType": "application",
+            "root": "",
+            "sourceRoot": "src",
+            "prefix": "app",
+            "architect": {
+                "build": {
+                    "builder": "@angular/build:application",
+                    "options": {
+                        "outputPath": "dist/example-app-angular",
+                        "index": "src/index.html",
+                        "browser": "src/main.ts",
+                        "server": "src/main.server.ts",
+                        "ssr": {
+                            "entry": "src/server.ts"
+                        },
+                        "outputMode": "server",
+                        "polyfills": ["zone.js"],
+                        "tsConfig": "tsconfig.app.json",
+                        "assets": [
+                            {
+                                "glob": "**/*",
+                                "input": "public"
+                            },
+                            {
+                                "glob": "signin-page-badge.svg",
+                                "input": "../../packages/example-ui/assets",
+                                "output": "assets"
+                            },
+                            {
+                                "glob": "protected-page-badge.svg",
+                                "input": "../../packages/example-ui/assets",
+                                "output": "assets"
+                            }
+                        ],
+                        "styles": ["magic-sso-example-ui/styles.css"]
+                    },
+                    "configurations": {
+                        "production": {
+                            "budgets": [
+                                {
+                                    "type": "initial",
+                                    "maximumWarning": "500kB",
+                                    "maximumError": "1MB"
+                                },
+                                {
+                                    "type": "anyComponentStyle",
+                                    "maximumWarning": "4kB",
+                                    "maximumError": "8kB"
+                                }
+                            ],
+                            "outputHashing": "all"
+                        },
+                        "development": {
+                            "optimization": false,
+                            "extractLicenses": false,
+                            "sourceMap": false
+                        }
+                    },
+                    "defaultConfiguration": "production"
+                },
+                "serve": {
+                    "builder": "@angular/build:dev-server",
+                    "configurations": {
+                        "production": {
+                            "buildTarget": "example-app-angular:build:production"
+                        },
+                        "development": {
+                            "buildTarget": "example-app-angular:build:development"
+                        }
+                    },
+                    "defaultConfiguration": "development"
+                }
+            }
+        }
+    },
+    "cli": {
+        "analytics": false,
+        "cache": {
+            "enabled": false
+        }
+    }
+}
