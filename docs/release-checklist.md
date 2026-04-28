@@ -16,7 +16,6 @@ release.
 ## Release automation prerequisites
 
 - GitHub Actions is enabled for the repository.
-- `NPM_TOKEN` is configured as a repository secret for npm publishing.
 - The `pypi` GitHub environment is configured for trusted publishing and allows
   the `Publish` workflow to request an OIDC token.
 - GitHub Packages permissions are enabled so the Docker workflow can publish to
