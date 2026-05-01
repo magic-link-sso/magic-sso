@@ -15,7 +15,7 @@
     },
     "dependencies": {
         "@magic-link-sso/nextjs": "workspace:*",
-        "jose": "^6.2.2",
+        "jose": "^6.2.3",
         "jwt-decode": "^4.0.0",
         "magic-sso-example-ui": "workspace:*",
         "next": "^16.2.4",
@@ -27,7 +27,7 @@
         "@types/node": "^25.6.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
-        "postcss": "^8.5.10",
+        "postcss": "^8.5.13",
         "tailwindcss": "^4.2.4",
         "typescript": "^6.0.3"
     },

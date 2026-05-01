@@ -86,37 +86,30 @@ type SigninPageMode = 'confirmation' | 'form';
 
 const verifyEmailPreviewSecretHeaderName = 'x-magic-sso-preview-secret';
 
+function emptyStringAsUndefined(value: string | undefined): string | undefined {
+    return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+function optionalStringField(schema: z.ZodString) {
+    return z
+        .union([schema, z.literal('')])
+        .optional()
+        .transform((value) => emptyStringAsUndefined(value));
+}
+
 const signInQuerySchema = z.object({
-    returnUrl: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().min(1).optional(),
-    ),
-    scope: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().min(1).optional(),
-    ),
-    verifyUrl: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().url().optional(),
-    ),
+    returnUrl: optionalStringField(z.string().min(1)),
+    scope: optionalStringField(z.string().min(1)),
+    verifyUrl: optionalStringField(z.string().url()),
 });
 
 const submittedEmailSchema = z.string().trim().max(254).email();
 
 const signInBodySchema = z.object({
     email: submittedEmailSchema,
-    returnUrl: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().min(1).optional(),
-    ),
-    scope: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().min(1).optional(),
-    ),
-    verifyUrl: z.preprocess(
-        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-        z.string().url().optional(),
-    ),
+    returnUrl: optionalStringField(z.string().min(1)),
+    scope: optionalStringField(z.string().min(1)),
+    verifyUrl: optionalStringField(z.string().url()),
 });
 
 const verifyEmailQuerySchema = z.object({

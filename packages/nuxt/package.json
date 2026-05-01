@@ -56,14 +56,14 @@
         "typecheck": "tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
-        "@nuxt/kit": "^4.4.2",
+        "@nuxt/kit": "^4.4.4",
         "h3": "^1.15.11",
-        "jose": "^6.2.2",
-        "nitropack": "^2.13.3"
+        "jose": "^6.2.3",
+        "nitropack": "^2.13.4"
     },
     "devDependencies": {
         "@types/node": "^25.6.0",
-        "nuxt": "^4.4.2",
+        "nuxt": "^4.4.4",
         "typescript": "^6.0.3",
         "vitest": "^4.1.5"
     },
