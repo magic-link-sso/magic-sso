@@ -40,7 +40,7 @@ describe('Fastify example app', () => {
         expect(sharedIndex).toContain('signinBadgeUrl');
         expect(readme).toContain('magic-sso-example-ui');
         expect(mainSource).toContain("import 'dotenv/config';");
-        expect(packageJson).toContain('"dev": "tsx watch src/main.ts"');
+        expect(packageJson).toContain('"dev": "node --watch --import tsx src/main.ts"');
         expect(packageJson).toContain('"start": "node dist/main.js"');
     });
 

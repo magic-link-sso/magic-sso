@@ -17,6 +17,7 @@ const signinUtilsPath = path.join(rootDir, 'src/signin-utils.ts');
 const serverPath = path.join(rootDir, 'src/server.ts');
 const envExamplePath = path.join(rootDir, '.env.example');
 const angularConfigPath = path.join(rootDir, 'angular.json');
+const packageJsonPath = path.join(rootDir, 'package.json');
 const sharedStylesPath = path.join(sharedPackageDir, 'styles.css');
 const sharedIndexPath = path.join(sharedPackageDir, 'index.js');
 
@@ -120,5 +121,11 @@ describe('Angular example app', () => {
         expect(sharedStyles).toContain('.login-panel');
         expect(sharedStyles).toContain('.message-success');
         expect(sharedStyles).toContain('@media (prefers-color-scheme: dark)');
+    });
+
+    it('execs the Angular dev server after the package build step', async () => {
+        const packageJson = await readFile(packageJsonPath, 'utf8');
+
+        expect(packageJson).toContain('"dev": "node scripts/dev.mjs"');
     });
 });

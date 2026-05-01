@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "dev": "tsx watch src/main.ts",
+        "dev": "node --watch --import tsx src/main.ts",
         "format": "oxfmt package.json tsconfig.json .env.example README.md src tests",
         "format:check": "oxfmt --check package.json tsconfig.json .env.example README.md src tests",
         "lint": "oxlint src tests",

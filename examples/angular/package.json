@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "build": "pnpm --filter @magic-link-sso/angular build && NODE_OPTIONS=--dns-result-order=ipv4first HOST=0.0.0.0 ng build",
-        "dev": "pnpm --filter @magic-link-sso/angular build && ng serve --host 0.0.0.0 --port 3004",
+        "dev": "node scripts/dev.mjs",
         "format": "oxfmt angular.json package.json tsconfig.json tsconfig.app.json src tests README.md vitest.config.ts",
         "format:check": "oxfmt --check angular.json package.json tsconfig.json tsconfig.app.json src tests README.md vitest.config.ts",
         "lint": "oxlint src tests vitest.config.ts",

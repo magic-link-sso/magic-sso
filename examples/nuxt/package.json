@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; nuxt dev -p 3002'",
+        "dev": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && exec sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; exec nuxt dev -p 3002'",
         "build": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; nuxt build'",
         "format": "oxfmt app server scripts tests nuxt.config.ts package.json tsconfig.json vitest.config.ts README.md",
         "format:check": "oxfmt --check app server scripts tests nuxt.config.ts package.json tsconfig.json vitest.config.ts README.md",

@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "clean": "rm -rf .next",
-        "dev": "node scripts/ensure-env.mjs && pnpm run clean && pnpm --filter @magic-link-sso/nextjs build && next dev --webpack -p 3001",
+        "dev": "node scripts/ensure-env.mjs && pnpm run clean && pnpm --filter @magic-link-sso/nextjs build && exec next dev --webpack -p 3001",
         "build": "node scripts/ensure-env.mjs && pnpm run clean && pnpm --filter @magic-link-sso/nextjs build && next build --webpack",
         "format": "oxfmt",
         "format:check": "oxfmt --check",

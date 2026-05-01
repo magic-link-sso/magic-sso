@@ -128,7 +128,10 @@ test('package scripts clear the Next.js build cache before dev and build', async
     const packageJson = await readFile(nextPackageJsonPath, 'utf8');
 
     assert.match(packageJson, /"clean": "rm -rf \.next"/u);
-    assert.match(packageJson, /"dev": "node scripts\/ensure-env\.mjs && pnpm run clean/u);
+    assert.match(
+        packageJson,
+        /"dev": "node scripts\/ensure-env\.mjs && pnpm run clean && pnpm --filter @magic-link-sso\/nextjs build && exec next dev --webpack -p 3001"/u,
+    );
     assert.match(packageJson, /"build": "node scripts\/ensure-env\.mjs && pnpm run clean/u);
     assert.match(packageJson, /"start": "node scripts\/ensure-env\.mjs && next start -p 3001"/u);
 });

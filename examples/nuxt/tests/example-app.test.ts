@@ -121,6 +121,9 @@ describe('Nuxt example app', () => {
         ]);
 
         expect(packageJson).toContain('node scripts/ensure-env.mjs');
+        expect(packageJson).toContain(
+            `"dev": "node scripts/ensure-env.mjs && pnpm --filter @magic-link-sso/nuxt build && exec sh -ac 'set -a; [ -f ../../server/.env ] && . ../../server/.env; set +a; exec nuxt dev -p 3002'"`,
+        );
         expect(envExample).toContain('MAGICSSO_PUBLIC_ORIGIN=http://localhost:3002');
     });
 });
