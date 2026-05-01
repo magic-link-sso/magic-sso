@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "dev": "tsx watch src/main.ts",
+        "dev": "node --watch --import tsx src/main.ts",
         "format": "oxfmt package.json tsconfig.json vitest.config.ts .env.example .env.prod.example README.md magic-gate.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src tests",
         "format:check": "oxfmt --check package.json tsconfig.json vitest.config.ts .env.example .env.prod.example README.md magic-gate.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src tests",
         "lint": "oxlint src tests",

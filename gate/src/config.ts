@@ -115,6 +115,19 @@ const gateTomlSchema = z
     })
     .strict();
 
+function formatTomlValidationIssue(issue: z.ZodIssue | undefined): string {
+    if (typeof issue === 'undefined') {
+        return 'Invalid config.';
+    }
+
+    const issuePath = issue.path.map(String).join('.');
+    if (issue.code === 'invalid_type' && issue.input === undefined && issuePath.length > 0) {
+        return `${issuePath} is required.`;
+    }
+
+    return issuePath.length > 0 ? `${issuePath}: ${issue.message}` : issue.message;
+}
+
 function trimTrailingSlash(pathname: string): string {
     return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 }
@@ -566,7 +579,7 @@ function parseGateToml(fileContents: string, filePath: string): GateConfigInput 
     const parsedConfig = gateTomlSchema.safeParse(parsedToml);
     if (!parsedConfig.success) {
         throw new Error(
-            `Failed to validate MAGIC_GATE_CONFIG_FILE (${filePath}): ${parsedConfig.error.issues[0]?.message ?? 'Invalid config.'}`,
+            `Failed to validate MAGIC_GATE_CONFIG_FILE (${filePath}): ${formatTomlValidationIssue(parsedConfig.error.issues[0])}`,
         );
     }
 

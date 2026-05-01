@@ -260,6 +260,7 @@ publicOrigin = "http://private.example.com"
 upstreamUrl = "http://private-upstream.internal"
 
 [auth]
+jwtSecret = "test-jwt-secret-for-magic-gate-123456"
 serverUrl = "http://sso.example.com"
 `.trimStart(),
         );
@@ -269,7 +270,9 @@ serverUrl = "http://sso.example.com"
                 loadConfig({
                     MAGIC_GATE_CONFIG_FILE: file.path,
                 }),
-            ).toThrowError(/Failed to validate MAGIC_GATE_CONFIG_FILE/u);
+            ).toThrowError(
+                /Failed to validate MAGIC_GATE_CONFIG_FILE .*auth\.previewSecret is required\./u,
+            );
         } finally {
             file.cleanup();
         }
