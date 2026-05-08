@@ -17,7 +17,9 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-export const FULL_ACCESS_SCOPE = '*';
+import { FULL_ACCESS_SCOPE } from '@magic-link-sso/config-core';
+
+export { FULL_ACCESS_SCOPE };
 
 export function normalizeRequestedScope(scope: string | undefined): string {
     if (typeof scope !== 'string') {

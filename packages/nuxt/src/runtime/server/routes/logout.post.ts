@@ -1,27 +1,30 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { defineEventHandler, deleteCookie, getRequestURL, sendRedirect } from 'h3';
+import { defineEventHandler, deleteCookie, sendRedirect } from 'h3';
 import type { H3Event } from 'h3';
-import { getCookieName, getMagicSsoConfig } from '../utils/auth';
-
-function readHeaderValue(value: string | string[] | undefined): string | undefined {
-    if (Array.isArray(value)) {
-        return typeof value[0] === 'string' ? value[0] : undefined;
-    }
-
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
+import {
+    getCookieName,
+    getMagicSsoConfig,
+    getRequestOrigin,
+    readFirstHeaderValue,
+} from '../utils/auth';
 
 function hasSameOriginMutationSource(event: H3Event): boolean {
-    const expectedOrigin = getRequestURL(event).origin;
-    const originHeader = readHeaderValue(event.node.req.headers.origin);
-    if (typeof originHeader === 'string') {
+    const expectedOrigin = getRequestOrigin(event, {
+        allowRequestUrlFallback: true,
+    });
+    if (expectedOrigin === null) {
+        return false;
+    }
+
+    const originHeader = readFirstHeaderValue(event.node.req.headers.origin);
+    if (originHeader !== null) {
         return originHeader === expectedOrigin;
     }
 
-    const refererHeader = readHeaderValue(event.node.req.headers.referer);
-    if (typeof refererHeader !== 'string') {
+    const refererHeader = readFirstHeaderValue(event.node.req.headers.referer);
+    if (refererHeader === null) {
         return false;
     }
 

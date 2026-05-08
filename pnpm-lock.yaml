@@ -264,6 +264,52 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
+  examples/photos:
+    dependencies:
+      '@magic-link-sso/nextjs':
+        specifier: workspace:*
+        version: link:../../packages/nextjs
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
+      jwt-decode:
+        specifier: ^4.0.0
+        version: 4.0.0
+      next:
+        specifier: ^16.2.4
+        version: 16.2.4(@playwright/test@1.59.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(sass@1.97.3)
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4.2.4
+        version: 4.2.4
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      postcss:
+        specifier: ^8.5.13
+        version: 8.5.13
+      tailwindcss:
+        specifier: ^4.2.4
+        version: 4.2.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+
   gate:
     dependencies:
       '@fastify/cookie':
@@ -316,6 +362,37 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
 
+  manager:
+    dependencies:
+      '@fastify/rate-limit':
+        specifier: ^10.3.0
+        version: 10.3.0
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../packages/config-core
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      smol-toml:
+        specifier: ^1.6.1
+        version: 1.6.1
+      zod:
+        specifier: ^4.4.1
+        version: 4.4.1
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+
   packages/angular:
     dependencies:
       jose:
@@ -328,6 +405,25 @@ importers:
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+
+  packages/config-core:
+    dependencies:
+      smol-toml:
+        specifier: ^1.6.1
+        version: 1.6.1
+      zod:
+        specifier: ^4.4.1
+        version: 4.4.1
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
@@ -414,6 +510,9 @@ importers:
       '@fastify/view':
         specifier: ^11.1.1
         version: 11.1.1
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../packages/config-core
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -9633,7 +9732,7 @@ snapshots:
 
   '@types/nodemailer@8.0.0':
     dependencies:
-      '@types/node': 24.12.2
+      '@types/node': 25.6.0
 
   '@types/qs@6.15.0': {}
 

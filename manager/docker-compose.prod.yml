@@ -1,0 +1,43 @@
+services:
+  manager:
+    image: ${MANAGER_IMAGE:-ghcr.io/magic-link-sso/magic-sso/manager:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      MAGICSSO_MANAGER_CONFIG_FILE: ${MAGICSSO_MANAGER_CONFIG_FILE:-/app/runtime/manager.toml}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4311/healthz').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5m
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+      start_interval: 5s
+    volumes:
+      - ./runtime:/app/runtime
+
+  magic-gate-manager:
+    image: ${MAGIC_GATE_IMAGE:-ghcr.io/magic-link-sso/magic-sso/gate:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      MAGIC_GATE_CONFIG_FILE: ${MAGIC_GATE_CONFIG_FILE:-/app/gate/magic-gate.toml}
+    ports:
+      - '${MANAGER_PUBLIC_PORT:-4000}:4000'
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./magic-gate.toml:/app/gate/magic-gate.toml:ro
+    depends_on:
+      manager:
+        condition: service_healthy

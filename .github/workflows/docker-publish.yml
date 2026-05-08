@@ -23,6 +23,8 @@ jobs:
             image_name: server
           - dockerfile: ./gate/Dockerfile
             image_name: gate
+          - dockerfile: ./manager/Dockerfile
+            image_name: manager
     permissions:
       contents: read
       packages: write
@@ -95,5 +97,5 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}
           subject-digest: ${{ steps.build-and-push.outputs.digest }}

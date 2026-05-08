@@ -15,6 +15,11 @@ x-sso-render-env: &sso-render-env
   PRIVATE1_PUBLIC_HOST: ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
   PRIVATE2_ALLOWED_EMAIL: ${PRIVATE2_ALLOWED_EMAIL:-private2@example.com}
   PRIVATE2_PUBLIC_HOST: ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
+  MANAGER_AUDIT_INTEGRITY_KEY: ${MANAGER_AUDIT_INTEGRITY_KEY:-gate-dev-audit-integrity-key-1234567890}
+  MANAGER_ALLOWED_EMAIL: ${MANAGER_ALLOWED_EMAIL:-manager@example.com}
+  MANAGER_PUBLIC_HOST: ${MANAGER_PUBLIC_HOST:-manager.localhost}
+  MANAGER_RELOAD_SECRET: ${MANAGER_RELOAD_SECRET:-gate-dev-reload-secret-1234567890}
+  MANAGER_UPSTREAM_PORT: ${MANAGER_UPSTREAM_PORT:-4311}
   PUBLIC_PROXY_PORT: ${PUBLIC_PROXY_PORT:-4306}
   SSO_PUBLIC_HOST: ${SSO_PUBLIC_HOST:-sso.localhost}
 
@@ -47,16 +52,45 @@ services:
       context: ..
       dockerfile: server/Dockerfile
     environment:
-      MAGICSSO_CONFIG_FILE: /app/server/magic-sso.toml
-      <<: *sso-render-env
+      MAGICSSO_CONFIG_FILE: /app/runtime/magic-sso.runtime.toml
     restart: unless-stopped
     volumes:
-      - ./dev/magic-sso.toml.template:/app/server/magic-sso.toml.template:ro
-      - ./dev/render-magic-sso-config.mjs:/app/server/render-magic-sso-config.mjs:ro
-    command: >
-      sh -c "node /app/server/render-magic-sso-config.mjs && node dist/main.js"
+      - ./runtime:/app/runtime:ro
     depends_on:
-      - mailpit
+      mailpit:
+        condition: service_started
+      manager:
+        condition: service_healthy
+
+  manager:
+    build:
+      context: ..
+      dockerfile: manager/Dockerfile
+    environment:
+      MAGICSSO_MANAGER_CONFIG_FILE: /app/runtime/manager.toml
+      <<: *sso-render-env
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4311/healthz').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5m
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+      start_interval: 5s
+    restart: unless-stopped
+    volumes:
+      - ./runtime:/app/runtime
+      - ./dev/bootstrap-manager-stack.mjs:/app/manager/bootstrap-manager-stack.mjs:ro
+      - ./dev/manager-state.json.template:/app/manager/manager-state.json.template:ro
+      - ./dev/manager.toml.template:/app/manager/manager.toml.template:ro
+      - ./dev/magic-sso.toml.template:/app/server/magic-sso.base.toml.template:ro
+    command: >
+      sh -c "node /app/manager/bootstrap-manager-stack.mjs && node dist/main.js"
 
   private1-upstream:
     build:
@@ -115,9 +149,31 @@ services:
       - private2-static
       - magic-sso
 
+  magic-gate-manager:
+    build:
+      context: ..
+      dockerfile: gate/Dockerfile
+    environment:
+      MAGIC_GATE_CONFIG_FILE: /app/gate/magic-gate.toml
+      <<: *gate-render-env
+      MAGIC_GATE_RENDER_PUBLIC_ORIGIN: http://${MANAGER_PUBLIC_HOST:-manager.localhost}:${PUBLIC_PROXY_PORT:-4306}
+      MAGIC_GATE_RENDER_UPSTREAM_URL: http://manager:${MANAGER_UPSTREAM_PORT:-4311}
+    restart: unless-stopped
+    volumes:
+      - ./dev/magic-gate.toml.template:/app/gate/magic-gate.toml.template:ro
+      - ./dev/render-magic-gate-config.mjs:/app/gate/render-magic-gate-config.mjs:ro
+    command: >
+      sh -c "node /app/gate/render-magic-gate-config.mjs && node dist/main.js"
+    depends_on:
+      manager:
+        condition: service_healthy
+      magic-sso:
+        condition: service_started
+
   public-proxy:
     image: caddy:2-alpine
     environment:
+      MANAGER_PUBLIC_HOST: ${MANAGER_PUBLIC_HOST:-manager.localhost}
       PRIVATE1_PUBLIC_HOST: ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
       PRIVATE2_PUBLIC_HOST: ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
       PUBLIC_PROXY_PORT: ${PUBLIC_PROXY_PORT:-4306}
@@ -134,6 +190,7 @@ services:
     networks:
       default:
         aliases:
+          - ${MANAGER_PUBLIC_HOST:-manager.localhost}
           - ${PRIVATE1_PUBLIC_HOST:-private1.localhost}
           - ${PRIVATE2_PUBLIC_HOST:-private2.localhost}
           - ${SSO_PUBLIC_HOST:-sso.localhost}

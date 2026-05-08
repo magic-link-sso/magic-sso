@@ -13,21 +13,22 @@
     "type": "module",
     "main": "dist/main.js",
     "scripts": {
-        "build": "tsc -p tsconfig.json",
-        "dev": "node --watch --import tsx src/main.ts",
+        "build": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.json",
+        "dev": "pnpm --filter @magic-link-sso/config-core build && node --watch --import tsx src/main.ts",
         "format": "oxfmt .",
         "format:check": "oxfmt --check .",
         "lint": "oxlint .",
         "start": "node dist/main.js",
-        "test": "vitest run",
+        "test": "pnpm --filter @magic-link-sso/config-core build && vitest run",
         "test:coverage": "vitest run --coverage",
-        "typecheck": "tsc -p tsconfig.json --noEmit"
+        "typecheck": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.json --noEmit"
     },
     "dependencies": {
         "@fastify/cookie": "^11.0.2",
         "@fastify/formbody": "^8.0.2",
         "@fastify/rate-limit": "^10.3.0",
         "@fastify/view": "^11.1.1",
+        "@magic-link-sso/config-core": "workspace:*",
         "dotenv": "^17.4.2",
         "ejs": "^5.0.2",
         "fastify": "^5.8.5",

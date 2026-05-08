@@ -1,0 +1,63 @@
+[server]
+appPort = 3000
+appUrl = "http://${SSO_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}"
+logLevel = "info"
+logFormat = "json"
+serveRootLandingPage = false
+trustProxy = true
+verifyTokenStoreDir = "/tmp/magic-sso/verification-tokens"
+signInEmailRateLimitStoreDir = "/tmp/magic-sso/signin-email-rate-limit"
+
+[server.reload]
+secret = "${MANAGER_RELOAD_SECRET}"
+
+[auth]
+jwtSecret = "${MAGICSSO_JWT_SECRET}"
+jwtExpiration = "1h"
+csrfSecret = "${MAGICSSO_DEV_CSRF_SECRET}"
+emailSecret = "${MAGICSSO_DEV_EMAIL_SECRET}"
+previewSecret = "${MAGICSSO_PREVIEW_SECRET}"
+emailExpiration = "15m"
+
+[cookie]
+name = "${MAGICSSO_COOKIE_NAME}"
+httpOnly = true
+sameSite = "lax"
+secure = false
+
+[email]
+from = "owner@example.com"
+signature = "Magic Link SSO"
+
+[email.smtp]
+host = "mailpit"
+port = 1025
+user = "mailpit"
+pass = "mailpit"
+secure = false
+
+[[sites]]
+id = "photos"
+origins = ["http://${PHOTOS_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}"]
+allowedRedirectUris = [
+  "http://${PHOTOS_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}/verify-email",
+  "http://${PHOTOS_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}/*",
+]
+allowedEmails = ["${PHOTOS_OWNER_EMAIL}", "${PHOTOS_FRIEND_EMAIL}", "${PHOTOS_FAMILY_EMAIL}"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO Photos Demo"
+logoText = "PH"
+
+[[sites]]
+id = "manager-admin"
+origins = ["http://${MANAGER_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}"]
+allowedRedirectUris = [
+  "http://${MANAGER_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}/_magicgate/verify-email",
+  "http://${MANAGER_PUBLIC_HOST}:${MANAGER_PUBLIC_PORT}/*",
+]
+allowedEmails = ["${MANAGER_ALLOWED_EMAIL}"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO Manager"
+logoText = "MG"

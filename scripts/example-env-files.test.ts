@@ -80,6 +80,19 @@ const exampleEnvSpecs: readonly ExampleEnvSpec[] = [
         },
     },
     {
+        filePath: 'examples/photos/.env.local.example',
+        requiredEntries: {
+            MAGICSSO_COOKIE_MAX_AGE: '3600',
+            MAGICSSO_COOKIE_NAME: 'magic-sso',
+            MAGICSSO_COOKIE_PATH: '/',
+            MAGICSSO_DIRECT_USE: 'false',
+            MAGICSSO_JWT_SECRET: 'VERY-VERY-LONG-RANDOM-JWT-SECRET',
+            MAGICSSO_PREVIEW_SECRET: 'VERY-VERY-LONG-RANDOM-PREVIEW-SECRET',
+            MAGICSSO_PUBLIC_ORIGIN: 'http://localhost:5001',
+            MAGICSSO_SERVER_URL: 'http://localhost:3000',
+        },
+    },
+    {
         filePath: 'examples/nuxt/.env.example',
         requiredEntries: {
             MAGICSSO_COOKIE_MAX_AGE: '3600',
@@ -109,6 +122,25 @@ const exampleEnvSpecs: readonly ExampleEnvSpec[] = [
             MAGICSSO_PUBLIC_URLS: 'login',
             MAGICSSO_REQUEST_TIMEOUT: '5',
             MAGICSSO_SERVER_URL: 'http://localhost:3000',
+        },
+    },
+    {
+        filePath: 'manager/.env.example',
+        requiredEntries: {
+            MAGICSSO_COOKIE_MAX_AGE: '3600',
+            MAGICSSO_COOKIE_NAME: 'magic-sso',
+            MAGICSSO_DEV_CSRF_SECRET: 'manager-dev-csrf-secret-1234567890abc',
+            MAGICSSO_DEV_EMAIL_SECRET: 'manager-dev-email-secret-1234567890ab',
+            MAGICSSO_JWT_SECRET: 'manager-dev-jwt-secret-1234567890abcd',
+            MAGICSSO_PREVIEW_SECRET: 'manager-dev-preview-secret-123456789',
+            MANAGER_ALLOWED_EMAIL: 'manager@example.com',
+            MANAGER_AUDIT_INTEGRITY_KEY: 'manager-dev-audit-integrity-key-1234567890',
+            MANAGER_PUBLIC_PORT: '4306',
+            MANAGER_RELOAD_SECRET: 'manager-dev-reload-secret-1234567890',
+            MANAGER_UPSTREAM_PORT: '4311',
+            PHOTOS_FAMILY_EMAIL: 'family@example.com',
+            PHOTOS_FRIEND_EMAIL: 'friend@example.com',
+            PHOTOS_OWNER_EMAIL: 'owner@example.com',
         },
     },
 ];

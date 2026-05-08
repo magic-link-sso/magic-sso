@@ -266,17 +266,45 @@ export function normaliseReturnUrl(returnUrl: string | undefined, origin: string
     }
 }
 
-function getExpectedAudience(event: H3Event): string | null {
+export function readFirstHeaderValue(value: string | string[] | undefined): string | null {
+    if (Array.isArray(value)) {
+        return typeof value[0] === 'string' ? value[0] : null;
+    }
+
+    return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function inferOriginProtocol(host: string): string {
+    return host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https';
+}
+
+export function getRequestOrigin(
+    event: H3Event,
+    options?: { allowRequestUrlFallback?: boolean },
+): string | null {
     const config = getMagicSsoConfig(event);
     if (config.publicOrigin.length > 0) {
         return config.publicOrigin;
     }
 
-    if (!config.trustProxy) {
-        return null;
+    if (config.trustProxy) {
+        const host =
+            readFirstHeaderValue(event.node.req.headers['x-forwarded-host']) ??
+            readFirstHeaderValue(event.node.req.headers.host);
+        if (host !== null) {
+            const forwardedProtocol = readFirstHeaderValue(
+                event.node.req.headers['x-forwarded-proto'],
+            );
+            const protocol = forwardedProtocol ?? inferOriginProtocol(host);
+            return `${protocol}://${host}`;
+        }
     }
 
-    return getRequestURL(event).origin;
+    return options?.allowRequestUrlFallback === true ? getRequestURL(event).origin : null;
+}
+
+function getExpectedAudience(event: H3Event): string | null {
+    return getRequestOrigin(event);
 }
 
 export async function verifyAuthToken(

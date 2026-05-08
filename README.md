@@ -8,9 +8,19 @@ can run without a database.
 
 This repository contains the server, reusable framework packages, the Magic Link
 SSO Gate reverse-proxy service, and example apps for Angular, Django, Fastify,
-Next.js, and Nuxt, plus two Gate-backed private resources: `private1` as a
-dynamic upstream example and `private2` as a static site example. See
-[Magic Link SSO Gate](#magic-link-sso-gate).
+Next.js, Nuxt, and the managed-mode Photos demo, plus two Gate-backed private
+resources: `private1` as a dynamic upstream example and `private2` as a static
+site example. See [Magic Link SSO Gate](#magic-link-sso-gate).
+
+Magic Link SSO also supports two operator workflows:
+
+- classic mode: the server reads one operator-maintained TOML file
+- managed mode: an optional manager generates a runtime TOML from static config
+  plus manager-owned access state
+
+For agent-agnostic setup and integration skills that can be installed into tools
+such as Codex, Claude, and Gemini, see the separate
+[magic-link-sso/skills](https://github.com/magic-link-sso/skills) repository.
 
 ## At a Glance
 
@@ -32,6 +42,7 @@ passwords or HTTP Basic Auth.
 
 - [How it works](#how-it-works)
 - [Getting Started](#getting-started)
+- [Deployment Modes](#deployment-modes)
 - [Configuration Reference](#configuration-reference)
 - [Framework Integrations](#framework-integrations)
 - [Magic Link SSO Gate](#magic-link-sso-gate)
@@ -93,6 +104,10 @@ Flows:
     adapter = "file"
     # redisUrl = "redis://127.0.0.1:6379/0"
     keyPrefix = "magic-sso"
+
+    # Optional internal reload hook for manager-driven applies.
+    # [server.reload]
+    # secret = "replace-me-with-a-dedicated-long-random-reload-secret"
 
     [auth]
     jwtSecret = "replace-me-with-a-long-random-jwt-secret"
@@ -173,7 +188,8 @@ Prerequisites:
 Repository layout:
 
 - `server/` SSO server
-- `examples/` example apps for Angular, Django, Fastify, Next.js, and Nuxt
+- `examples/` example apps for Angular, Django, Fastify, Next.js, Nuxt, and the
+  managed-mode Photos demo
 - `packages/` reusable framework integrations
 - `docs/` supporting documentation and diagrams
 
@@ -232,6 +248,7 @@ pnpm dev:nextjs
 pnpm dev:nextjs:package
 pnpm dev:nuxt
 pnpm dev:nuxt:package
+pnpm dev:photos
 pnpm dev:django
 pnpm dev:private1
 pnpm dev:private2
@@ -258,6 +275,46 @@ with `PW_SLOWMO_MS`, for example:
 PW_SLOWMO_MS=1200 pnpm test:e2e:ui
 ```
 
+## Deployment Modes
+
+Magic Link SSO supports two deployment modes:
+
+- Classic mode keeps the original workflow: the server reads a single
+  `magic-sso.toml`, and operators edit that file directly.
+- Managed mode is optional and additive: operators keep a static
+  `magic-sso.base.toml`, the manager stores mutable access data separately, and
+  the server reads a generated `magic-sso.runtime.toml`.
+- The optional manager can export/import portable state snapshots and reconcile
+  manager-owned access from either the base or runtime file before the next
+  apply.
+
+Classic mode remains the default and requires no manager package, database, or
+state migration.
+
+### Choose a Mode
+
+- Choose classic mode if you want the original workflow: one operator-maintained
+  `magic-sso.toml`, manual edits, and your normal restart-or-reload process.
+- Choose managed mode only if you want the optional manager package to own
+  access administration for selected sites. The server does not depend on
+  manager state unless you deliberately point `MAGICSSO_CONFIG_FILE` at the
+  generated `magic-sso.runtime.toml`.
+- Rolling back from managed mode to classic mode is operational: stop using the
+  generated runtime file, point `MAGICSSO_CONFIG_FILE` back to your manual TOML,
+  and reload or restart the server.
+
+Manager-specific docs:
+
+- [Manager architecture](./docs/manager-architecture.md)
+- [Managed mode setup, compose example, and file ownership](./docs/managed-mode.md)
+- [Manager operations and drift recovery](./docs/manager-operations.md)
+- [Manager package README and CLI/API/UI workflows](./manager/README.md)
+
+For a production-style managed-mode admin surface that uses published images,
+see `manager/docker-compose.prod.yml` together with
+[`manager/README.md`](./manager/README.md) and
+[`docs/managed-mode.md`](./docs/managed-mode.md).
+
 ## Configuration Reference
 
 The server reads its runtime config from the TOML file referenced by
@@ -273,6 +330,8 @@ Top-level tables:
 - `[server]` sets `appUrl`, `appPort`, `logLevel`, `logFormat`,
   `serveRootLandingPage`, `trustProxy`, `verifyTokenStoreDir`, and
   `signInEmailRateLimitStoreDir`.
+- `[server.reload]` optionally enables the internal authenticated config reload
+  hook used by managed-mode applies.
 - `[server.securityState]` selects whether replay protection and per-email
   sign-in throttling use local files or shared Redis state.
 - `[auth]` sets `jwtSecret`, `jwtExpiration`, `csrfSecret`, `emailSecret`, and
@@ -299,6 +358,11 @@ single Magic Link SSO server instance. In multi-instance deployments, set
 `server.securityState.redisUrl` so verification-token replay prevention and
 per-email sign-in throttling are enforced cluster-wide. `keyPrefix` is optional
 and defaults to `"magic-sso"`.
+
+`[server.reload]` is optional. If you omit it, the server behaves exactly as it
+does in classic mode and does not expose the internal reload endpoint. If you
+configure it, set `server.reload.secret` to a dedicated long random secret and
+keep the endpoint on private networking only.
 
 Each `[[sites]]` entry must define:
 
@@ -399,6 +463,7 @@ Framework-specific setup lives in the package and example READMEs:
 - Fastify: [example](./examples/fastify/README.md)
 - Next.js: [package](./packages/nextjs/README.md),
   [example](./examples/nextjs/README.md)
+- Photos managed-mode demo: [example](./examples/photos/README.md)
 - Nuxt: [package](./packages/nuxt/README.md),
   [example](./examples/nuxt/README.md)
 
@@ -458,6 +523,7 @@ Published Docker images are split by component under the repository namespace:
 
 - `ghcr.io/magic-link-sso/magic-sso/server:latest`
 - `ghcr.io/magic-link-sso/magic-sso/gate:latest`
+- `ghcr.io/magic-link-sso/magic-sso/manager:latest`
 
 See the full guide in [docs/gate.md](./docs/gate.md).
 
@@ -493,6 +559,9 @@ This repository contains multiple components under different licenses.
 - **Repository default:** [MIT License](./LICENSE) unless a more specific
   component license applies
 - **Server code:** [GNU General Public License v3.0 (GPLv3)](./server/LICENSE)
+- **Manager code:** [GNU General Public License v3.0 (GPLv3)](./manager/LICENSE)
+- **Gate service, examples, and top-level docs/tooling:** MIT under the
+  repository default unless a more specific component license applies
 - **Published framework packages:** MIT under their component license files
 - **@magic-link-sso/angular:** Licensed under
   [MIT License](./packages/angular/LICENSE)

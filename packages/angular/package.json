@@ -46,7 +46,7 @@
         "registry": "https://registry.npmjs.org/"
     },
     "scripts": {
-        "build": "pnpm run clean && tsc -p tsconfig.json",
+        "build": "tsc -p tsconfig.json",
         "build:watch": "tsc -p tsconfig.json --watch",
         "clean": "rm -rf dist tsconfig.tsbuildinfo",
         "format": "oxfmt .",

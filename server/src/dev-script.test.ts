@@ -24,6 +24,8 @@ describe('server dev script', () => {
     it('uses Node watch mode with tsx import for clean shutdowns', async () => {
         const packageJson = await readFile(new URL('../package.json', import.meta.url), 'utf8');
 
-        expect(packageJson).toContain('"dev": "node --watch --import tsx src/main.ts"');
+        expect(packageJson).toContain(
+            '"dev": "pnpm --filter @magic-link-sso/config-core build && node --watch --import tsx src/main.ts"',
+        );
     });
 });

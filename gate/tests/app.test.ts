@@ -1128,6 +1128,77 @@ describe('magic gate routes', () => {
         }
     });
 
+    it('forwards urlencoded form bodies to the protected upstream', async () => {
+        mockSessionRevocationCheck(ssoOrigin);
+        let observedBody = '';
+        let observedContentLength = '';
+        let observedContentType = '';
+
+        const upstream = createServer((request, response) => {
+            observedContentLength = request.headers['content-length'] ?? '';
+            observedContentType = request.headers['content-type'] ?? '';
+            request.setEncoding('utf8');
+            request.on('data', (chunk: string) => {
+                observedBody += chunk;
+            });
+            request.on('end', () => {
+                response.writeHead(200, {
+                    'content-type': 'application/json; charset=utf-8',
+                });
+                response.end(JSON.stringify({ ok: true }));
+            });
+        });
+        const upstreamPort = await listenOnLocalhost(upstream);
+        const app = await createApp({
+            config: {
+                jwtSecret: testJwtSecret,
+                publicOrigin: gateOrigin,
+                previewSecret: testPreviewSecret,
+                requestTimeoutMs: 5_000,
+                serverUrl: ssoOrigin,
+                upstreamUrl: `http://127.0.0.1:${upstreamPort}`,
+            },
+            logger: false,
+        });
+        const accessToken = await createAccessToken({
+            audience: gateOrigin,
+            issuer: ssoOrigin,
+        });
+        const formPayload = new URLSearchParams({
+            grantEmail: 'reports@example.com',
+            grantMode: 'scoped',
+            selectedScope0: 'reports',
+        }).toString();
+
+        try {
+            const response = await app.inject({
+                method: 'POST',
+                url: '/sites/fastify/access/grants',
+                headers: {
+                    cookie: `magic-sso=${encodeURIComponent(accessToken)}`,
+                    'content-type': 'application/x-www-form-urlencoded',
+                },
+                payload: formPayload,
+            });
+
+            expect(response.statusCode).toBe(200);
+            expect(observedBody).toBe(formPayload);
+            expect(observedContentType).toContain('application/x-www-form-urlencoded');
+            expect(observedContentLength).toBe(String(Buffer.byteLength(formPayload)));
+        } finally {
+            await app.close();
+            await new Promise<void>((resolve, reject) => {
+                upstream.close((error) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+                    resolve();
+                });
+            });
+        }
+    });
+
     it('filters upstream cookies that collide with gate cookie names', async () => {
         mockSessionRevocationCheck(ssoOrigin);
         const upstream = createServer((_request, response) => {

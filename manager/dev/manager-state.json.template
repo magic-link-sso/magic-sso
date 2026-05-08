@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "managedSites": {
+    "photos": {
+      "grants": [
+        {
+          "email": "${PHOTOS_OWNER_EMAIL}",
+          "scopes": [
+            "*"
+          ]
+        },
+        {
+          "email": "${PHOTOS_FRIEND_EMAIL}",
+          "scopes": [
+            "friends"
+          ]
+        },
+        {
+          "email": "${PHOTOS_FAMILY_EMAIL}",
+          "scopes": [
+            "family"
+          ]
+        }
+      ],
+      "scopeCatalog": [
+        "friends",
+        "family",
+        "photo:red-kite-at-dusk"
+      ]
+    }
+  },
+  "metadata": {}
+}

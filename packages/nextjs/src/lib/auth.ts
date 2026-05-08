@@ -143,7 +143,7 @@ export function isTrustProxyEnabled(): boolean {
     return readBooleanEnv(process.env.MAGICSSO_TRUST_PROXY);
 }
 
-function readFirstHeaderValue(value: string | null): string | null {
+export function readFirstHeaderValue(value: string | null): string | null {
     if (typeof value !== 'string' || value.length === 0) {
         return null;
     }
@@ -152,7 +152,7 @@ function readFirstHeaderValue(value: string | null): string | null {
     return typeof firstValue === 'string' && firstValue.length > 0 ? firstValue.trim() : null;
 }
 
-async function getRequestOrigin(): Promise<string | null> {
+export async function getRequestOrigin(): Promise<string | null> {
     const publicOrigin = getPublicOrigin();
     if (publicOrigin !== null) {
         return publicOrigin;

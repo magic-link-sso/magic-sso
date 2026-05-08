@@ -27,10 +27,36 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getCookieName, getCookiePath } from '../../lib/auth';
+import {
+    getCookieName,
+    getCookiePath,
+    getPublicOrigin,
+    isTrustProxyEnabled,
+    readFirstHeaderValue,
+} from '../../lib/auth';
 
-function hasSameOriginMutationSource(request: Request): boolean {
-    const expectedOrigin = new URL(request.url).origin;
+function getExpectedOrigin(request: Request): string {
+    const publicOrigin = getPublicOrigin();
+    if (publicOrigin !== null) {
+        return publicOrigin;
+    }
+
+    if (isTrustProxyEnabled()) {
+        const forwardedHost = readFirstHeaderValue(request.headers.get('x-forwarded-host'));
+        const host = forwardedHost ?? readFirstHeaderValue(request.headers.get('host'));
+        if (typeof host === 'string' && host.length > 0) {
+            const forwardedProtocol = readFirstHeaderValue(
+                request.headers.get('x-forwarded-proto'),
+            );
+            const protocol = forwardedProtocol ?? new URL(request.url).protocol.slice(0, -1);
+            return `${protocol}://${host}`;
+        }
+    }
+
+    return new URL(request.url).origin;
+}
+
+function hasSameOriginMutationSource(request: Request, expectedOrigin: string): boolean {
     const originHeader = request.headers.get('origin');
     if (typeof originHeader === 'string' && originHeader.length > 0) {
         return originHeader === expectedOrigin;
@@ -58,13 +84,15 @@ export async function LogoutRoute(request: Request): Promise<Response> {
         });
     }
 
-    if (!hasSameOriginMutationSource(request)) {
+    const expectedOrigin = getExpectedOrigin(request);
+
+    if (!hasSameOriginMutationSource(request, expectedOrigin)) {
         return new NextResponse('Forbidden', {
             status: 403,
         });
     }
 
-    const url = new URL(request.url);
+    const url = new URL('/', expectedOrigin);
     url.pathname = '/';
     const response = NextResponse.redirect(url, 303);
 

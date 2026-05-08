@@ -1,6 +1,3 @@
-!**/.env.example
-!**/.env.local.example
-!.env.example
 **/.angular/
 **/.nuxt/
 **/.output/
@@ -9,6 +6,10 @@
 *.sqlite*
 .DS_Store
 .env*
+!.env.example
+!**/.env.example
+!**/.env.local.example
+!manager/.env.prod.example
 .idea/
 .magic-sso/
 .next/
@@ -22,6 +23,10 @@ node_modules/
 playwright-report/
 run/
 gate/magic-gate.toml
+gate/runtime/*
+!gate/runtime/.gitkeep
+manager/runtime/*
+!manager/runtime/.gitkeep
 server/magic-sso.toml
 test-results/
 venv/
