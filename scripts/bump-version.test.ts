@@ -16,6 +16,32 @@ import {
     resolveReleaseVersion,
 } from './release-metadata.mjs';
 
+const jsReleasePackages: Array<[string, string]> = [
+    ['gate/package.json', 'magic-sso-gate'],
+    ['manager/package.json', 'magic-sso-manager'],
+    ['packages/config-core/package.json', '@magic-link-sso/config-core'],
+    ['packages/angular/package.json', '@magic-link-sso/angular'],
+    ['packages/example-ui/package.json', 'magic-sso-example-ui'],
+    ['packages/nextjs/package.json', '@magic-link-sso/nextjs'],
+    ['packages/nuxt/package.json', '@magic-link-sso/nuxt'],
+    ['server/package.json', 'magic-sso-server'],
+    ['examples/angular/package.json', 'example-app-angular'],
+    ['examples/fastify/package.json', 'example-app-fastify'],
+    ['examples/gate-private1-app/package.json', 'example-app-gate-private1'],
+    ['examples/gate-private2-static/package.json', 'example-app-gate-private2-static'],
+    ['examples/nextjs/package.json', 'example-app-nextjs'],
+    ['examples/nuxt/package.json', 'example-app-nuxt'],
+    ['examples/photos/package.json', 'example-app-photos'],
+];
+
+const currentReleaseVersionSourceFiles = new Set([
+    'packages/angular/package.json',
+    'packages/example-ui/package.json',
+    'packages/nextjs/package.json',
+    'packages/nuxt/package.json',
+    'server/package.json',
+]);
+
 function indentLines(source: string, prefix: string): string {
     return source
         .trim()
@@ -26,23 +52,10 @@ function indentLines(source: string, prefix: string): string {
 
 async function writeWorkspace(rootDir: string): Promise<void> {
     const files: Array<[string, string]> = [
-        [
-            'packages/angular/package.json',
-            '{\n    "name": "@magic-link-sso/angular",\n    "version": "1.0.0"\n}\n',
-        ],
-        [
-            'packages/example-ui/package.json',
-            '{\n    "name": "magic-sso-example-ui",\n    "version": "1.0.0"\n}\n',
-        ],
-        [
-            'packages/nextjs/package.json',
-            '{\n    "name": "@magic-link-sso/nextjs",\n    "version": "1.0.0"\n}\n',
-        ],
-        [
-            'packages/nuxt/package.json',
-            '{\n    "name": "@magic-link-sso/nuxt",\n    "version": "1.0.0"\n}\n',
-        ],
-        ['server/package.json', '{\n    "name": "magic-sso-server",\n    "version": "1.0.0"\n}\n'],
+        ...jsReleasePackages.map(([relativePath, packageName]) => [
+            relativePath,
+            `{\n    "name": "${packageName}",\n    "version": "${currentReleaseVersionSourceFiles.has(relativePath) ? '1.0.0' : '0.1.0'}"\n}\n`,
+        ]),
         [
             'packages/django/pyproject.toml',
             indentLines(
@@ -160,21 +173,11 @@ describe('version bump workflow', () => {
         });
 
         expect(formatVersionChanges(changes)).toContain('0.9.0');
-        expect(
-            await readFile(path.join(rootDir, 'packages/angular/package.json'), 'utf8'),
-        ).toContain('"version": "0.9.0"');
-        expect(
-            await readFile(path.join(rootDir, 'packages/example-ui/package.json'), 'utf8'),
-        ).toContain('"version": "0.9.0"');
-        expect(
-            await readFile(path.join(rootDir, 'packages/nextjs/package.json'), 'utf8'),
-        ).toContain('"version": "0.9.0"');
-        expect(await readFile(path.join(rootDir, 'packages/nuxt/package.json'), 'utf8')).toContain(
-            '"version": "0.9.0"',
-        );
-        expect(await readFile(path.join(rootDir, 'server/package.json'), 'utf8')).toContain(
-            '"version": "0.9.0"',
-        );
+        for (const [relativePath] of jsReleasePackages) {
+            expect(await readFile(path.join(rootDir, relativePath), 'utf8')).toContain(
+                '"version": "0.9.0"',
+            );
+        }
         expect(
             await readFile(path.join(rootDir, 'packages/django/pyproject.toml'), 'utf8'),
         ).toContain('version = "0.9.0"');
@@ -203,7 +206,7 @@ describe('version bump workflow', () => {
             rootDir,
         });
 
-        expect(changes).toHaveLength(10);
+        expect(changes).toHaveLength(20);
         expect(await readFile(packageJsonPath, 'utf8')).toContain('"version": "1.0.0"');
     });
 });

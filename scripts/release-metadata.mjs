@@ -10,6 +10,24 @@ export function stripCliSeparators(argv) {
 }
 
 export const JS_PACKAGE_FILES = [
+    'gate/package.json',
+    'manager/package.json',
+    'packages/config-core/package.json',
+    'packages/angular/package.json',
+    'packages/example-ui/package.json',
+    'packages/nextjs/package.json',
+    'packages/nuxt/package.json',
+    'server/package.json',
+    'examples/angular/package.json',
+    'examples/fastify/package.json',
+    'examples/gate-private1-app/package.json',
+    'examples/gate-private2-static/package.json',
+    'examples/nextjs/package.json',
+    'examples/nuxt/package.json',
+    'examples/photos/package.json',
+];
+
+export const RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES = [
     'packages/angular/package.json',
     'packages/example-ui/package.json',
     'packages/nextjs/package.json',
@@ -70,10 +88,10 @@ export async function readRepositoryFile(rootDir, relativePath) {
     return readFile(path.join(rootDir, relativePath), 'utf8');
 }
 
-export async function readManagedReleaseVersions(rootDir) {
+export async function readReleaseVersions(rootDir, jsPackageFiles) {
     const versions = [];
 
-    for (const relativePath of JS_PACKAGE_FILES) {
+    for (const relativePath of jsPackageFiles) {
         const source = await readRepositoryFile(rootDir, relativePath);
         versions.push({
             file: relativePath,
@@ -99,6 +117,14 @@ export async function readManagedReleaseVersions(rootDir) {
     }
 
     return versions;
+}
+
+export async function readManagedReleaseVersions(rootDir) {
+    return readReleaseVersions(rootDir, JS_PACKAGE_FILES);
+}
+
+export async function readCurrentReleaseVersionEntries(rootDir) {
+    return readReleaseVersions(rootDir, RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES);
 }
 
 export function findCurrentReleaseVersion(versionEntries) {
@@ -161,7 +187,7 @@ export async function resolveReleaseVersion(rootDir, versionSpecifier) {
         throw new Error(`Unsupported version "${versionSpecifier}".`);
     }
 
-    const versionEntries = await readManagedReleaseVersions(rootDir);
+    const versionEntries = await readCurrentReleaseVersionEntries(rootDir);
     const currentVersion = findCurrentReleaseVersion(versionEntries);
 
     return incrementVersion(currentVersion, versionSpecifier);

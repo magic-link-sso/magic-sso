@@ -42,15 +42,15 @@ pnpm release:prepare -- minor
 pnpm release:prepare -- 0.9.0
 ```
 
-- `major`, `minor`, and `patch` resolve from the current managed release
-  version, similar to `npm version`.
+- `major`, `minor`, and `patch` resolve from the current shared release version
+  used by the published packages, similar to `npm version`.
 - `pnpm changelog:release -- 0.9.0` only updates `CHANGELOG.md`.
 - `pnpm version:bump -- 0.9.0 --apply` remains the source of truth for package
   and Python release version updates.
 - `pnpm release:prepare -- 0.9.0` runs both steps, then verifies that
   `CHANGELOG.md` contains `## [0.9.0] - YYYY-MM-DD`.
-- The Django example stays aligned with the shared release version because its
-  `pyproject.toml` and `uv.lock` reference the published Django package.
+- Release prep keeps the versioned JS workspaces, the Django package, and the
+  Django example aligned with the shared release version.
 
 ## Verification commands
 

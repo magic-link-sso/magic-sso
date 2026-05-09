@@ -8,28 +8,30 @@ import {
     verifyReleaseTag,
 } from './verify-release-tag.mjs';
 
+const jsReleasePackages: Array<[string, string]> = [
+    ['gate/package.json', 'magic-sso-gate'],
+    ['manager/package.json', 'magic-sso-manager'],
+    ['packages/config-core/package.json', '@magic-link-sso/config-core'],
+    ['packages/angular/package.json', '@magic-link-sso/angular'],
+    ['packages/example-ui/package.json', 'magic-sso-example-ui'],
+    ['packages/nextjs/package.json', '@magic-link-sso/nextjs'],
+    ['packages/nuxt/package.json', '@magic-link-sso/nuxt'],
+    ['server/package.json', 'magic-sso-server'],
+    ['examples/angular/package.json', 'example-app-angular'],
+    ['examples/fastify/package.json', 'example-app-fastify'],
+    ['examples/gate-private1-app/package.json', 'example-app-gate-private1'],
+    ['examples/gate-private2-static/package.json', 'example-app-gate-private2-static'],
+    ['examples/nextjs/package.json', 'example-app-nextjs'],
+    ['examples/nuxt/package.json', 'example-app-nuxt'],
+    ['examples/photos/package.json', 'example-app-photos'],
+];
+
 async function writeVersionWorkspace(rootDir: string, version: string): Promise<void> {
     const files: Array<[string, string]> = [
-        [
-            'packages/angular/package.json',
-            `{\n    "name": "@magic-link-sso/angular",\n    "version": "${version}"\n}\n`,
-        ],
-        [
-            'packages/example-ui/package.json',
-            `{\n    "name": "magic-sso-example-ui",\n    "version": "${version}"\n}\n`,
-        ],
-        [
-            'packages/nextjs/package.json',
-            `{\n    "name": "@magic-link-sso/nextjs",\n    "version": "${version}"\n}\n`,
-        ],
-        [
-            'packages/nuxt/package.json',
-            `{\n    "name": "@magic-link-sso/nuxt",\n    "version": "${version}"\n}\n`,
-        ],
-        [
-            'server/package.json',
-            `{\n    "name": "magic-sso-server",\n    "version": "${version}"\n}\n`,
-        ],
+        ...jsReleasePackages.map(([relativePath, packageName]) => [
+            relativePath,
+            `{\n    "name": "${packageName}",\n    "version": "${version}"\n}\n`,
+        ]),
         [
             'packages/django/pyproject.toml',
             `[project]\nname = "magic-link-sso-django"\nversion = "${version}"\n`,
@@ -82,7 +84,7 @@ describe('release tag verification', () => {
                 tagName: 'v0.9.0',
             }),
         ).resolves.toEqual({
-            checkedFiles: 10,
+            checkedFiles: 20,
             tagVersion: '0.9.0',
         });
     });
