@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const uvEnvironment = {
+    ...process.env,
+    UV_CACHE_DIR: '/tmp/uv-cache',
+    UV_TOOL_DIR: '/tmp/uv-tools',
+    UV_STATE_DIR: '/tmp/uv-state',
+};
 
 /**
  * Build the commands used by the Python dependency audit.
@@ -31,6 +37,15 @@ export function buildAuditArgs(requirementsFile) {
 }
 
 /**
+ * Build a sandbox-safe environment for uv commands.
+ *
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function buildUvEnv() {
+    return { ...uvEnvironment };
+}
+
+/**
  * Run the Python dependency audit against the Django package lockfile.
  *
  * @returns {Promise<void>}
@@ -43,11 +58,13 @@ export async function main() {
     try {
         execFileSync('uv', exportArgs, {
             cwd: repositoryRoot,
+            env: buildUvEnv(),
             stdio: 'inherit',
         });
 
         execFileSync('uvx', auditArgs, {
             cwd: repositoryRoot,
+            env: buildUvEnv(),
             stdio: 'inherit',
         });
     } finally {

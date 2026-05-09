@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAuditArgs } from './audit-python.mjs';
+import { buildAuditArgs, buildUvEnv } from './audit-python.mjs';
 
 describe('audit python script', () => {
     it('uses a hashed requirements export and disables pip resolution', () => {
@@ -15,5 +15,13 @@ describe('audit python script', () => {
         expect(exportArgs).toContain('requirements.txt');
         expect(exportArgs).toContain(requirementsFile);
         expect(auditArgs).toEqual(['pip-audit', '--disable-pip', '-r', requirementsFile]);
+    });
+
+    it('uses sandbox-safe uv cache directories', () => {
+        expect(buildUvEnv()).toMatchObject({
+            UV_CACHE_DIR: '/tmp/uv-cache',
+            UV_TOOL_DIR: '/tmp/uv-tools',
+            UV_STATE_DIR: '/tmp/uv-state',
+        });
     });
 });
