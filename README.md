@@ -259,11 +259,8 @@ Example app `.env` files act as local defaults. Exported shell variables still
 win, so you can switch modes without editing files, for example:
 
 ```sh
-MAGICSSO_DIRECT_USE=true pnpm dev
+pnpm dev:direct
 ```
-
-`MAGICSSO_DIRECT_USE=1` is also supported, but `true` and `false` remain the
-recommended forms in docs and scripts.
 
 `pnpm test:e2e` runs the Playwright smoke suite against the bundled example apps
 and starts the local SMTP sink and SSO server for the run.
