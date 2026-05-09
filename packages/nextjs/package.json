@@ -55,7 +55,7 @@
         "jose": "^6.2.3"
     },
     "devDependencies": {
-        "@types/node": "^25.6.0",
+        "@types/node": "^25.6.2",
         "@types/react": "^19.2.14",
         "typescript": "^6.0.3",
         "vitest": "^4.1.5"

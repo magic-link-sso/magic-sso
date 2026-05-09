@@ -6,10 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12,<4"
 license = { text = "MIT" }
 authors = [{ name = "Wojciech Polak" }]
-dependencies = ["django>=6.0.4,<7", "magic-link-sso-django"]
+dependencies = ["django>=6.0.5,<7", "magic-link-sso-django"]
 
 [dependency-groups]
-dev = ["pytest>=9.0.3,<10", "ruff>=0.15.12,<1", "ty>=0.0.33,<1"]
+dev = ["pytest>=9.0.3,<10", "ruff>=0.15.12,<1", "ty>=0.0.34,<1"]
 
 [tool.uv.sources]
 magic-link-sso-django = { path = "../../packages/django", editable = true }
