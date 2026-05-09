@@ -43,6 +43,9 @@ const UV_ENV = {
  *   dependencies?: Record<string, string>;
  *   devDependencies?: Record<string, string>;
  *   peerDependencies?: Record<string, string>;
+ *   pnpm?: {
+ *     overrides?: Record<string, string>;
+ *   };
  * }} PackageManifest
  */
 
@@ -174,6 +177,78 @@ export function buildJsChanges(manifest, proposed, includePeer) {
     }
 
     return changes.sort((left, right) => left.dependency.localeCompare(right.dependency));
+}
+
+/**
+ * @param {Record<string, string>} dependencies
+ * @returns {string[]}
+ */
+export function collectRejectedVersionedDependencies(dependencies) {
+    return Object.entries(dependencies)
+        .filter(([, specifier]) => specifier === 'latest' || specifier.startsWith('workspace:'))
+        .map(([dependency]) => dependency);
+}
+
+/**
+ * @param {DependencyChange[]} changes
+ * @returns {DependencyChange[]}
+ */
+export function deduplicateDependencyChanges(changes) {
+    return [
+        ...new Map(
+            changes.map((change) => [`${change.dependency}\0${change.next}`, change]),
+        ).values(),
+    ].sort((left, right) => left.dependency.localeCompare(right.dependency));
+}
+
+/**
+ * @param {{
+ *   apply: boolean;
+ *   manifest: PackageManifest;
+ *   mode: 'compatible' | 'latest';
+ *   packageFile: string;
+ *   runNcu: (options: Record<string, unknown>) => Promise<Record<string, string>>;
+ * }} options
+ * @returns {Promise<DependencyChange[]>}
+ */
+export async function updatePnpmOverrides(options) {
+    const { apply, manifest, mode, packageFile, runNcu } = options;
+    const overrides = manifest.pnpm?.overrides;
+
+    if (!overrides || Object.keys(overrides).length === 0) {
+        return [];
+    }
+
+    const proposed = await runNcu({
+        dep: ['prod'],
+        jsonUpgraded: true,
+        packageData: {
+            dependencies: overrides,
+        },
+        packageManager: 'pnpm',
+        reject: collectRejectedVersionedDependencies(overrides),
+        silent: true,
+        target: mode === 'latest' ? 'latest' : 'minor',
+        upgrade: false,
+    });
+    const changes = buildJsChanges({ dependencies: overrides }, proposed, false);
+
+    if (apply && changes.length > 0) {
+        const updatedSource = await readFile(packageFile, 'utf8');
+        const updatedManifest = /** @type {PackageManifest} */ (JSON.parse(updatedSource));
+
+        if (!updatedManifest.pnpm?.overrides) {
+            throw new Error(`Expected pnpm.overrides in "${packageFile}".`);
+        }
+
+        for (const change of changes) {
+            updatedManifest.pnpm.overrides[change.dependency] = change.next;
+        }
+
+        await writeFile(packageFile, `${JSON.stringify(updatedManifest, null, 4)}\n`, 'utf8');
+    }
+
+    return changes;
 }
 
 /**
@@ -553,6 +628,7 @@ export async function loadNcuRun() {
 export async function updateJsDependencies(options) {
     const { apply, includePeer, mode, rootDir, runNcu } = options;
     const packageFiles = await findJsPackageFiles(rootDir);
+    const rootPackageFile = path.join(rootDir, 'package.json');
     /** @type {Array<{ changes: DependencyChange[]; file: string }>} */
     const results = [];
     const previousMaxListeners = process.getMaxListeners();
@@ -574,9 +650,20 @@ export async function updateJsDependencies(options) {
                 upgrade: apply,
             });
             const changes = buildJsChanges(manifest, proposed, includePeer);
+            const overrideChanges =
+                packageFile === rootPackageFile
+                    ? await updatePnpmOverrides({
+                          apply,
+                          manifest,
+                          mode,
+                          packageFile,
+                          runNcu,
+                      })
+                    : [];
+            const combinedChanges = deduplicateDependencyChanges([...changes, ...overrideChanges]);
 
-            if (changes.length > 0) {
-                results.push({ changes, file: packageFile });
+            if (combinedChanges.length > 0) {
+                results.push({ changes: combinedChanges, file: packageFile });
             }
         }
     } finally {

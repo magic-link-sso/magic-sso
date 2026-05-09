@@ -9,9 +9,12 @@ import {
     buildJsChanges,
     buildBoundedRequirement,
     collectJsRejectNames,
+    deduplicateDependencyChanges,
     parseTomlArrayLine,
     parseUvLockVersions,
     planPythonManifestUpdate,
+    updateJsDependencies,
+    updatePnpmOverrides,
     updatePythonDependencies,
 } from './upgrade-deps.mjs';
 
@@ -50,6 +53,117 @@ describe('JS dependency planning', () => {
             { dependency: 'exact-dep', next: '2.3.9', previous: '2.3.4' },
             { dependency: 'tilde-dep', next: '~3.4.8', previous: '~3.4.5' },
         ]);
+    });
+
+    it('deduplicates dependency changes when a package is updated in multiple manifest sections', () => {
+        expect(
+            deduplicateDependencyChanges([
+                { dependency: 'postcss', next: '^8.5.14', previous: '^8.5.13' },
+                { dependency: 'postcss', next: '^8.5.14', previous: '^8.5.13' },
+            ]),
+        ).toEqual([{ dependency: 'postcss', next: '^8.5.14', previous: '^8.5.13' }]);
+    });
+
+    it('plans pnpm override updates from the root manifest', async () => {
+        const tempRoot = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-'));
+        const rootPackageFile = path.join(tempRoot, 'package.json');
+        await writeFile(
+            rootPackageFile,
+            JSON.stringify(
+                {
+                    name: 'magic-sso-workspace',
+                    pnpm: {
+                        overrides: {
+                            postcss: '^8.5.13',
+                        },
+                    },
+                },
+                null,
+                4,
+            ),
+            'utf8',
+        );
+
+        const manifest = JSON.parse(await readFile(rootPackageFile, 'utf8'));
+        const runNcu = vi.fn(async (options: Record<string, unknown>) => {
+            expect(options.packageData).toEqual({
+                dependencies: {
+                    postcss: '^8.5.13',
+                },
+            });
+
+            return {
+                postcss: '^8.5.14',
+            };
+        });
+
+        await expect(
+            updatePnpmOverrides({
+                apply: false,
+                manifest,
+                mode: 'compatible',
+                packageFile: rootPackageFile,
+                runNcu,
+            }),
+        ).resolves.toEqual([{ dependency: 'postcss', next: '^8.5.14', previous: '^8.5.13' }]);
+    });
+
+    it('applies pnpm override updates during the JS upgrade workflow', async () => {
+        const tempRoot = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-'));
+        await mkdir(path.join(tempRoot, 'examples'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'packages'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'server'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'tests', 'e2e'), { recursive: true });
+
+        const rootPackageFile = path.join(tempRoot, 'package.json');
+        const rootManifest = {
+            name: 'magic-sso-workspace',
+            private: true,
+            pnpm: {
+                overrides: {
+                    postcss: '^8.5.13',
+                },
+            },
+        };
+
+        await writeFile(rootPackageFile, `${JSON.stringify(rootManifest, null, 4)}\n`, 'utf8');
+        await writeFile(
+            path.join(tempRoot, 'server', 'package.json'),
+            '{"name":"server"}\n',
+            'utf8',
+        );
+        await writeFile(
+            path.join(tempRoot, 'tests', 'e2e', 'package.json'),
+            '{"name":"e2e"}\n',
+            'utf8',
+        );
+
+        const runNcu = vi.fn(async (options: Record<string, unknown>) => {
+            if ('packageData' in options) {
+                return { postcss: '^8.5.14' };
+            }
+
+            return {};
+        });
+
+        await expect(
+            updateJsDependencies({
+                apply: true,
+                includePeer: false,
+                mode: 'compatible',
+                rootDir: tempRoot,
+                runNcu,
+            }),
+        ).resolves.toEqual([
+            {
+                changes: [{ dependency: 'postcss', next: '^8.5.14', previous: '^8.5.13' }],
+                file: rootPackageFile,
+            },
+        ]);
+
+        expect(JSON.parse(await readFile(rootPackageFile, 'utf8')).pnpm.overrides.postcss).toBe(
+            '^8.5.14',
+        );
     });
 });
 
