@@ -12,6 +12,7 @@
         "test:e2e:direct": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.direct.config.ts",
         "test:e2e:headed": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts --headed",
         "test:e2e:indirect": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts",
+        "test:e2e:manager": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.manager.config.ts",
         "test:e2e:ui": "env -u NO_COLOR -u FORCE_COLOR PW_SLOWMO_MS=${PW_SLOWMO_MS:-700} playwright test --config playwright.indirect.config.ts --ui",
         "typecheck": "tsc -p tsconfig.json"
     },

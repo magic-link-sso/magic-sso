@@ -3,7 +3,11 @@
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !gate/
+!manager/
+!examples/photos/
 !examples/gate-private1-app/
 !examples/gate-private2-static/
+!packages/config-core/
 !packages/example-ui/
+!packages/nextjs/
 !server/

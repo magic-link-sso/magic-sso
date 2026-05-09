@@ -1,0 +1,29 @@
+managedSiteIds = ["photos"]
+
+[audit]
+integrityKey = "${MANAGER_AUDIT_INTEGRITY_KEY}"
+maxArchivedFiles = 4
+maxFileBytes = 1048576
+
+[paths]
+auditFile = "./manager-audit.ndjson"
+baseConfigFile = "./magic-sso.base.toml"
+lastGoodRuntimeConfigFile = "./magic-sso.runtime.last-good.toml"
+lockFile = "./manager.lock"
+runtimeConfigFile = "./magic-sso.runtime.toml"
+stateFile = "./manager-state.json"
+
+[reload]
+url = "${MANAGER_DEV_SERVER_ORIGIN}/internal/access-config/reload"
+secret = "${MANAGER_RELOAD_SECRET}"
+timeoutMs = 5000
+
+[service]
+host = "127.0.0.1"
+port = ${MANAGER_UPSTREAM_PORT}
+trustProxy = true
+
+[service.auth]
+mode = "gate"
+requiredSiteId = "manager-admin"
+requiredScope = "*"

@@ -1,0 +1,146 @@
+x-manager-bootstrap-env: &manager-bootstrap-env
+  MAGICSSO_COOKIE_MAX_AGE: ${MAGICSSO_COOKIE_MAX_AGE:-3600}
+  MAGICSSO_COOKIE_NAME: ${MAGICSSO_COOKIE_NAME:-magic-sso}
+  MAGICSSO_DEV_CSRF_SECRET: ${MAGICSSO_DEV_CSRF_SECRET:-manager-dev-csrf-secret-1234567890abc}
+  MAGICSSO_DEV_EMAIL_SECRET: ${MAGICSSO_DEV_EMAIL_SECRET:-manager-dev-email-secret-1234567890ab}
+  MAGICSSO_JWT_SECRET: ${MAGICSSO_JWT_SECRET:-manager-dev-jwt-secret-1234567890abcd}
+  MAGICSSO_PREVIEW_SECRET: ${MAGICSSO_PREVIEW_SECRET:-manager-dev-preview-secret-123456789}
+  MANAGER_PUBLIC_HOST: ${MANAGER_PUBLIC_HOST:-manager.localhost}
+  MANAGER_ALLOWED_EMAIL: ${MANAGER_ALLOWED_EMAIL:-manager@example.com}
+  MANAGER_AUDIT_INTEGRITY_KEY: ${MANAGER_AUDIT_INTEGRITY_KEY:-manager-dev-audit-integrity-key-1234567890}
+  MANAGER_PUBLIC_PORT: ${MANAGER_PUBLIC_PORT:-4306}
+  MANAGER_RELOAD_SECRET: ${MANAGER_RELOAD_SECRET:-manager-dev-reload-secret-1234567890}
+  MANAGER_UPSTREAM_PORT: ${MANAGER_UPSTREAM_PORT:-4311}
+  PHOTOS_PUBLIC_HOST: ${PHOTOS_PUBLIC_HOST:-photos.localhost}
+  PHOTOS_FAMILY_EMAIL: ${PHOTOS_FAMILY_EMAIL:-family@example.com}
+  PHOTOS_FRIEND_EMAIL: ${PHOTOS_FRIEND_EMAIL:-friend@example.com}
+  PHOTOS_OWNER_EMAIL: ${PHOTOS_OWNER_EMAIL:-owner@example.com}
+  SSO_PUBLIC_HOST: ${SSO_PUBLIC_HOST:-sso.localhost}
+
+x-manager-gate-env: &manager-gate-env
+  MAGIC_GATE_RENDER_COOKIE_MAX_AGE: ${MAGICSSO_COOKIE_MAX_AGE:-3600}
+  MAGIC_GATE_RENDER_COOKIE_NAME: ${MAGICSSO_COOKIE_NAME:-magic-sso}
+  MAGIC_GATE_RENDER_DIRECT_USE: 'false'
+  MAGIC_GATE_RENDER_JWT_SECRET: ${MAGICSSO_JWT_SECRET:-manager-dev-jwt-secret-1234567890abcd}
+  MAGIC_GATE_RENDER_MODE: subdomain
+  MAGIC_GATE_RENDER_NAMESPACE: /_magicgate
+  MAGIC_GATE_RENDER_PREVIEW_SECRET: ${MAGICSSO_PREVIEW_SECRET:-manager-dev-preview-secret-123456789}
+  MAGIC_GATE_RENDER_PUBLIC_ORIGIN: http://${MANAGER_PUBLIC_HOST:-manager.localhost}:${MANAGER_PUBLIC_PORT:-4306}
+  MAGIC_GATE_RENDER_RATE_LIMIT_MAX: '240'
+  MAGIC_GATE_RENDER_RATE_LIMIT_WINDOW_MS: '60000'
+  MAGIC_GATE_RENDER_REQUEST_TIMEOUT_MS: '10000'
+  MAGIC_GATE_RENDER_SERVER_URL: http://${SSO_PUBLIC_HOST:-sso.localhost}:${MANAGER_PUBLIC_PORT:-4306}
+  MAGIC_GATE_RENDER_TRUST_PROXY: 'true'
+  MAGIC_GATE_RENDER_UPSTREAM_URL: http://manager:${MANAGER_UPSTREAM_PORT:-4311}
+  MAGIC_GATE_RENDER_WS_ENABLED: 'true'
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - '${MAILPIT_HTTP_PORT:-8025}:8025'
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+
+  manager:
+    build:
+      context: ..
+      dockerfile: manager/Dockerfile
+    environment:
+      MAGICSSO_MANAGER_CONFIG_FILE: /app/runtime/manager.toml
+      <<: *manager-bootstrap-env
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4311/healthz').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5m
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+      start_interval: 5s
+    restart: unless-stopped
+    volumes:
+      - ./runtime:/app/runtime
+      - ./dev/bootstrap-managed-stack.mjs:/app/manager/bootstrap-managed-stack.mjs:ro
+      - ./dev/manager-state.json.template:/app/manager/manager-state.json.template:ro
+      - ./dev/manager.toml.template:/app/manager/manager.toml.template:ro
+      - ./dev/magic-sso.base.toml.template:/app/server/magic-sso.base.toml.template:ro
+    command: >
+      sh -c "node /app/manager/bootstrap-managed-stack.mjs && node dist/main.js"
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  magic-sso:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      MAGICSSO_CONFIG_FILE: /app/runtime/magic-sso.runtime.toml
+    restart: unless-stopped
+    volumes:
+      - ./runtime:/app/runtime:ro
+    depends_on:
+      manager:
+        condition: service_healthy
+
+  photos:
+    build:
+      context: ..
+      dockerfile: examples/photos/Dockerfile
+    environment:
+      HOSTNAME: 0.0.0.0
+      MAGICSSO_COOKIE_MAX_AGE: ${MAGICSSO_COOKIE_MAX_AGE:-3600}
+      MAGICSSO_COOKIE_NAME: ${MAGICSSO_COOKIE_NAME:-magic-sso}
+      MAGICSSO_DIRECT_USE: 'false'
+      MAGICSSO_JWT_SECRET: ${MAGICSSO_JWT_SECRET:-manager-dev-jwt-secret-1234567890abcd}
+      MAGICSSO_PREVIEW_SECRET: ${MAGICSSO_PREVIEW_SECRET:-manager-dev-preview-secret-123456789}
+      MAGICSSO_PUBLIC_ORIGIN: http://${PHOTOS_PUBLIC_HOST:-photos.localhost}:${MANAGER_PUBLIC_PORT:-4306}
+      MAGICSSO_SERVER_URL: http://${SSO_PUBLIC_HOST:-sso.localhost}:${MANAGER_PUBLIC_PORT:-4306}
+      PORT: 5001
+    restart: unless-stopped
+    depends_on:
+      magic-sso:
+        condition: service_started
+
+  magic-gate-manager:
+    build:
+      context: ..
+      dockerfile: gate/Dockerfile
+    environment:
+      MAGIC_GATE_CONFIG_FILE: /app/gate/magic-gate.toml
+      <<: *manager-gate-env
+    restart: unless-stopped
+    volumes:
+      - ./dev/magic-gate.toml.template:/app/gate/magic-gate.toml.template:ro
+      - ../gate/dev/render-magic-gate-config.mjs:/app/gate/render-magic-gate-config.mjs:ro
+    command: >
+      sh -c "node /app/gate/render-magic-gate-config.mjs && node dist/main.js"
+    depends_on:
+      manager:
+        condition: service_healthy
+      magic-sso:
+        condition: service_started
+
+  public-proxy:
+    image: caddy:2-alpine
+    environment:
+      MANAGER_PUBLIC_HOST: ${MANAGER_PUBLIC_HOST:-manager.localhost}
+      MANAGER_PUBLIC_PORT: ${MANAGER_PUBLIC_PORT:-4306}
+      PHOTOS_PUBLIC_HOST: ${PHOTOS_PUBLIC_HOST:-photos.localhost}
+      SSO_PUBLIC_HOST: ${SSO_PUBLIC_HOST:-sso.localhost}
+    ports:
+      - '${MANAGER_PUBLIC_PORT:-4306}:${MANAGER_PUBLIC_PORT:-4306}'
+    restart: unless-stopped
+    volumes:
+      - ./dev/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases:
+          - ${MANAGER_PUBLIC_HOST:-manager.localhost}
+          - ${PHOTOS_PUBLIC_HOST:-photos.localhost}
+          - ${SSO_PUBLIC_HOST:-sso.localhost}

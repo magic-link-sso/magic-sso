@@ -8,6 +8,8 @@ repository are licensed under the MIT License below.
 Repository license map:
 
 - `server/` is licensed under GPL-3.0-or-later. See `server/LICENSE`.
+- `manager/` is licensed under GPL-3.0-or-later. See `manager/LICENSE`.
+- `gate/` is covered by this root MIT license unless stated otherwise.
 - Published framework packages under `packages/` carry their own component
   license files, which currently align with MIT.
 - Examples, documentation, workflow files, and other top-level repository files

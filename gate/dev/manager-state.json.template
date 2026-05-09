@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "managedSites": {
+    "private1": {
+      "grants": [
+        {
+          "email": "${PRIVATE1_ALLOWED_EMAIL}",
+          "scopes": [
+            "*"
+          ]
+        }
+      ],
+      "scopeCatalog": []
+    },
+    "private2": {
+      "grants": [
+        {
+          "email": "${PRIVATE2_ALLOWED_EMAIL}",
+          "scopes": [
+            "*"
+          ]
+        }
+      ],
+      "scopeCatalog": []
+    }
+  },
+  "metadata": {}
+}

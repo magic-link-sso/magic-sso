@@ -1,0 +1,35 @@
+managedSiteIds = ["photos"]
+
+[audit]
+# Replace before startup. The placeholder value is rejected at boot.
+integrityKey = "replace-me-with-a-dedicated-long-random-audit-integrity-key"
+maxArchivedFiles = 4
+maxFileBytes = 1048576
+
+[paths]
+baseConfigFile = "../magic-sso.base.toml"
+stateFile = "../manager-state.json"
+runtimeConfigFile = "../magic-sso.runtime.toml"
+lastGoodRuntimeConfigFile = "../magic-sso.runtime.last-good.toml"
+auditFile = "../manager-audit.ndjson"
+lockFile = "../manager.lock"
+
+[reload]
+url = "http://127.0.0.1:3000/internal/access-config/reload"
+# Replace before startup. The placeholder value is rejected at boot.
+secret = "replace-me-with-a-dedicated-long-random-reload-secret"
+timeoutMs = 5000
+
+[service]
+host = "127.0.0.1"
+port = 4311
+trustProxy = true
+
+[service.auth]
+mode = "gate"
+requiredSiteId = "manager-admin"
+requiredScope = "*"
+
+# Legacy bearer-token fallback for emergency or direct local access:
+# mode = "bearer-token"
+# bearerToken = "replace-me-with-a-dedicated-long-random-manager-api-token"

@@ -8,6 +8,9 @@ trustProxy = true
 verifyTokenStoreDir = "/tmp/magic-sso/verification-tokens"
 signInEmailRateLimitStoreDir = "/tmp/magic-sso/signin-email-rate-limit"
 
+[server.reload]
+secret = "${MANAGER_RELOAD_SECRET}"
+
 [auth]
 jwtSecret = "${MAGICSSO_JWT_SECRET}"
 jwtExpiration = "1h"
@@ -58,3 +61,16 @@ allowedEmails = ["${PRIVATE2_ALLOWED_EMAIL}"]
 [sites.hostedAuth.branding]
 title = "Magic Link SSO private2"
 logoText = "P2"
+
+[[sites]]
+id = "manager-admin"
+origins = ["http://${MANAGER_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}"]
+allowedRedirectUris = [
+    "http://${MANAGER_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/_magicgate/verify-email",
+    "http://${MANAGER_PUBLIC_HOST}:${PUBLIC_PROXY_PORT}/*",
+]
+allowedEmails = ["${MANAGER_ALLOWED_EMAIL}"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO Manager"
+logoText = "MG"

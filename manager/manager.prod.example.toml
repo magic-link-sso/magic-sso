@@ -1,0 +1,41 @@
+# Magic Link SSO manager settings for a published-image deployment.
+#
+# Copy this file to `manager/runtime/manager.toml` and adjust the values for
+# your environment. The relative paths below assume the config file lives inside
+# the same mounted runtime directory as the manager-owned state files.
+
+managedSiteIds = ["private-app"]
+
+[audit]
+# Replace before startup. The placeholder value is rejected at boot.
+integrityKey = "replace-me-with-a-dedicated-long-random-audit-integrity-key"
+maxArchivedFiles = 4
+maxFileBytes = 1048576
+
+[paths]
+baseConfigFile = "./magic-sso.base.toml"
+stateFile = "./manager-state.json"
+runtimeConfigFile = "./magic-sso.runtime.toml"
+lastGoodRuntimeConfigFile = "./magic-sso.runtime.last-good.toml"
+auditFile = "./manager-audit.ndjson"
+lockFile = "./manager.lock"
+
+# Optional restart-free apply hook. Remove this block if you prefer restart-
+# based applies after each manager write.
+# [reload]
+# url = "http://magic-sso.internal:3000/internal/access-config/reload"
+# secret = "replace-me-with-a-dedicated-long-random-reload-secret"
+# timeoutMs = 5000
+
+[service]
+host = "0.0.0.0"
+port = 4311
+trustProxy = true
+
+[service.auth]
+mode = "gate"
+requiredSiteId = "manager-admin"
+requiredScope = "*"
+
+# Keep `manager-admin` out of `managedSiteIds` so its bootstrap access remains
+# operator-managed in `magic-sso.base.toml`.

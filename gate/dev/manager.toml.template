@@ -1,0 +1,29 @@
+managedSiteIds = ["private1", "private2"]
+
+[audit]
+integrityKey = "${MANAGER_AUDIT_INTEGRITY_KEY}"
+maxArchivedFiles = 4
+maxFileBytes = 1048576
+
+[paths]
+auditFile = "/app/runtime/manager-audit.ndjson"
+baseConfigFile = "/app/runtime/magic-sso.base.toml"
+lastGoodRuntimeConfigFile = "/app/runtime/magic-sso.runtime.last-good.toml"
+lockFile = "/app/runtime/manager.lock"
+runtimeConfigFile = "/app/runtime/magic-sso.runtime.toml"
+stateFile = "/app/runtime/manager-state.json"
+
+[reload]
+url = "http://magic-sso:3000/internal/access-config/reload"
+secret = "${MANAGER_RELOAD_SECRET}"
+timeoutMs = 5000
+
+[service]
+host = "0.0.0.0"
+port = ${MANAGER_UPSTREAM_PORT}
+trustProxy = true
+
+[service.auth]
+mode = "gate"
+requiredSiteId = "manager-admin"
+requiredScope = "*"

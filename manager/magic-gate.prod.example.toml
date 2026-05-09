@@ -1,0 +1,27 @@
+# Magic Link SSO Gate configuration for the published manager admin surface.
+#
+# Copy this file to `manager/magic-gate.toml` and adjust the values for your
+# environment. Then point `MAGIC_GATE_CONFIG_FILE` at the copied file.
+
+[gate]
+port = 4000
+mode = "subdomain"
+namespace = "/_magicgate"
+publicOrigin = "https://manager.example.com"
+upstreamUrl = "http://manager:4311"
+directUse = true
+requestTimeoutMs = 10000
+rateLimitMax = 240
+rateLimitWindowMs = 60000
+trustProxy = true
+wsEnabled = true
+
+[auth]
+jwtSecret = "replace-with-a-real-jwt-secret-at-least-32-chars"
+previewSecret = "replace-with-a-real-preview-secret-at-least-32-chars"
+serverUrl = "https://sso.example.com"
+
+[cookie]
+name = "magic-sso"
+path = "/"
+maxAge = 3600

@@ -1,0 +1,44 @@
+{
+    "name": "magic-sso-manager",
+    "version": "1.0.0",
+    "private": true,
+    "license": "GPL-3.0-or-later",
+    "bin": {
+        "manager": "./dist/cli.js"
+    },
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.json",
+        "dev": "pnpm --filter @magic-link-sso/config-core build && node --watch --import tsx src/main.ts",
+        "format": "oxfmt package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts .env.example .env.prod.example README.md manager.example.toml manager.prod.example.toml magic-gate.prod.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src",
+        "format:check": "oxfmt --check package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts .env.example .env.prod.example README.md manager.example.toml manager.prod.example.toml magic-gate.prod.example.toml Dockerfile docker-compose.yml docker-compose.prod.yml dev src",
+        "lint": "oxlint src",
+        "start": "node dist/main.js",
+        "test": "pnpm --filter @magic-link-sso/config-core build && vitest run --config vitest.config.ts",
+        "typecheck": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "@fastify/rate-limit": "^10.3.0",
+        "@magic-link-sso/config-core": "workspace:*",
+        "fastify": "^5.8.5",
+        "smol-toml": "^1.6.1",
+        "zod": "^4.4.1"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

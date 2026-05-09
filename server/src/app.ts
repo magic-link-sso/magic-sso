@@ -43,7 +43,9 @@ import {
     createDefaultHostedAuthPageCopy,
     hasSuspiciousRedirectPath,
     loadConfig,
+    renderSiteAccessRules,
     type AppConfig,
+    type RedirectUriRule,
     type SiteConfig,
 } from './config.js';
 import { createVerificationEmailSender, type VerificationEmailSender } from './email.js';
@@ -85,6 +87,7 @@ interface HtmlSecurityContext {
 type SigninPageMode = 'confirmation' | 'form';
 
 const verifyEmailPreviewSecretHeaderName = 'x-magic-sso-preview-secret';
+const accessConfigReloadSecretHeaderName = 'x-magic-sso-reload-secret';
 
 function emptyStringAsUndefined(value: string | undefined): string | undefined {
     return typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -666,6 +669,108 @@ function getDefaultFeedbackMessage(key: HostedAuthFeedbackKey): string {
     return defaultHostedAuthFeedback[key];
 }
 
+function cloneHostedAuthViewConfig(viewConfig: HostedAuthViewConfig): HostedAuthViewConfig {
+    return {
+        hostedAuthBranding: {
+            ...viewConfig.hostedAuthBranding,
+            signinCssVariables: { ...viewConfig.hostedAuthBranding.signinCssVariables },
+            verifyEmailCssVariables: { ...viewConfig.hostedAuthBranding.verifyEmailCssVariables },
+        },
+        hostedAuthPageCopy: {
+            lang: viewConfig.hostedAuthPageCopy.lang,
+            signin: { ...viewConfig.hostedAuthPageCopy.signin },
+            verifyEmail: { ...viewConfig.hostedAuthPageCopy.verifyEmail },
+            feedback: { ...viewConfig.hostedAuthPageCopy.feedback },
+        },
+    };
+}
+
+function sortRedirectUriRules(site: SiteConfig): RedirectUriRule[] {
+    return [...site.allowedRedirectUris].sort((left, right) => {
+        const leftKey = `${left.origin}${left.pathname}:${left.match}`;
+        const rightKey = `${right.origin}${right.pathname}:${right.match}`;
+        return leftKey.localeCompare(rightKey);
+    });
+}
+
+function createReloadInvariantSnapshot(config: AppConfig): object {
+    return {
+        appPort: config.appPort,
+        appUrl: config.appUrl,
+        csrfSecret: config.csrfSecret,
+        cookieDomain: config.cookieDomain,
+        cookieHttpOnly: config.cookieHttpOnly,
+        cookieName: config.cookieName,
+        cookiePath: config.cookiePath,
+        cookieSameSite: config.cookieSameSite,
+        cookieSecure: config.cookieSecure,
+        emailExpirationSeconds: config.emailExpirationSeconds,
+        emailFrom: config.emailFrom,
+        emailSecret: config.emailSecret,
+        emailSignature: config.emailSignature,
+        emailSmtpFallbacks: config.emailSmtpFallbacks.map((transport) => ({ ...transport })),
+        emailSmtpHost: config.emailSmtpHost,
+        emailSmtpPass: config.emailSmtpPass,
+        emailSmtpPort: config.emailSmtpPort,
+        emailSmtpSecure: config.emailSmtpSecure,
+        emailSmtpUser: config.emailSmtpUser,
+        healthzRateLimitMax: config.healthzRateLimitMax,
+        hostedAuthBranding: cloneHostedAuthViewConfig(config).hostedAuthBranding,
+        hostedAuthPageCopy: cloneHostedAuthViewConfig(config).hostedAuthPageCopy,
+        jwtExpirationSeconds: config.jwtExpirationSeconds,
+        jwtSecret: config.jwtSecret,
+        logFormat: config.logFormat,
+        logLevel: config.logLevel,
+        previewSecret: config.previewSecret,
+        rateLimitWindowMs: config.rateLimitWindowMs,
+        reload: typeof config.reload === 'undefined' ? undefined : { ...config.reload },
+        securityState: { ...config.securityState },
+        serveRootLandingPage: config.serveRootLandingPage,
+        signInEmailRateLimitMax: config.signInEmailRateLimitMax,
+        signInEmailRateLimitStoreDir: config.signInEmailRateLimitStoreDir,
+        signInPageRateLimitMax: config.signInPageRateLimitMax,
+        signInRateLimitMax: config.signInRateLimitMax,
+        sites: [...config.sites]
+            .map((site) => ({
+                ...cloneHostedAuthViewConfig(site),
+                id: site.id,
+                origins: [...site.origins].sort(),
+                allowedRedirectUris: sortRedirectUriRules(site),
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+        trustProxy: config.trustProxy,
+        verifyRateLimitMax: config.verifyRateLimitMax,
+        verifyTokenStoreDir: config.verifyTokenStoreDir,
+    };
+}
+
+function hasSameReloadInvariantConfig(
+    currentConfig: AppConfig,
+    candidateConfig: AppConfig,
+): boolean {
+    return (
+        JSON.stringify(createReloadInvariantSnapshot(currentConfig)) ===
+        JSON.stringify(createReloadInvariantSnapshot(candidateConfig))
+    );
+}
+
+function getChangedReloadSiteIds(currentConfig: AppConfig, candidateConfig: AppConfig): string[] {
+    const currentSites = new Map(
+        currentConfig.sites.map((site) => [
+            site.id,
+            JSON.stringify(renderSiteAccessRules(site.accessRules)),
+        ]),
+    );
+    const changedSiteIds = candidateConfig.sites.flatMap((site) => {
+        const currentSnapshot = currentSites.get(site.id);
+        const candidateSnapshot = JSON.stringify(renderSiteAccessRules(site.accessRules));
+
+        return currentSnapshot === candidateSnapshot ? [] : [site.id];
+    });
+
+    return changedSiteIds.sort();
+}
+
 function hasValidVerifyEmailPreviewSecret(request: FastifyRequest, config: AppConfig): boolean {
     const previewSecret = request.headers[verifyEmailPreviewSecretHeaderName];
     return (
@@ -1121,6 +1226,77 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             reply.send({ status: 'ok' });
         },
     );
+
+    const reloadConfig = config.reload;
+    if (typeof reloadConfig !== 'undefined') {
+        app.post('/internal/access-config/reload', async (request, reply): Promise<void> => {
+            setNoStoreHeaders(reply);
+
+            const submittedSecret = request.headers[accessConfigReloadSecretHeaderName];
+            if (
+                typeof submittedSecret !== 'string' ||
+                submittedSecret.length === 0 ||
+                !safeCompare(submittedSecret, reloadConfig.secret)
+            ) {
+                request.log.warn(
+                    {
+                        sourceIp: request.ip,
+                    },
+                    'Rejected access-config reload request with an invalid secret',
+                );
+                reply.code(403).send({ message: 'Forbidden' });
+                return;
+            }
+
+            let candidateConfig: AppConfig;
+            try {
+                candidateConfig = loadConfig();
+            } catch (error) {
+                request.log.warn(
+                    {
+                        err: error,
+                        sourceIp: request.ip,
+                    },
+                    'Rejected access-config reload request because the candidate config is invalid',
+                );
+                reply.code(409).send({
+                    message: getErrorMessage(error) ?? 'Failed to reload config',
+                });
+                return;
+            }
+
+            if (!hasSameReloadInvariantConfig(config, candidateConfig)) {
+                request.log.warn(
+                    {
+                        changedSiteIds: getChangedReloadSiteIds(config, candidateConfig),
+                        sourceIp: request.ip,
+                    },
+                    'Rejected access-config reload request because non-reloadable settings changed',
+                );
+                reply.code(409).send({
+                    message: 'Reload only supports site access changes.',
+                });
+                return;
+            }
+
+            const changedSiteIds = getChangedReloadSiteIds(config, candidateConfig);
+            config.sites = candidateConfig.sites;
+
+            request.log.info(
+                {
+                    changedSiteIds,
+                    sourceIp: request.ip,
+                },
+                changedSiteIds.length === 0
+                    ? 'Reloaded access config without site access changes'
+                    : 'Reloaded access config',
+            );
+            reply.send({
+                changedSiteIds,
+                reloaded: true,
+            });
+        });
+    }
 
     app.post('/session-revocations/check', async (request, reply): Promise<void> => {
         setNoStoreHeaders(reply);

@@ -120,6 +120,7 @@ describe('loadConfig', () => {
             expect(config.hostedAuthBranding).toEqual(createDefaultHostedAuthBranding());
             expect(config.hostedAuthPageCopy).toEqual(createDefaultHostedAuthPageCopy());
             expect(config.logFormat).toBe('json');
+            expect(config.reload).toBeUndefined();
             expect(config.securityState).toEqual({
                 adapter: 'file',
                 keyPrefix: 'magic-sso',
@@ -197,6 +198,38 @@ allowedEmails = ["user@example.com"]
         } finally {
             cleanup();
         }
+    });
+
+    it('parses an optional reload secret from server.reload', () => {
+        const { cleanup, config } = loadConfigFromToml(
+            `${baseToml()}
+
+[server.reload]
+secret = "${JWT_SECRET}-reload-secret-0123456789"
+`,
+        );
+
+        try {
+            expect(config.reload).toEqual({
+                secret: `${JWT_SECRET}-reload-secret-0123456789`,
+            });
+        } finally {
+            cleanup();
+        }
+    });
+
+    it('rejects server.reload secrets that are too short', () => {
+        expect(() =>
+            loadConfigFromToml(
+                `${baseToml()}
+
+[server.reload]
+secret = "${SHORT_SECRET}"
+`,
+            ),
+        ).toThrowError(
+            /server\.reload\.secret: server\.reload\.secret must be at least 32 characters long\./u,
+        );
     });
 
     it('parses access rules and preserves scope casing', () => {

@@ -24,8 +24,9 @@ import { PassThrough } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import type { FastifyServerOptions } from 'fastify';
 import { SignJWT } from 'jose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import * as configModule from './config.js';
 import {
     createDefaultHostedAuthBranding,
     createDefaultHostedAuthPageCopy,
@@ -381,6 +382,7 @@ describe('buildApp', () => {
         await app.close();
         rmSync(signInEmailRateLimitStoreDir, { recursive: true, force: true });
         rmSync(verifyTokenStoreDir, { recursive: true, force: true });
+        vi.restoreAllMocks();
     });
 
     it('returns a health response', async () => {
@@ -391,6 +393,272 @@ describe('buildApp', () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.json()).toEqual({ status: 'ok' });
+    });
+
+    it('keeps the reload endpoint disabled when server.reload is not configured', async () => {
+        const response = await app.inject({
+            method: 'POST',
+            url: '/internal/access-config/reload',
+        });
+
+        expect(response.statusCode).toBe(404);
+    });
+
+    it('rejects reload requests with an invalid secret', async () => {
+        const reloadApp = await createTestApp({
+            config: {
+                ...config,
+                reload: {
+                    secret: 'reload-secret-for-magic-sso-123456',
+                },
+            },
+            mailer: {
+                async sendVerificationEmail(input: VerificationEmailInput): Promise<void> {
+                    sentEmails.push(input);
+                },
+            },
+        });
+
+        try {
+            const loadConfigSpy = vi.spyOn(configModule, 'loadConfig');
+            const response = await reloadApp.inject({
+                method: 'POST',
+                url: '/internal/access-config/reload',
+                headers: {
+                    'x-magic-sso-reload-secret': 'wrong-secret',
+                },
+            });
+
+            expect(response.statusCode).toBe(403);
+            expect(response.json()).toEqual({ message: 'Forbidden' });
+            expect(loadConfigSpy).not.toHaveBeenCalled();
+        } finally {
+            await reloadApp.close();
+        }
+    });
+
+    it('reloads live site access when only access rules changed', async () => {
+        let logs = '';
+        const logStream = new PassThrough();
+        logStream.setEncoding('utf8');
+        logStream.on('data', (chunk: string) => {
+            logs += chunk;
+        });
+        const reloadSecret = 'reload-secret-for-magic-sso-123456';
+        const reloadConfig: AppConfig = {
+            ...config,
+            reload: {
+                secret: reloadSecret,
+            },
+        };
+        const reloadApp = await createTestApp({
+            config: reloadConfig,
+            logger: {
+                level: 'info',
+                stream: logStream,
+            },
+            mailer: {
+                async sendVerificationEmail(input: VerificationEmailInput): Promise<void> {
+                    sentEmails.push(input);
+                },
+            },
+        });
+
+        try {
+            const beforeReloadResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: {
+                    'content-type': 'application/json',
+                },
+                payload: {
+                    email: 'reloaded@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+
+            expect(beforeReloadResponse.statusCode).toBe(200);
+            expect(sentEmails).toHaveLength(0);
+
+            const reloadSite = reloadConfig.sites[0];
+            if (typeof reloadSite === 'undefined') {
+                throw new Error('Expected reload config to include a client site.');
+            }
+
+            const candidateConfig: AppConfig = {
+                ...reloadConfig,
+                sites: [
+                    {
+                        ...reloadSite,
+                        accessRules: createAccessRules({
+                            'allowed@example.com': [FULL_ACCESS_SCOPE],
+                            'reloaded@example.com': [FULL_ACCESS_SCOPE],
+                        }),
+                    },
+                ],
+            };
+            vi.spyOn(configModule, 'loadConfig').mockReturnValue(candidateConfig);
+
+            const reloadResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/internal/access-config/reload',
+                headers: {
+                    'x-magic-sso-reload-secret': reloadSecret,
+                },
+            });
+
+            expect(reloadResponse.statusCode).toBe(200);
+            expect(reloadResponse.json()).toEqual({
+                changedSiteIds: ['client'],
+                reloaded: true,
+            });
+
+            const afterReloadResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: {
+                    'content-type': 'application/json',
+                },
+                payload: {
+                    email: 'reloaded@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+
+            expect(afterReloadResponse.statusCode).toBe(200);
+            expect(sentEmails).toHaveLength(1);
+            await waitForLogFlush();
+            expect(logs).toContain('"changedSiteIds":["client"]');
+            expect(logs).toContain('"msg":"Reloaded access config"');
+        } finally {
+            await reloadApp.close();
+        }
+    });
+
+    it('keeps live access unchanged when reload validation fails', async () => {
+        const reloadSecret = 'reload-secret-for-magic-sso-123456';
+        const reloadConfig: AppConfig = {
+            ...config,
+            reload: {
+                secret: reloadSecret,
+            },
+        };
+        const reloadApp = await createTestApp({
+            config: reloadConfig,
+            mailer: {
+                async sendVerificationEmail(input: VerificationEmailInput): Promise<void> {
+                    sentEmails.push(input);
+                },
+            },
+        });
+
+        try {
+            vi.spyOn(configModule, 'loadConfig').mockImplementation(() => {
+                throw new Error(
+                    'Failed to validate MAGICSSO_CONFIG_FILE (/tmp/runtime.toml): broken',
+                );
+            });
+
+            const reloadResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/internal/access-config/reload',
+                headers: {
+                    'x-magic-sso-reload-secret': reloadSecret,
+                },
+            });
+
+            expect(reloadResponse.statusCode).toBe(409);
+            expect(reloadResponse.json()).toEqual({
+                message: 'Failed to validate MAGICSSO_CONFIG_FILE (/tmp/runtime.toml): broken',
+            });
+
+            const signInResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: {
+                    'content-type': 'application/json',
+                },
+                payload: {
+                    email: 'reloaded@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+
+            expect(signInResponse.statusCode).toBe(200);
+            expect(sentEmails).toHaveLength(0);
+        } finally {
+            await reloadApp.close();
+        }
+    });
+
+    it('rejects reloads when non-reloadable settings changed and keeps live access unchanged', async () => {
+        const reloadSecret = 'reload-secret-for-magic-sso-123456';
+        const reloadConfig: AppConfig = {
+            ...config,
+            reload: {
+                secret: reloadSecret,
+            },
+        };
+        const reloadApp = await createTestApp({
+            config: reloadConfig,
+            mailer: {
+                async sendVerificationEmail(input: VerificationEmailInput): Promise<void> {
+                    sentEmails.push(input);
+                },
+            },
+        });
+
+        try {
+            const reloadSite = reloadConfig.sites[0];
+            if (typeof reloadSite === 'undefined') {
+                throw new Error('Expected reload config to include a client site.');
+            }
+
+            const candidateConfig: AppConfig = {
+                ...reloadConfig,
+                appUrl: 'http://other-sso.example.com',
+                sites: [
+                    {
+                        ...reloadSite,
+                        accessRules: createAccessRules({
+                            'allowed@example.com': [FULL_ACCESS_SCOPE],
+                            'reloaded@example.com': [FULL_ACCESS_SCOPE],
+                        }),
+                    },
+                ],
+            };
+            vi.spyOn(configModule, 'loadConfig').mockReturnValue(candidateConfig);
+
+            const reloadResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/internal/access-config/reload',
+                headers: {
+                    'x-magic-sso-reload-secret': reloadSecret,
+                },
+            });
+
+            expect(reloadResponse.statusCode).toBe(409);
+            expect(reloadResponse.json()).toEqual({
+                message: 'Reload only supports site access changes.',
+            });
+
+            const signInResponse = await reloadApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: {
+                    'content-type': 'application/json',
+                },
+                payload: {
+                    email: 'reloaded@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+
+            expect(signInResponse.statusCode).toBe(200);
+            expect(sentEmails).toHaveLength(0);
+        } finally {
+            await reloadApp.close();
+        }
     });
 
     it('includes the startup probe header on the health response when configured', async () => {

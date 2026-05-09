@@ -1,0 +1,16 @@
+{
+	admin off
+	auto_https off
+}
+
+http://{$SSO_PUBLIC_HOST}:{$MANAGER_PUBLIC_PORT} {
+	reverse_proxy magic-sso:3000
+}
+
+http://{$PHOTOS_PUBLIC_HOST}:{$MANAGER_PUBLIC_PORT} {
+	reverse_proxy photos:5001
+}
+
+http://{$MANAGER_PUBLIC_HOST}:{$MANAGER_PUBLIC_PORT} {
+	reverse_proxy magic-gate-manager:4000
+}

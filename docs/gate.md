@@ -214,8 +214,10 @@ That stack includes:
 
 - Caddy as the public reverse proxy
 - Magic Link SSO server
+- Magic Link SSO manager in managed mode
 - Magic Link SSO Gate for `private1`
 - Magic Link SSO Gate for `private2`
+- Magic Link SSO Gate for `manager`
 - `private1` dynamic upstream example
 - `private2` static site example
 - Mailpit for inspecting the magic-link email
@@ -224,6 +226,7 @@ Open:
 
 - `http://private1.localhost:4306`
 - `http://private2.localhost:4306`
+- `http://manager.localhost:4306`
 - `http://sso.localhost:4306`
 - `http://localhost:8025`
 
@@ -240,7 +243,10 @@ renderer inputs are grouped under the `MAGIC_GATE_RENDER_*` prefix, including
 `MAGIC_GATE_RENDER_COOKIE_NAME`, and `MAGIC_GATE_RENDER_COOKIE_MAX_AGE`. If you
 use `pnpm dev:gate:stack`, Compose will still use defaults or exported shell env
 vars. Use `docker compose --env-file gate/.env ...` when you want the stack to
-read the env file explicitly.
+read the env file explicitly. The same stack also brings up a Gate-protected
+manager at `manager.localhost`, seeds `private1` and `private2` access through
+manager-owned state, and keeps the bootstrap `manager-admin` allowlist in the
+static server template via `MANAGER_ALLOWED_EMAIL`.
 
 The `private2` example is intentionally a static site behind Gate. It shows that
 the protected upstream can be a plain file server for HTML, SPA bundles, and

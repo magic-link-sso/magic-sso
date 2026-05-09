@@ -9,6 +9,9 @@ const quietWebServerScript = resolve(packageDir, 'src/run-web-server.mjs');
 const repoRoot = resolve(packageDir, '../..');
 const angularPort = '43104';
 const fastifyPort = '43105';
+const photosPort = '5001';
+const managerGatePort = '43111';
+const managerServicePort = '43110';
 const private1GatePort = '43106';
 const private1UpstreamPort = '43107';
 const private2UpstreamPort = '43108';
@@ -20,6 +23,7 @@ const nextPort = '43101';
 const nuxtPort = '43102';
 const serverPort = '43100';
 const serverFixtureConfigPath = resolve(packageDir, 'fixtures/server.config.toml');
+const managerReloadSecret = 'test-manager-reload-secret-1234567890';
 const sharedJwtSecret = 'test-jwt-secret-for-e2e-suite-123456';
 const sharedPreviewSecret = 'test-preview-secret-for-e2e-suite-123';
 
@@ -34,6 +38,169 @@ function createEphemeralServerConfigPath(): string {
     const configPath = resolve(tempDir, 'server.config.toml');
     writeFileSync(configPath, configContents, 'utf8');
     return configPath;
+}
+
+function createEphemeralManagerServerConfigPath(): string {
+    const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-manager-server-'));
+    const verifyTokenStoreDir = resolve(tempDir, 'verification-tokens');
+    const signInEmailRateLimitStoreDir = resolve(tempDir, 'signin-email-rate-limit');
+    const configPath = resolve(tempDir, 'server.config.toml');
+    const configContents = `
+[server]
+appPort = ${serverPort}
+appUrl = "http://localhost:${serverPort}"
+logLevel = "error"
+verifyTokenStoreDir = "${verifyTokenStoreDir}"
+signInEmailRateLimitStoreDir = "${signInEmailRateLimitStoreDir}"
+
+[server.reload]
+secret = "${managerReloadSecret}"
+
+[auth]
+csrfSecret = "test-csrf-secret-for-manager-e2e-suite-123456"
+jwtSecret = "${sharedJwtSecret}"
+emailSecret = "test-email-secret-for-manager-e2e-suite-12345"
+previewSecret = "${sharedPreviewSecret}"
+
+[cookie]
+name = "magic-sso"
+secure = false
+
+[email]
+from = "noreply@example.com"
+
+[email.smtp]
+host = "127.0.0.1"
+port = 43125
+user = "test-user"
+pass = "test-password"
+secure = false
+
+[[sites]]
+id = "photos"
+origins = ["http://localhost:${photosPort}"]
+allowedRedirectUris = ["http://localhost:${photosPort}/verify-email", "http://localhost:${photosPort}/*"]
+allowedEmails = ["owner@example.com", "friend@example.com", "family@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO Photos Demo"
+logoText = "PH"
+
+[[sites]]
+id = "manager-admin"
+origins = ["http://localhost:${managerGatePort}"]
+allowedRedirectUris = ["http://localhost:${managerGatePort}/_magicgate/verify-email", "http://localhost:${managerGatePort}/*"]
+allowedEmails = ["manager@example.com"]
+
+[sites.hostedAuth.branding]
+title = "Magic Link SSO Manager"
+logoText = "MG"
+`.trimStart();
+    writeFileSync(configPath, configContents, 'utf8');
+    return configPath;
+}
+
+function createEphemeralManagerSettingsPaths(): {
+    bootstrapConfigPath: string;
+    configPath: string;
+    runtimeConfigFile: string;
+} {
+    const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-manager-settings-'));
+    const baseConfigFile = resolve(tempDir, 'magic-sso.base.toml');
+    const bootstrapConfigPath = resolve(tempDir, 'manager.bootstrap.toml');
+    const configPath = resolve(tempDir, 'manager.toml');
+    const stateFile = resolve(tempDir, 'manager-state.json');
+    const runtimeConfigFile = resolve(tempDir, 'magic-sso.runtime.toml');
+    const lastGoodRuntimeConfigFile = resolve(tempDir, 'magic-sso.runtime.last-good.toml');
+    const auditFile = resolve(tempDir, 'manager-audit.ndjson');
+    const lockFile = resolve(tempDir, 'manager.lock');
+
+    writeFileSync(
+        baseConfigFile,
+        readFileSync(createEphemeralManagerServerConfigPath(), 'utf8'),
+        'utf8',
+    );
+    writeFileSync(
+        stateFile,
+        JSON.stringify(
+            {
+                version: 1,
+                managedSites: {
+                    photos: {
+                        grants: [
+                            {
+                                email: 'owner@example.com',
+                                scopes: ['*'],
+                            },
+                            {
+                                email: 'friend@example.com',
+                                scopes: ['friends'],
+                            },
+                            {
+                                email: 'family@example.com',
+                                scopes: ['family'],
+                            },
+                        ],
+                        scopeCatalog: ['friends', 'family', 'photo:red-kite-at-dusk'],
+                    },
+                },
+                metadata: {},
+            },
+            null,
+            2,
+        ),
+        'utf8',
+    );
+    writeFileSync(
+        bootstrapConfigPath,
+        `
+managedSiteIds = ["photos"]
+
+[paths]
+baseConfigFile = "${baseConfigFile}"
+stateFile = "${stateFile}"
+runtimeConfigFile = "${runtimeConfigFile}"
+lastGoodRuntimeConfigFile = "${lastGoodRuntimeConfigFile}"
+auditFile = "${auditFile}"
+lockFile = "${lockFile}"
+`.trimStart(),
+        'utf8',
+    );
+    writeFileSync(
+        configPath,
+        `
+managedSiteIds = ["photos"]
+
+[paths]
+baseConfigFile = "${baseConfigFile}"
+stateFile = "${stateFile}"
+runtimeConfigFile = "${runtimeConfigFile}"
+lastGoodRuntimeConfigFile = "${lastGoodRuntimeConfigFile}"
+auditFile = "${auditFile}"
+lockFile = "${lockFile}"
+
+[reload]
+url = "http://127.0.0.1:${serverPort}/internal/access-config/reload"
+secret = "${managerReloadSecret}"
+timeoutMs = 5000
+
+[service]
+host = "127.0.0.1"
+port = ${managerServicePort}
+
+[service.auth]
+mode = "gate"
+requiredSiteId = "manager-admin"
+requiredScope = "*"
+`.trimStart(),
+        'utf8',
+    );
+
+    return {
+        bootstrapConfigPath,
+        configPath,
+        runtimeConfigFile,
+    };
 }
 
 function createEphemeralGateConfigPath(options: {
@@ -369,6 +536,139 @@ export function createE2eConfig(
                 stderr: 'pipe',
                 stdout: 'ignore',
                 timeout: 60_000,
+            },
+        ],
+    });
+}
+
+export function createManagerE2eConfig() {
+    const isCi = process.env.CI === 'true';
+    const slowMo = parseOptionalPositiveInteger(process.env.PW_SLOWMO_MS);
+    const managerSettingsPaths = createEphemeralManagerSettingsPaths();
+    process.env['MAGICSSO_E2E_MANAGER_CONFIG_FILE'] = managerSettingsPaths.configPath;
+    const managerGateConfigPath = createEphemeralGateConfigPath({
+        directUse: false,
+        port: managerGatePort,
+        publicOrigin: `http://localhost:${managerGatePort}`,
+        upstreamUrl: `http://127.0.0.1:${managerServicePort}`,
+    });
+
+    const serverEnv = buildEnv({
+        MAGICSSO_CONFIG_FILE: managerSettingsPaths.runtimeConfigFile,
+        MAGICSSO_MANAGER_CONFIG_FILE: managerSettingsPaths.bootstrapConfigPath,
+    });
+
+    const managerEnv = buildEnv({
+        MAGICSSO_MANAGER_CONFIG_FILE: managerSettingsPaths.configPath,
+    });
+
+    const photosEnv = buildEnv({
+        MAGICSSO_COOKIE_NAME: 'magic-sso',
+        MAGICSSO_COOKIE_MAX_AGE: '3600',
+        MAGICSSO_DIRECT_USE: 'false',
+        MAGICSSO_JWT_SECRET: sharedJwtSecret,
+        MAGICSSO_PREVIEW_SECRET: sharedPreviewSecret,
+        MAGICSSO_PUBLIC_ORIGIN: `http://localhost:${photosPort}`,
+        MAGICSSO_SERVER_URL: `http://localhost:${serverPort}`,
+    });
+
+    const mailSinkEnv = buildEnv({
+        MAIL_SINK_HTTP_HOST: '127.0.0.1',
+        MAIL_SINK_HTTP_PORT: mailSinkHttpPort,
+        MAIL_SINK_SMTP_HOST: '127.0.0.1',
+        MAIL_SINK_SMTP_PASS: 'test-password',
+        MAIL_SINK_SMTP_PORT: mailSinkSmtpPort,
+        MAIL_SINK_SMTP_USER: 'test-user',
+        WEB_SERVER_COMMAND: 'pnpm mail-sink',
+    });
+
+    return defineConfig({
+        testDir: resolve(packageDir, 'tests'),
+        testMatch: /manager-wave8\.spec\.ts/u,
+        timeout: 60_000,
+        expect: {
+            timeout: 15_000,
+        },
+        fullyParallel: false,
+        forbidOnly: isCi,
+        retries: isCi ? 2 : 0,
+        reporter: isCi ? [['github'], ['html', { open: 'never' }]] : 'list',
+        use: {
+            ...(typeof slowMo === 'number'
+                ? {
+                      launchOptions: {
+                          slowMo,
+                      },
+                  }
+                : {}),
+            trace: 'retain-on-failure',
+        },
+        webServer: [
+            {
+                command: `node ${quietWebServerScript}`,
+                cwd: packageDir,
+                env: mailSinkEnv,
+                port: Number.parseInt(mailSinkHttpPort, 10),
+                reuseExistingServer: false,
+                stderr: 'pipe',
+                stdout: 'ignore',
+                timeout: 30_000,
+            },
+            {
+                command: `node ${quietWebServerScript}`,
+                cwd: repoRoot,
+                env: {
+                    ...serverEnv,
+                    WEB_SERVER_COMMAND:
+                        'pnpm --filter magic-sso-manager build && node manager/dist/cli.js apply --yes && pnpm --filter magic-sso-server build && pnpm --filter magic-sso-server start',
+                },
+                url: `http://localhost:${serverPort}/healthz`,
+                reuseExistingServer: false,
+                stderr: 'pipe',
+                stdout: 'ignore',
+                timeout: 120_000,
+            },
+            {
+                command: `node ${quietWebServerScript}`,
+                cwd: repoRoot,
+                env: {
+                    ...photosEnv,
+                    WEB_SERVER_COMMAND:
+                        'pnpm --filter example-app-photos build && pnpm --filter example-app-photos start',
+                },
+                url: `http://localhost:${photosPort}/login`,
+                reuseExistingServer: false,
+                stderr: 'pipe',
+                stdout: 'ignore',
+                timeout: 120_000,
+            },
+            {
+                command: `node ${quietWebServerScript}`,
+                cwd: repoRoot,
+                env: {
+                    ...managerEnv,
+                    WEB_SERVER_COMMAND:
+                        'pnpm --filter magic-sso-manager build && pnpm --filter magic-sso-manager start',
+                },
+                url: `http://127.0.0.1:${managerServicePort}/healthz`,
+                reuseExistingServer: false,
+                stderr: 'pipe',
+                stdout: 'ignore',
+                timeout: 120_000,
+            },
+            {
+                command: `node ${quietWebServerScript}`,
+                cwd: repoRoot,
+                env: {
+                    MAGIC_GATE_CONFIG_FILE: managerGateConfigPath,
+                    WEB_SERVER_COMMAND:
+                        'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
+                },
+                url: `http://localhost:${managerGatePort}/_magicgate/healthz`,
+                reuseExistingServer: false,
+                stderr: 'pipe',
+                stdout: 'ignore',
+                timeout: 120_000,
             },
         ],
     });

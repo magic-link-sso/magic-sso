@@ -80,8 +80,10 @@ Then open:
 The bundled stack starts:
 
 - Magic Link SSO server
+- Magic Link SSO manager in managed mode
 - Magic Link SSO Gate for `private1`
 - Magic Link SSO Gate for `private2`
+- Magic Link SSO Gate for `manager`
 - `private1` dynamic upstream example
 - `private2` static site example
 - Caddy public proxy
@@ -98,6 +100,7 @@ Then open:
 
 - protected entrypoint `private1`: `http://private1.localhost:4306`
 - protected entrypoint `private2`: `http://private2.localhost:4306`
+- protected manager UI: `http://manager.localhost:4306`
 - hosted sign-in origin: `http://sso.localhost:4306`
 - Mailpit inbox: `http://localhost:8025`
 
@@ -112,7 +115,13 @@ there without editing `docker-compose.yml`. The Gate renderer uses only
 `MAGIC_GATE_RENDER_COOKIE_MAX_AGE`. The `pnpm dev:gate:stack` shortcut still
 works with defaults or exported shell env vars, but `--env-file gate/.env` is
 the explicit path when you want Compose to read the checked-in example-derived
-env file.
+env file. The stack keeps generated manager and server runtime files under
+`gate/runtime/`, mounted read-write into the manager container and read-only
+into the server container. The manager bootstraps the runtime TOML from the
+rendered base config plus `gate/dev/manager-state.json.template`, so the local
+stack comes up with `private1` and `private2` access already managed through the
+Gate-protected manager UI. `MANAGER_ALLOWED_EMAIL` controls the bootstrap admin
+email for the dedicated `manager-admin` site.
 
 The compose stack is designed as a local mirror of the production topology
 documented in [`docs/gate.md`](../docs/gate.md).

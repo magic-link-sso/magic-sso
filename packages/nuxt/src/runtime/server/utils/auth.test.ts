@@ -9,6 +9,7 @@ import {
     getExcludedPaths,
     getMagicSsoConfig,
     getJwtSecret,
+    getRequestOrigin,
     isPublicPath,
     normaliseReturnUrl,
     resolveMagicSsoConfig,
@@ -395,6 +396,65 @@ describe('normaliseReturnUrl', () => {
     });
 });
 
+describe('getRequestOrigin', () => {
+    it('prefers the configured public origin', () => {
+        const event = {
+            ...createEvent('http://internal.example.local/protected'),
+            context: {
+                nitro: {
+                    runtimeConfig: {
+                        magicSso: {
+                            publicOrigin: 'https://photos.example.com/path?q=1',
+                            trustProxy: true,
+                        },
+                    },
+                },
+            },
+        };
+
+        expect(getRequestOrigin(event)).toBe('https://photos.example.com');
+    });
+
+    it('uses trusted forwarded headers when the public origin is not configured', () => {
+        const event = {
+            ...createEvent('http://0.0.0.0:5001/protected'),
+            context: {
+                nitro: {
+                    runtimeConfig: {
+                        magicSso: {
+                            trustProxy: true,
+                        },
+                    },
+                },
+            },
+        };
+        event.node.req.headers['x-forwarded-host'] = 'photos.localhost:4306';
+        event.node.req.headers['x-forwarded-proto'] = 'http';
+
+        expect(getRequestOrigin(event)).toBe('http://photos.localhost:4306');
+    });
+
+    it('falls back to the request URL only when explicitly allowed', () => {
+        const event = {
+            ...createEvent('http://app.example.com/protected'),
+            context: {
+                nitro: {
+                    runtimeConfig: {
+                        magicSso: {
+                            trustProxy: false,
+                        },
+                    },
+                },
+            },
+        };
+
+        expect(getRequestOrigin(event)).toBeNull();
+        expect(getRequestOrigin(event, { allowRequestUrlFallback: true })).toBe(
+            'http://app.example.com',
+        );
+    });
+});
+
 describe('verifyAuthToken', () => {
     it('returns the decoded payload for valid tokens', async () => {
         const token = await signToken(
@@ -498,5 +558,36 @@ describe('verifyRequestAuth', () => {
         event.node.req.headers['cookie'] = `token=${token}`;
 
         await expect(verifyRequestAuth(event)).resolves.toBeNull();
+    });
+
+    it('uses trusted forwarded headers for audience checks when trust proxy is enabled', async () => {
+        const token = await signToken(
+            'user@example.com',
+            'test-secret',
+            'http://photos.localhost:4306',
+            'http://sso.example.com',
+        );
+        const event = {
+            ...createEvent('http://0.0.0.0:5001/protected'),
+            context: {
+                nitro: {
+                    runtimeConfig: {
+                        magicSso: {
+                            jwtSecret: 'test-secret',
+                            serverUrl: 'http://sso.example.com',
+                            cookieName: 'token',
+                            trustProxy: true,
+                        },
+                    },
+                },
+            },
+        };
+        event.node.req.headers['cookie'] = `token=${token}`;
+        event.node.req.headers['x-forwarded-host'] = 'photos.localhost:4306';
+        event.node.req.headers['x-forwarded-proto'] = 'http';
+
+        await expect(verifyRequestAuth(event)).resolves.toMatchObject({
+            email: 'user@example.com',
+        });
     });
 });

@@ -1,4 +1,6 @@
 packages:
+    - manager
+    - packages/config-core
     - packages/example-ui
     - server
     - gate
@@ -12,6 +14,7 @@ packages:
     - examples/gate-private2-static
     - examples/nextjs
     - examples/nuxt
+    - examples/photos
     - tests/e2e
 
 overrides:
