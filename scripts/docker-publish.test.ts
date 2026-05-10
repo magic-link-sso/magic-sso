@@ -27,4 +27,31 @@ describe('docker publish workflow', () => {
             'subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}',
         );
     });
+
+    it('installs workspace dependencies when building published images', async () => {
+        const [serverDockerfile, gateDockerfile, managerDockerfile] = await Promise.all([
+            readRepositoryFile('server/Dockerfile'),
+            readRepositoryFile('gate/Dockerfile'),
+            readRepositoryFile('manager/Dockerfile'),
+        ]);
+
+        expect(serverDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-server... --frozen-lockfile',
+        );
+        expect(serverDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-server... --prod --frozen-lockfile',
+        );
+        expect(gateDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-gate... --frozen-lockfile',
+        );
+        expect(gateDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-gate... --prod --frozen-lockfile',
+        );
+        expect(managerDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-manager... --frozen-lockfile',
+        );
+        expect(managerDockerfile).toContain(
+            'pnpm install --ignore-scripts --filter magic-sso-manager... --prod --frozen-lockfile',
+        );
+    });
 });

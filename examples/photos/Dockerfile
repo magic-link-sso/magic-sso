@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY examples/photos/package.json examples/photos/package.json
 COPY packages/nextjs/package.json packages/nextjs/package.json
-RUN pnpm install --ignore-scripts --filter example-app-photos --frozen-lockfile
+RUN pnpm install --ignore-scripts --filter example-app-photos... --frozen-lockfile
 COPY examples/photos examples/photos
 COPY packages/nextjs packages/nextjs
 RUN pnpm --filter example-app-photos build

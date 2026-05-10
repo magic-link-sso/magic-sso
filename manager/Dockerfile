@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config-core/package.json packages/config-core/package.json
 COPY manager/package.json manager/package.json
-RUN pnpm install --ignore-scripts --filter magic-sso-manager --frozen-lockfile
+RUN pnpm install --ignore-scripts --filter magic-sso-manager... --frozen-lockfile
 COPY packages/config-core packages/config-core
 COPY manager manager
 RUN pnpm --filter magic-sso-manager build
@@ -19,7 +19,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config-core/package.json packages/config-core/package.json
 COPY manager/package.json manager/package.json
-RUN pnpm install --ignore-scripts --filter magic-sso-manager --prod --frozen-lockfile
+RUN pnpm install --ignore-scripts --filter magic-sso-manager... --prod --frozen-lockfile
 
 FROM node:${node}
 RUN addgroup -S -g 1001 nodejs

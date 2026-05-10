@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY gate/package.json gate/package.json
 COPY packages/example-ui/package.json packages/example-ui/package.json
-RUN pnpm install --ignore-scripts --filter magic-sso-gate --frozen-lockfile
+RUN pnpm install --ignore-scripts --filter magic-sso-gate... --frozen-lockfile
 COPY gate gate
 COPY packages/example-ui packages/example-ui
 RUN pnpm --filter magic-sso-gate build
@@ -19,7 +19,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY gate/package.json gate/package.json
 COPY packages/example-ui/package.json packages/example-ui/package.json
-RUN pnpm install --ignore-scripts --filter magic-sso-gate --prod --frozen-lockfile
+RUN pnpm install --ignore-scripts --filter magic-sso-gate... --prod --frozen-lockfile
 
 FROM node:${node}
 RUN addgroup -S -g 1001 nodejs
