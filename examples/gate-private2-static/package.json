@@ -1,6 +1,6 @@
 {
     "name": "example-app-gate-private2-static",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "private": true,
     "scripts": {
         "build": "node -e \"console.log('private2-static is static; no build step needed.')\"",
