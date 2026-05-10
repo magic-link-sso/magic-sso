@@ -1,6 +1,6 @@
 {
     "name": "magic-sso-example-ui",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "private": true,
     "description": "Shared UI assets for Magic Link SSO TypeScript examples",
     "files": [

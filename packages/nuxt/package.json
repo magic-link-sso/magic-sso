@@ -1,6 +1,6 @@
 {
     "name": "@magic-link-sso/nuxt",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Magic Link SSO for Nuxt",
     "keywords": [
         "auth",
