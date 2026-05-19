@@ -16,7 +16,7 @@
     "dependencies": {
         "@magic-link-sso/nuxt": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
-        "nuxt": "^4.4.4",
+        "nuxt": "^4.4.6",
         "vue": "^3.5.34"
     },
     "devDependencies": {
