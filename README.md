@@ -180,7 +180,7 @@ Flows:
 Prerequisites:
 
 - Node.js 24.15.0 or later
-- pnpm 10.30.3 or later
+- pnpm 11.1.3 or later
 - Python 3.12 or later
 - uv 0.10 or later
 - Docker if you want to use `server/docker-compose.yml`

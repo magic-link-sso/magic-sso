@@ -15,7 +15,7 @@ Thanks for helping improve Magic Link SSO.
 
 ## Development setup
 
-1. Install Node.js `24.15.0` or later and `pnpm 10.30.3` or later.
+1. Install Node.js `24.15.0` or later and `pnpm 11.1.3` or later.
 2. Install Python `3.12` or later and `uv 0.10` or later.
 3. Install dependencies:
 
