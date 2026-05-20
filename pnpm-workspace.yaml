@@ -17,6 +17,13 @@ packages:
     - examples/photos
     - tests/e2e
 
+allowBuilds:
+    '@parcel/watcher': false
+    esbuild: true
+    lmdb: false
+    msgpackr-extract: false
+    sharp: false
+
 overrides:
     '@hono/node-server@<1.19.13': '>=1.19.13'
     brace-expansion@>=2.0.0 <2.0.3: '>=2.0.3'
