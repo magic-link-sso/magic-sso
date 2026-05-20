@@ -17,8 +17,8 @@
         "typecheck": "tsc -p tsconfig.json"
     },
     "devDependencies": {
-        "@playwright/test": "^1.59.1",
-        "@types/node": "^25.6.2",
+        "@playwright/test": "^1.60.0",
+        "@types/node": "^25.9.1",
         "mailparser": "latest",
         "smtp-server": "latest",
         "typescript": "^5.9.3"
