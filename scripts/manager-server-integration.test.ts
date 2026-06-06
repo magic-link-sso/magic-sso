@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     FULL_ACCESS_SCOPE,
@@ -23,6 +22,7 @@ import type { VerificationEmailInput, VerificationEmailSender } from '../server/
 import type { PerEmailSignInLimiter } from '../server/src/perEmailSignInLimiter.js';
 
 const tempDirectories: string[] = [];
+type InjectableApp = Awaited<ReturnType<typeof buildApp>>;
 
 function createBaseConfigToml(): string {
     return `
@@ -75,7 +75,7 @@ timeoutMs = 2000
     `.trimStart();
 }
 
-function createInjectFetch(app: FastifyInstance): typeof fetch {
+function createInjectFetch(app: InjectableApp): typeof fetch {
     const injectFetch: typeof fetch = async (input, init) => {
         const requestUrl =
             typeof input === 'string' || input instanceof URL
@@ -111,7 +111,7 @@ function createInjectFetch(app: FastifyInstance): typeof fetch {
 }
 
 async function attemptScopedSignin(
-    app: FastifyInstance,
+    app: InjectableApp,
     sentEmails: VerificationEmailInput[],
     email: string,
     scope: string,

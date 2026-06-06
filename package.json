@@ -52,6 +52,7 @@
     },
     "devDependencies": {
         "@types/node": "^25.9.1",
+        "fallow": "^2.88.3",
         "git-cliff": "^2.13.1",
         "husky": "^9.1.7",
         "lint-staged": "^16.4.0",

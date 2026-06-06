@@ -160,10 +160,6 @@ export function listAlbums(): readonly Album[] {
     return albums;
 }
 
-export function listPhotos(): readonly Photo[] {
-    return photos;
-}
-
 export function getAlbum(slug: string): Album | undefined {
     return albums.find((album) => album.slug === slug);
 }

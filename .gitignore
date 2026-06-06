@@ -10,6 +10,7 @@
 !**/.env.example
 !**/.env.local.example
 !manager/.env.prod.example
+.fallow/
 .idea/
 .magic-sso/
 .next/

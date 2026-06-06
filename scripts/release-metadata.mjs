@@ -27,7 +27,7 @@ export const JS_PACKAGE_FILES = [
     'examples/photos/package.json',
 ];
 
-export const RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES = [
+const RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES = [
     'packages/angular/package.json',
     'packages/example-ui/package.json',
     'packages/nextjs/package.json',
@@ -69,7 +69,7 @@ export function readTomlVersion(source) {
     return match[1];
 }
 
-export function readUvLockPackageVersion(source, packageName) {
+function readUvLockPackageVersion(source, packageName) {
     const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
     const pattern = new RegExp(
         String.raw`\[\[package\]\]\nname = "${escapedPackageName}"\nversion = "([^"]+)"`,
@@ -84,11 +84,11 @@ export function readUvLockPackageVersion(source, packageName) {
     return match[1];
 }
 
-export async function readRepositoryFile(rootDir, relativePath) {
+async function readRepositoryFile(rootDir, relativePath) {
     return readFile(path.join(rootDir, relativePath), 'utf8');
 }
 
-export async function readReleaseVersions(rootDir, jsPackageFiles) {
+async function readReleaseVersions(rootDir, jsPackageFiles) {
     const versions = [];
 
     for (const relativePath of jsPackageFiles) {
@@ -123,7 +123,7 @@ export async function readManagedReleaseVersions(rootDir) {
     return readReleaseVersions(rootDir, JS_PACKAGE_FILES);
 }
 
-export async function readCurrentReleaseVersionEntries(rootDir) {
+async function readCurrentReleaseVersionEntries(rootDir) {
     return readReleaseVersions(rootDir, RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES);
 }
 

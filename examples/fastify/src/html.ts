@@ -3,7 +3,7 @@
 
 import type { AuthPayload } from './auth.js';
 
-export interface RenderPageOptions {
+interface RenderPageOptions {
     body: string;
     title: string;
 }

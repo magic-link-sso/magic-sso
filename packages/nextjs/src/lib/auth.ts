@@ -152,7 +152,7 @@ export function readFirstHeaderValue(value: string | null): string | null {
     return typeof firstValue === 'string' && firstValue.length > 0 ? firstValue.trim() : null;
 }
 
-export async function getRequestOrigin(): Promise<string | null> {
+async function getRequestOrigin(): Promise<string | null> {
     const publicOrigin = getPublicOrigin();
     if (publicOrigin !== null) {
         return publicOrigin;

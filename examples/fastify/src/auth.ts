@@ -127,10 +127,7 @@ export function getJwtSecret(config?: MagicSsoConfig): Uint8Array | null {
     return jwtSecret.length > 0 ? new TextEncoder().encode(jwtSecret) : null;
 }
 
-export function readCookieValue(
-    cookieHeader: string | undefined,
-    name: string,
-): string | undefined {
+function readCookieValue(cookieHeader: string | undefined, name: string): string | undefined {
     if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
         return undefined;
     }

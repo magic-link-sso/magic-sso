@@ -22,7 +22,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 const JWT_ALGORITHM = 'HS256';
 
-export interface JwtVerificationFailure {
+interface JwtVerificationFailure {
     errorName: string;
 }
 

@@ -14,7 +14,7 @@ export interface CreateUpstreamAppOptions {
     logger?: false | { level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' };
 }
 
-export function normaliseBasePath(value: string | undefined): string {
+function normaliseBasePath(value: string | undefined): string {
     if (typeof value !== 'string' || value.trim().length === 0) {
         return '';
     }

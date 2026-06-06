@@ -1,0 +1,53 @@
+{
+    "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+    "entry": ["gate/src/main.ts", "manager/src/main.ts", "server/src/main.ts"],
+    "publicPackages": ["@magic-link-sso/angular", "@magic-link-sso/nextjs", "@magic-link-sso/nuxt"],
+    "dynamicallyLoaded": [
+        "examples/angular/src/main.server.ts",
+        "examples/angular/src/server.ts",
+        "examples/gate-private2-static/public/assets/*",
+        "examples/nextjs/tests/*.mjs",
+        "examples/nuxt/tests/*.mjs",
+        "gate/dev/bootstrap-manager-stack.mjs",
+        "gate/dev/render-magic-gate-config.mjs",
+        "manager/dev/bootstrap-local-managed-stack.mjs",
+        "manager/dev/bootstrap-managed-stack.mjs",
+        "packages/nuxt/src/runtime/app/**/*.ts",
+        "packages/nuxt/src/runtime/server/routes/*.ts",
+        "tests/e2e/src/run-web-server.mjs"
+    ],
+    "ignoreDependencies": [
+        "@angular/platform-server",
+        "@magic-link-sso/angular",
+        "@magic-link-sso/config-core",
+        "@magic-link-sso/nextjs",
+        "git-cliff",
+        "pino-pretty"
+    ],
+    "ignoreUnresolvedImports": ["/app/manager/dist/index.js"],
+    "workspaces": {
+        "packages": [
+            "examples/angular",
+            "examples/django",
+            "examples/fastify",
+            "examples/gate-private1-app",
+            "examples/gate-private2-static",
+            "examples/nextjs",
+            "examples/nuxt",
+            "examples/photos",
+            "gate",
+            "manager",
+            "packages/angular",
+            "packages/config-core",
+            "packages/example-ui",
+            "packages/nextjs",
+            "packages/nuxt",
+            "server",
+            "tests/e2e"
+        ]
+    },
+    "duplicates": {
+        "minOccurrences": 3
+    },
+    "rules": {}
+}

@@ -179,7 +179,7 @@ export function buildVerifyUrl(config: GateConfig, returnUrl: string): string {
     return verifyUrl.toString();
 }
 
-export function buildLoginPath(config: GateConfig, returnUrl: string, scope?: string): string {
+function buildLoginPath(config: GateConfig, returnUrl: string, scope?: string): string {
     const loginPath = new URL(buildPublicUrl(config, buildGatePath(config, '/login')));
     loginPath.searchParams.set('returnUrl', normaliseReturnUrl(returnUrl, config));
 
