@@ -17,6 +17,7 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { escapeHtml } from '@magic-link-sso/config-core/runtime';
 import nodemailer from 'nodemailer';
 import type { AppConfig, SmtpTransportConfig } from './config.js';
 
@@ -78,15 +79,6 @@ function normaliseEmailSignature(signature: string): string {
     }
 
     return trimmedSignature;
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function buildTextBody(

@@ -18,7 +18,7 @@
  */
 
 import { FULL_ACCESS_SCOPE } from '@magic-link-sso/config-core';
-import { timingSafeEqual } from 'node:crypto';
+import { safeCompare } from '@magic-link-sso/config-core/runtime';
 import { type IncomingHttpHeaders } from 'node:http';
 import {
     type ManagerBearerTokenAuthConfig,
@@ -39,16 +39,6 @@ export interface ManagerGateActor {
 }
 
 export type ManagerAuthenticatedActor = ManagerApiActor | ManagerGateActor;
-
-function safeCompare(left: string, right: string): boolean {
-    const leftBytes = new TextEncoder().encode(left);
-    const rightBytes = new TextEncoder().encode(right);
-    if (leftBytes.length !== rightBytes.length) {
-        return false;
-    }
-
-    return timingSafeEqual(leftBytes, rightBytes);
-}
 
 function readSingleHeaderValue(value: string | string[] | undefined): string | undefined {
     if (Array.isArray(value)) {

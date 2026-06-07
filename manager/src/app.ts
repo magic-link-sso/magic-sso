@@ -17,6 +17,7 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { readCookieValue } from '@magic-link-sso/config-core/runtime';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, {
     type FastifyInstance,
@@ -244,29 +245,6 @@ function normalizeReturnToPath(value: string | undefined): string {
     }
 
     return normalizedValue;
-}
-
-function readCookieValue(cookieHeader: string | undefined, cookieName: string): string | undefined {
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    const prefix = `${cookieName}=`;
-    for (const item of cookieHeader.split(';')) {
-        const trimmedItem = item.trim();
-        if (!trimmedItem.startsWith(prefix)) {
-            continue;
-        }
-
-        const value = trimmedItem.slice(prefix.length);
-        try {
-            return decodeURIComponent(value);
-        } catch {
-            return value;
-        }
-    }
-
-    return undefined;
 }
 
 function readHeaderFirstValue(value: string | string[] | undefined): string | undefined {

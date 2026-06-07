@@ -3,6 +3,7 @@
 
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
+import { safeCompare } from '@magic-link-sso/config-core/runtime';
 import Fastify, {
     type FastifyInstance,
     type FastifyReply,
@@ -10,7 +11,7 @@ import Fastify, {
     type RouteHandlerMethod,
 } from 'fastify';
 import { protectedBadgeUrl, signinBadgeUrl } from 'magic-sso-example-ui';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
     IncomingMessage,
@@ -662,16 +663,6 @@ function isValidVerifyCsrfToken(token: string, secret: Buffer): boolean {
 
     const expectedSignature = createHmac('sha256', secret).update(nonce).digest('base64url');
     return safeCompare(signature, expectedSignature);
-}
-
-function safeCompare(left: string, right: string): boolean {
-    const leftBuffer = Buffer.from(left);
-    const rightBuffer = Buffer.from(right);
-    if (leftBuffer.length !== rightBuffer.length) {
-        return false;
-    }
-
-    return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function readServerUrlConfigError(serverUrl: string, publicOrigin: string): string | null {

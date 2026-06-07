@@ -16,6 +16,7 @@
     "dependencies": {
         "@fastify/cookie": "^11.0.2",
         "@fastify/formbody": "^8.0.2",
+        "@magic-link-sso/config-core": "workspace:*",
         "dotenv": "^17.4.2",
         "fastify": "^5.8.5",
         "jose": "^6.2.3",

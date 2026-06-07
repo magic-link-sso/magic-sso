@@ -79,6 +79,9 @@ importers:
       '@magic-link-sso/angular':
         specifier: workspace:*
         version: link:../../packages/angular
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../../packages/config-core
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -130,6 +133,9 @@ importers:
       '@fastify/formbody':
         specifier: ^8.0.2
         version: 8.0.2
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../../packages/config-core
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -198,6 +204,9 @@ importers:
 
   examples/nextjs:
     dependencies:
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../../packages/config-core
       '@magic-link-sso/nextjs':
         specifier: workspace:*
         version: link:../../packages/nextjs
@@ -263,6 +272,9 @@ importers:
 
   examples/photos:
     dependencies:
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../../packages/config-core
       '@magic-link-sso/nextjs':
         specifier: workspace:*
         version: link:../../packages/nextjs
@@ -309,6 +321,9 @@ importers:
       '@fastify/formbody':
         specifier: ^8.0.2
         version: 8.0.2
+      '@magic-link-sso/config-core':
+        specifier: workspace:*
+        version: link:../packages/config-core
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

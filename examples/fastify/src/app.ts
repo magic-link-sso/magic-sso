@@ -3,8 +3,9 @@
 
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
+import { readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { protectedBadgeUrl, signinBadgeUrl } from 'magic-sso-example-ui';
@@ -114,35 +115,9 @@ function createVerifyCsrfToken(): string {
     return randomBytes(32).toString('base64url');
 }
 
-function readCookieValue(cookieHeader: string | undefined, cookieName: string): string | undefined {
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    for (const entry of cookieHeader.split(';')) {
-        const [name, ...valueParts] = entry.trim().split('=');
-        if (name === cookieName) {
-            const value = valueParts.join('=');
-            return value.length > 0 ? decodeURIComponent(value) : undefined;
-        }
-    }
-
-    return undefined;
-}
-
 function readPreviewSecret(): string | null {
     const previewSecret = process.env['MAGICSSO_PREVIEW_SECRET'];
     return typeof previewSecret === 'string' && previewSecret.length > 0 ? previewSecret : null;
-}
-
-function safeCompare(left: string, right: string): boolean {
-    const leftBuffer = Buffer.from(left);
-    const rightBuffer = Buffer.from(right);
-    if (leftBuffer.length !== rightBuffer.length) {
-        return false;
-    }
-
-    return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function buildVerifyCsrfCookieOptions(request: FastifyRequest): {

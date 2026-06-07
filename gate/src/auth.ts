@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { readCookieValue as readSharedCookieValue } from '@magic-link-sso/config-core/runtime';
 import { hkdfSync } from 'node:crypto';
 import { jwtVerify, type JWTPayload } from 'jose';
 import type { GateConfig } from './config.js';
@@ -71,27 +72,7 @@ export function readCookieValue(
     cookieHeader: string | undefined,
     name: string,
 ): string | undefined {
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    const prefix = `${name}=`;
-    let matchedValue: string | undefined;
-    for (const item of cookieHeader.split(';')) {
-        const trimmedItem = item.trim();
-        if (!trimmedItem.startsWith(prefix)) {
-            continue;
-        }
-
-        const value = trimmedItem.slice(prefix.length);
-        try {
-            matchedValue = decodeURIComponent(value);
-        } catch {
-            matchedValue = value;
-        }
-    }
-
-    return matchedValue;
+    return readSharedCookieValue(cookieHeader, name, { lastMatch: true });
 }
 
 export async function verifyAuthToken(

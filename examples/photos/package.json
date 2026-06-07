@@ -14,6 +14,7 @@
         "typecheck": "node scripts/ensure-env.mjs && next typegen && tsc -p tsconfig.json --noEmit"
     },
     "dependencies": {
+        "@magic-link-sso/config-core": "workspace:*",
         "@magic-link-sso/nextjs": "workspace:*",
         "next": "^16.2.6",
         "react": "^19.2.6",

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { escapeHtml } from '@magic-link-sso/config-core/runtime';
 import type { AuthPayload } from './auth.js';
 
 interface RenderPageOptions {
@@ -41,15 +42,6 @@ export interface VerifyEmailConfirmationPageOptions {
 }
 
 const stylesheetPath = '/shared/styles.css';
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-}
 
 function buildDocument(options: RenderPageOptions): string {
     return `<!doctype html>

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import 'dotenv/config';
+import { escapeHtml, readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
 import express, {
     type NextFunction as ExpressNextFunction,
     type Request as ExpressRequest,
@@ -14,7 +15,7 @@ import {
     isMainModule,
     writeResponseToNodeResponse,
 } from '@angular/ssr/node';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -214,40 +215,8 @@ function createVerifyCsrfToken(): string {
     return randomBytes(32).toString('base64url');
 }
 
-function readCookie(request: ExpressRequest, cookieName: string): string | undefined {
-    const cookieHeader = request.headers.cookie;
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    for (const entry of cookieHeader.split(';')) {
-        const [name, ...valueParts] = entry.trim().split('=');
-        if (name === cookieName) {
-            const value = valueParts.join('=');
-            return value.length > 0 ? decodeURIComponent(value) : undefined;
-        }
-    }
-
-    return undefined;
-}
-
 function hasValidVerifyCsrfToken(submittedToken: string, cookieToken: string): boolean {
-    const submittedBuffer = Buffer.from(submittedToken);
-    const cookieBuffer = Buffer.from(cookieToken);
-    if (submittedBuffer.length !== cookieBuffer.length) {
-        return false;
-    }
-
-    return timingSafeEqual(submittedBuffer, cookieBuffer);
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    return safeCompare(submittedToken, cookieToken);
 }
 
 function renderVerifyEmailConfirmationPage(
@@ -591,14 +560,14 @@ function createApp(): express.Express {
         handleAsync(async (request, response) => {
             const appOrigin = getRequestOrigin(request);
             const submittedToken = readBodyString(request.body['token']);
-            const cookieToken = readCookie(request, verifyTokenCookieName);
+            const cookieToken = readCookieValue(request.headers.cookie, verifyTokenCookieName);
             const submittedCsrfToken = readBodyString(request.body['csrfToken']);
             const returnUrl = normaliseReturnUrl(
                 readBodyString(request.body['returnUrl']),
                 appOrigin,
                 '/',
             );
-            const cookieCsrfToken = readCookie(request, verifyCsrfCookieName);
+            const cookieCsrfToken = readCookieValue(request.headers.cookie, verifyCsrfCookieName);
             const token =
                 typeof submittedToken === 'string'
                     ? typeof cookieToken === 'string' && submittedToken !== cookieToken

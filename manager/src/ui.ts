@@ -17,6 +17,7 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { escapeHtml } from '@magic-link-sso/config-core/runtime';
 import { type ManagerAuditEvent } from './apply.js';
 import { type ConfigDriftStatus, type ManagedSiteDiff } from './runtime.js';
 import {
@@ -118,15 +119,6 @@ interface ManagerShellOptions {
     signOutPath?: string | undefined;
     subtitle: string;
     title: string;
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function formatTimestampFallback(timestamp: Date): string {

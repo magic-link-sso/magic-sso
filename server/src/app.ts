@@ -22,6 +22,7 @@ import type { CookieSerializeOptions } from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import rateLimit from '@fastify/rate-limit';
 import view from '@fastify/view';
+import { safeCompare } from '@magic-link-sso/config-core/runtime';
 import ejs from 'ejs';
 import Fastify, {
     type FastifyBaseLogger,
@@ -30,7 +31,7 @@ import Fastify, {
     type FastifyRequest,
     type FastifyServerOptions,
 } from 'fastify';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {
@@ -540,16 +541,6 @@ function createCsrfToken(config: AppConfig): string {
     const nonce = randomBytes(32).toString('base64url');
     const signature = createHmac('sha256', config.csrfSecret).update(nonce).digest('base64url');
     return `${nonce}.${signature}`;
-}
-
-function safeCompare(left: string, right: string): boolean {
-    const leftBuffer = Buffer.from(left);
-    const rightBuffer = Buffer.from(right);
-    if (leftBuffer.length !== rightBuffer.length) {
-        return false;
-    }
-
-    return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function isValidCsrfToken(token: string, config: AppConfig): boolean {

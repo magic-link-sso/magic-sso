@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { escapeHtml, safeCompare } from '@magic-link-sso/config-core/runtime';
 import { buildAuthCookieOptions, getJwtSecret, verifyAuthToken } from '@magic-link-sso/nextjs';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveAppOrigin } from '../login/url';
 
@@ -67,13 +68,7 @@ function createVerifyCsrfToken(): string {
 }
 
 function hasValidVerifyCsrfToken(submittedToken: string, cookieToken: string): boolean {
-    const submittedBuffer = Buffer.from(submittedToken);
-    const cookieBuffer = Buffer.from(cookieToken);
-    if (submittedBuffer.length !== cookieBuffer.length) {
-        return false;
-    }
-
-    return timingSafeEqual(submittedBuffer, cookieBuffer);
+    return safeCompare(submittedToken, cookieToken);
 }
 
 function buildVerifyCookieOptions(request: NextRequest): {
@@ -108,15 +103,6 @@ function clearVerifyCookie(response: NextResponse, request: NextRequest): void {
         value: '',
         maxAge: 0,
     });
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function renderConfirmationPage(email: string, returnUrl: string, csrfToken: string): string {

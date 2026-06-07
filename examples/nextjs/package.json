@@ -14,6 +14,7 @@
         "typecheck": "tsc -p tsconfig.json --noEmit"
     },
     "dependencies": {
+        "@magic-link-sso/config-core": "workspace:*",
         "@magic-link-sso/nextjs": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
         "next": "^16.2.6",

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { escapeHtml } from '@magic-link-sso/config-core/runtime';
+
 export interface LoginPageMessage {
     kind: 'error' | 'success';
     text: string;
@@ -24,15 +26,6 @@ export interface VerifyEmailConfirmationPageOptions {
     signinBadgePath: string;
     stylesPath: string;
     submitAction: string;
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function buildDocument(title: string, stylesPath: string, body: string): string {

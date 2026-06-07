@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { readCookieValue } from '@magic-link-sso/config-core/runtime';
 import { jwtVerify, type JWTPayload } from 'jose';
 
 export interface AuthPayload extends JWTPayload {
@@ -125,29 +126,6 @@ export function resolveMagicSsoConfig(config: MagicSsoConfig = {}): MagicSsoReso
 export function getJwtSecret(config?: MagicSsoConfig): Uint8Array | null {
     const jwtSecret = resolveMagicSsoConfig(config).jwtSecret;
     return jwtSecret.length > 0 ? new TextEncoder().encode(jwtSecret) : null;
-}
-
-function readCookieValue(cookieHeader: string | undefined, name: string): string | undefined {
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    const prefix = `${name}=`;
-    for (const item of cookieHeader.split(';')) {
-        const trimmedItem = item.trim();
-        if (!trimmedItem.startsWith(prefix)) {
-            continue;
-        }
-
-        const value = trimmedItem.slice(prefix.length);
-        try {
-            return decodeURIComponent(value);
-        } catch {
-            return value;
-        }
-    }
-
-    return undefined;
 }
 
 export async function verifyAuthToken(
