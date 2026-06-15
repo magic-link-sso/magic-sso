@@ -38,6 +38,10 @@ Magic Link SSO can protect private resources in two high-level ways:
 In both cases, access is granted through email-based magic links rather than
 passwords or HTTP Basic Auth.
 
+If you are deciding between Magic Link SSO, Better Auth, Keycloak, or a broader
+identity platform, see
+[Choosing an Auth Option](./docs/auth-options-comparison.md).
+
 ## Contents
 
 - [How it works](#how-it-works)
