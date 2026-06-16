@@ -29,12 +29,12 @@
                             },
                             {
                                 "glob": "signin-page-badge.svg",
-                                "input": "../../packages/example-ui/assets",
+                                "input": "node_modules/magic-sso-example-ui/assets",
                                 "output": "assets"
                             },
                             {
                                 "glob": "protected-page-badge.svg",
-                                "input": "../../packages/example-ui/assets",
+                                "input": "node_modules/magic-sso-example-ui/assets",
                                 "output": "assets"
                             }
                         ],

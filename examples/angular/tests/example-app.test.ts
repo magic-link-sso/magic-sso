@@ -99,7 +99,7 @@ describe('Angular example app', () => {
         expect(angularConfig).toContain('"outputMode": "server"');
         expect(angularConfig).toContain('"server": "src/main.server.ts"');
         expect(angularConfig).toContain('"styles": ["magic-sso-example-ui/styles.css"]');
-        expect(angularConfig).toContain('"input": "../../packages/example-ui/assets"');
+        expect(angularConfig).toContain('"input": "node_modules/magic-sso-example-ui/assets"');
     });
 
     it('uses the shared login utilities for return-url and verify-url handling', async () => {

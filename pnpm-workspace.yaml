@@ -29,6 +29,18 @@ minimumReleaseAgeExclude:
     - '@types/react@19.2.15'
     - postcss@8.5.15
     - tsx@4.22.3
+    - '@playwright/test@1.61.0'
+    - '@vitest/coverage-v8@4.1.9'
+    - '@vitest/expect@4.1.9'
+    - '@vitest/mocker@4.1.9'
+    - '@vitest/pretty-format@4.1.9'
+    - '@vitest/runner@4.1.9'
+    - '@vitest/snapshot@4.1.9'
+    - '@vitest/spy@4.1.9'
+    - '@vitest/utils@4.1.9'
+    - playwright-core@1.61.0
+    - playwright@1.61.0
+    - vitest@4.1.9
 
 overrides:
     '@hono/node-server@<1.19.13': '>=1.19.13'
