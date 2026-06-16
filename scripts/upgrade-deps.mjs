@@ -693,16 +693,34 @@ export async function updatePythonDependencies(options) {
         rootDir,
         runCommandImpl = runCommand,
     } = options;
-    const projectDirs = [path.join(rootDir, 'examples', 'django')];
-
-    if (includePythonPackage) {
-        projectDirs.push(path.join(rootDir, 'packages', 'django'));
-    }
+    const projects = [
+        {
+            dir: path.join(rootDir, 'examples', 'django'),
+            updateManifest: true,
+        },
+        {
+            dir: path.join(rootDir, 'packages', 'django'),
+            updateManifest: includePythonPackage,
+        },
+    ];
 
     /** @type {Array<{ changes: DependencyChange[]; file: string; needsLockRefresh: boolean }>} */
     const results = [];
 
-    for (const projectDir of projectDirs) {
+    for (const project of projects) {
+        const projectDir = project.dir;
+
+        if (!project.updateManifest) {
+            if (apply) {
+                await runCommandImpl('uv', ['lock', '--upgrade'], {
+                    cwd: projectDir,
+                    env: UV_ENV,
+                });
+            }
+
+            continue;
+        }
+
         const pyprojectFile = path.join(projectDir, 'pyproject.toml');
         const lockFile = path.join(projectDir, 'uv.lock');
         const source = await readFile(pyprojectFile, 'utf8');
@@ -733,16 +751,19 @@ export async function updatePythonDependencies(options) {
             source,
         });
 
-        if (plan.changes.length === 0) {
-            continue;
-        }
-
         if (apply) {
-            await writeFile(pyprojectFile, plan.nextSource, 'utf8');
+            if (plan.changes.length > 0) {
+                await writeFile(pyprojectFile, plan.nextSource, 'utf8');
+            }
+
             await runCommandImpl('uv', ['lock', '--upgrade'], {
                 cwd: projectDir,
                 env: UV_ENV,
             });
+        }
+
+        if (plan.changes.length === 0) {
+            continue;
         }
 
         results.push({

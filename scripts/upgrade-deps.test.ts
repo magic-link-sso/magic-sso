@@ -271,6 +271,71 @@ describe('Python dependency planning', () => {
             pyprojectFixture,
         );
     });
+
+    it('refreshes both Django uv locks without opting into package manifest updates', async () => {
+        const tempRoot = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-'));
+        const exampleDir = path.join(tempRoot, 'examples', 'django');
+        const packageDir = path.join(tempRoot, 'packages', 'django');
+        await mkdir(exampleDir, { recursive: true });
+        await mkdir(packageDir, { recursive: true });
+
+        const pyprojectFixture = await readFixture('sample-python-pyproject.toml');
+        const lockFixture = await readFixture('sample-python-uv.lock');
+        await writeFile(path.join(exampleDir, 'pyproject.toml'), pyprojectFixture, 'utf8');
+        await writeFile(path.join(exampleDir, 'uv.lock'), lockFixture, 'utf8');
+        await writeFile(path.join(packageDir, 'pyproject.toml'), pyprojectFixture, 'utf8');
+        await writeFile(path.join(packageDir, 'uv.lock'), lockFixture, 'utf8');
+
+        const fetchImpl = vi.fn(async (url: string) => {
+            const dependencyName = url.split('/').at(-2);
+            const versions =
+                dependencyName === 'django'
+                    ? ['5.2.1', '5.2.6', '6.0.0']
+                    : dependencyName === 'pytest'
+                      ? ['8.3.5', '8.4.2', '9.0.0']
+                      : dependencyName === 'ruff'
+                        ? ['0.11.8', '0.11.10', '1.0.0']
+                        : ['0.0.1a7', '0.0.2', '1.0.0'];
+
+            return new Response(
+                JSON.stringify({
+                    releases: Object.fromEntries(versions.map((version) => [version, []])),
+                }),
+                {
+                    status: 200,
+                },
+            );
+        });
+        const runCommandImpl = vi.fn();
+
+        const results = await updatePythonDependencies({
+            apply: true,
+            fetchImpl,
+            includePythonPackage: false,
+            mode: 'compatible',
+            rootDir: tempRoot,
+            runCommandImpl,
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0]?.file).toBe(path.join(exampleDir, 'pyproject.toml'));
+        expect(runCommandImpl).toHaveBeenCalledTimes(2);
+        expect(runCommandImpl).toHaveBeenNthCalledWith(
+            1,
+            'uv',
+            ['lock', '--upgrade'],
+            expect.objectContaining({ cwd: exampleDir }),
+        );
+        expect(runCommandImpl).toHaveBeenNthCalledWith(
+            2,
+            'uv',
+            ['lock', '--upgrade'],
+            expect.objectContaining({ cwd: packageDir }),
+        );
+        expect(await readFile(path.join(packageDir, 'pyproject.toml'), 'utf8')).toBe(
+            pyprojectFixture,
+        );
+    });
 });
 
 afterEach(() => {

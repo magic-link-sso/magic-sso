@@ -41,6 +41,15 @@ minimumReleaseAgeExclude:
     - playwright-core@1.61.0
     - playwright@1.61.0
     - vitest@4.1.9
+    - '@fallow-cli/darwin-arm64@2.97.0'
+    - '@fallow-cli/darwin-x64@2.97.0'
+    - '@fallow-cli/linux-arm64-gnu@2.97.0'
+    - '@fallow-cli/linux-arm64-musl@2.97.0'
+    - '@fallow-cli/linux-x64-gnu@2.97.0'
+    - '@fallow-cli/linux-x64-musl@2.97.0'
+    - '@fallow-cli/win32-arm64-msvc@2.97.0'
+    - '@fallow-cli/win32-x64-msvc@2.97.0'
+    - fallow@2.97.0
 
 overrides:
     '@hono/node-server@<1.19.13': '>=1.19.13'
