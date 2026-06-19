@@ -1,6 +1,6 @@
 {
     "name": "example-app-angular",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "private": true,
     "scripts": {
         "build": "pnpm --filter @magic-link-sso/angular build && NODE_OPTIONS=--dns-result-order=ipv4first HOST=0.0.0.0 ng build",

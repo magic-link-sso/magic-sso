@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases.
 
+## [1.2.0] - 2026-06-19
+
+### Changed
+
+- Reduce fallow dead-code noise
+- Reduce duplicated runtime helpers
+
+### Chore
+
+- Upgrade pnpm to v11
+- Upgrade dependencies
+
+### Documentation
+
+- Compare auth options
+
+### Fixed
+
+- Refresh all Python locks during dependency upgrades
+- Respect pnpm release age in dependency upgrades
+
 ## [1.1.1] - 2026-05-10
 
 ### Fixed
