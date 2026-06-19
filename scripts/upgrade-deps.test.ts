@@ -86,6 +86,7 @@ describe('JS dependency planning', () => {
 
         const manifest = JSON.parse(await readFile(rootPackageFile, 'utf8'));
         const runNcu = vi.fn(async (options: Record<string, unknown>) => {
+            expect(options.cooldown).toBe('24h');
             expect(options.packageData).toEqual({
                 dependencies: {
                     postcss: '^8.5.13',
@@ -139,6 +140,8 @@ describe('JS dependency planning', () => {
         );
 
         const runNcu = vi.fn(async (options: Record<string, unknown>) => {
+            expect(options.cooldown).toBe('24h');
+
             if ('packageData' in options) {
                 return { postcss: '^8.5.14' };
             }
@@ -164,6 +167,55 @@ describe('JS dependency planning', () => {
         expect(JSON.parse(await readFile(rootPackageFile, 'utf8')).pnpm.overrides.postcss).toBe(
             '^8.5.14',
         );
+    });
+
+    it('passes the pnpm release-age cooldown to every npm-check-updates pass', async () => {
+        const tempRoot = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-'));
+        await mkdir(path.join(tempRoot, 'examples'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'packages'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'server'), { recursive: true });
+        await mkdir(path.join(tempRoot, 'tests', 'e2e'), { recursive: true });
+
+        await writeFile(
+            path.join(tempRoot, 'package.json'),
+            JSON.stringify(
+                {
+                    name: 'magic-sso-workspace',
+                    private: true,
+                    pnpm: {
+                        overrides: {
+                            postcss: '^8.5.13',
+                        },
+                    },
+                },
+                null,
+                4,
+            ),
+            'utf8',
+        );
+        await writeFile(
+            path.join(tempRoot, 'server', 'package.json'),
+            '{"name":"server","dependencies":{"fastify":"^5.8.0"}}\n',
+            'utf8',
+        );
+        await writeFile(
+            path.join(tempRoot, 'tests', 'e2e', 'package.json'),
+            '{"name":"e2e"}\n',
+            'utf8',
+        );
+
+        const runNcu = vi.fn(async () => ({}));
+
+        await updateJsDependencies({
+            apply: false,
+            includePeer: false,
+            mode: 'compatible',
+            rootDir: tempRoot,
+            runNcu,
+        });
+
+        expect(runNcu).toHaveBeenCalled();
+        expect(runNcu.mock.calls.every(([options]) => options.cooldown === '24h')).toBe(true);
     });
 });
 

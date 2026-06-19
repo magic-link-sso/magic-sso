@@ -13,6 +13,7 @@ const UV_ENV = {
     UV_TOOL_DIR: '/tmp/uv-tools',
     UV_STATE_DIR: '/tmp/uv-state',
 };
+const PNPM_RELEASE_AGE_COOLDOWN = '24h';
 
 /**
  * @typedef {{
@@ -58,6 +59,9 @@ export function parseCliArgs(argv) {
         console.log(
             [
                 'Usage: node scripts/upgrade-deps.mjs <compatible|latest> [--apply] [--include-peer] [--include-python-package]',
+                '',
+                'JS upgrades are planned with npm-check-updates, filtered through a 24h cooldown',
+                'to match pnpm minimumReleaseAge, then applied through pnpm lockfile resolution.',
                 '',
                 'Examples:',
                 '  pnpm deps:upgrade',
@@ -220,6 +224,7 @@ export async function updatePnpmOverrides(options) {
     }
 
     const proposed = await runNcu({
+        cooldown: PNPM_RELEASE_AGE_COOLDOWN,
         dep: ['prod'],
         jsonUpgraded: true,
         packageData: {
@@ -640,6 +645,7 @@ export async function updateJsDependencies(options) {
             const manifest = /** @type {PackageManifest} */ (JSON.parse(source));
             const reject = collectJsRejectNames(manifest, includePeer);
             const proposed = await runNcu({
+                cooldown: PNPM_RELEASE_AGE_COOLDOWN,
                 dep: includePeer ? ['prod', 'dev', 'peer'] : ['prod', 'dev'],
                 jsonUpgraded: true,
                 packageFile,
