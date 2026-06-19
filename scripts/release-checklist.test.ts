@@ -31,6 +31,28 @@ describe('release security checks', () => {
         expect(workflow).toContain('run: pnpm run audit');
     });
 
+    it('keeps release audit remediation rules aligned with current advisories', async () => {
+        const workspace = await readRepositoryFile('pnpm-workspace.yaml');
+        const serverPackage = JSON.parse(await readRepositoryFile('server/package.json')) as {
+            dependencies?: Record<string, string>;
+        };
+        const nuxtExamplePackage = JSON.parse(
+            await readRepositoryFile('examples/nuxt/package.json'),
+        ) as {
+            devDependencies?: Record<string, string>;
+        };
+
+        expect(workspace).toContain('esbuild@>=0.27.3 <0.28.1:');
+        expect(workspace).toContain("nodemailer@<=9.0.0: '>=9.0.1'");
+        expect(workspace).toContain("vite@>=8.0.0 <=8.0.15: '>=8.0.16'");
+        expect(workspace).toContain('vite-node>vite: 8.0.16');
+        expect(workspace).toContain('- esbuild@0.28.1');
+        expect(workspace).toContain('- nodemailer@9.0.1');
+        expect(workspace).toContain('- vite@8.0.16');
+        expect(serverPackage.dependencies?.nodemailer).toBe('^9.0.1');
+        expect(nuxtExamplePackage.devDependencies?.vite).toBe('^8.0.16');
+    });
+
     it('documents the version bump helper in the release checklist', async () => {
         const checklist = await readRepositoryFile('docs/release-checklist.md');
 
