@@ -102,6 +102,8 @@
 
 1. Open the Django client in your browser at `http://localhost:8000`.
 2. Click the login button to be redirected to the SSO server.
-3. Enter your email address to receive a magic link.
-4. Click the magic link in your email to be redirected back to the Django
-   client, now authenticated.
+3. Enter your email address to receive a message containing a magic link and,
+   when server OTP is enabled, a short code.
+4. Either click the magic link or enter the code in the single field shown by
+   the packaged login form. Both paths return to the Django client with the same
+   HTTP-only authenticated session.

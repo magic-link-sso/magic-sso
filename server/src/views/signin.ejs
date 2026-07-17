@@ -456,6 +456,37 @@
                 </form>
             <% } else { %>
                 <div class="confirmation-panel" role="status" aria-live="polite">
+                    <% if (otpChallengeId && csrfToken) { %>
+                        <form method="post" action="/verify-email/otp" aria-describedby="otp-help">
+                            <div class="field-group">
+                                <label class="field-label" for="otp-code"><%= copy.otpLabel %></label>
+                                <input
+                                    id="otp-code"
+                                    type="text"
+                                    name="code"
+                                    autocomplete="one-time-code"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    minlength="<%= otpLength %>"
+                                    maxlength="<%= otpLength %>"
+                                    <% if (copy.otpPlaceholder.length === otpLength) { %>placeholder="<%= copy.otpPlaceholder %>"<% } %>
+                                    aria-describedby="otp-help"
+                                    required
+                                >
+                                <p class="lede" id="otp-help"><%= copy.otpHelpText %></p>
+                            </div>
+                            <input type="hidden" name="challengeId" value="<%= otpChallengeId %>">
+                            <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
+                            <input type="hidden" name="returnUrl" value="<%= returnUrl %>">
+                            <% if (scope) { %>
+                                <input type="hidden" name="scope" value="<%= scope %>">
+                            <% } %>
+                            <% if (verifyUrl) { %>
+                                <input type="hidden" name="verifyUrl" value="<%= verifyUrl %>">
+                            <% } %>
+                            <button type="submit" class="submit-button"><%= copy.otpSubmitButton %></button>
+                        </form>
+                    <% } %>
                     <% if (useDifferentEmailHref) { %>
                         <a class="secondary-link" href="<%= useDifferentEmailHref %>"><%= copy.useDifferentEmailButton %></a>
                     <% } %>

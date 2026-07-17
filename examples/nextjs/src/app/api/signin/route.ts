@@ -89,7 +89,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const result = await sendMagicLink(email, returnUrl, verifyUrl, scope);
     if (result.success) {
         if (acceptsJson(request)) {
-            return NextResponse.json({ message: 'Verification email sent', success: true });
+            return NextResponse.json({
+                message: 'Verification email sent',
+                ...(typeof result.otpChallengeId === 'string' &&
+                typeof result.otpLength === 'number'
+                    ? { otpChallengeId: result.otpChallengeId, otpLength: result.otpLength }
+                    : {}),
+                success: true,
+            });
         }
         return buildLoginRedirect(request, returnUrl, scope, {
             success: 'verification-email-sent',

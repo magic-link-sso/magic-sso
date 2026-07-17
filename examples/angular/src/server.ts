@@ -21,6 +21,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     buildAuthCookieOptions,
+    exchangeEmailOtp,
     getJwtSecret,
     normaliseReturnUrl,
     verifyAuthToken,
@@ -38,7 +39,15 @@ interface SignInRequestBody {
 
 interface SignInResult {
     message: string;
+    otpChallengeId?: string;
+    otpLength?: number;
     success: boolean;
+}
+
+interface VerifyOtpRequestBody {
+    challengeId?: string;
+    code?: string;
+    returnUrl?: string;
 }
 
 interface VerifyEmailResponse {
@@ -136,6 +145,16 @@ function readSignInRequestBody(value: unknown): SignInRequestBody {
         returnUrl: readBodyString(record?.['returnUrl']),
         scope: readBodyString(record?.['scope']),
         verifyUrl: readBodyString(record?.['verifyUrl']),
+    };
+}
+
+function readVerifyOtpRequestBody(value: unknown): VerifyOtpRequestBody {
+    const record = isRecord(value) ? value : null;
+
+    return {
+        challengeId: readBodyString(record?.['challengeId']),
+        code: readBodyString(record?.['code']),
+        returnUrl: readBodyString(record?.['returnUrl']),
     };
 }
 
@@ -461,9 +480,22 @@ function createApp(): express.Express {
                     return;
                 }
 
+                const payload = await readResponsePayload(ssoResponse);
+                const otpChallengeId =
+                    isRecord(payload) && typeof payload['otpChallengeId'] === 'string'
+                        ? payload['otpChallengeId']
+                        : undefined;
+                const otpLength =
+                    isRecord(payload) && Number.isInteger(payload['otpLength'])
+                        ? payload['otpLength']
+                        : undefined;
+
                 response.json({
                     success: true,
                     message: 'Verification email sent.',
+                    ...(typeof otpChallengeId === 'string' && typeof otpLength === 'number'
+                        ? { otpChallengeId, otpLength }
+                        : {}),
                 } satisfies SignInResult);
             } catch (error: unknown) {
                 response.status(502).json({
@@ -471,6 +503,51 @@ function createApp(): express.Express {
                     message: readMessage(error) ?? 'Failed to send verification email.',
                 } satisfies SignInResult);
             }
+        }),
+    );
+
+    app.post(
+        '/api/verify-email/otp',
+        handleAsync(async (request, response) => {
+            if (!hasSameOriginMutationSource(request)) {
+                response.status(403).json({
+                    success: false,
+                    message: 'Invalid or expired code.',
+                } satisfies SignInResult);
+                return;
+            }
+
+            const body = readVerifyOtpRequestBody(request.body);
+            const appOrigin = getRequestOrigin(request);
+            const serverUrl = process.env['MAGICSSO_SERVER_URL'];
+            if (
+                typeof body.challengeId !== 'string' ||
+                typeof body.code !== 'string' ||
+                typeof serverUrl !== 'string' ||
+                serverUrl.length === 0
+            ) {
+                response.status(400).json({
+                    success: false,
+                    message: 'Invalid or expired code.',
+                } satisfies SignInResult);
+                return;
+            }
+
+            const result = await exchangeEmailOtp({
+                challengeId: body.challengeId,
+                code: body.code,
+                expectedAudience: appOrigin,
+            });
+            if (result === null) {
+                response.status(400).json({
+                    success: false,
+                    message: 'Invalid or expired code.',
+                } satisfies SignInResult);
+                return;
+            }
+
+            setAuthCookie(response, result.accessToken);
+            response.json({ success: true, message: 'Signed in.' } satisfies SignInResult);
         }),
     );
 

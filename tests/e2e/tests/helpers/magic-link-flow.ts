@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Cookie } from '@playwright/test';
 import type { ExampleAppDefinition } from './apps.js';
-import { waitForMagicLink } from './mail-sink.js';
+import { waitForEmailOtp, waitForMagicLink } from './mail-sink.js';
 
 export type FlowMode = 'direct' | 'indirect';
 
@@ -25,6 +25,56 @@ export async function requestMagicLink(
         callbackUrlPrefix: `${app.appUrl}${app.verifyPath}`,
         recipient: email,
     });
+}
+
+export async function requestEmailOtp(
+    page: Page,
+    request: APIRequestContext,
+    app: ExampleAppDefinition,
+    email: string,
+    protectedPath: string,
+    flowMode: FlowMode,
+): Promise<string> {
+    await openSignInEntry(page, app, protectedPath, flowMode);
+
+    return submitEmailOtpRequest(page, request, email);
+}
+
+async function submitEmailOtpRequest(
+    page: Page,
+    request: APIRequestContext,
+    email: string,
+): Promise<string> {
+    const useDifferentEmailControl = page
+        .getByRole('link', { name: 'Use a different email' })
+        .or(page.getByRole('button', { name: 'Use a different email' }));
+    if (await useDifferentEmailControl.isVisible()) {
+        await useDifferentEmailControl.click();
+    }
+
+    await page.getByLabel('Email').fill(email);
+    await page.getByRole('button', { name: 'Send magic link' }).click();
+
+    await expectSubmissionFeedback(page);
+    const codeField = page.getByLabel('One-time code');
+    await expect(codeField).toHaveCount(1);
+    await expect(codeField).toBeVisible();
+
+    return waitForEmailOtp(request, { recipient: email });
+}
+
+export function createInvalidOtp(code: string): string {
+    const firstDigit = Number.parseInt(code.slice(0, 1), 10);
+    if (!Number.isInteger(firstDigit)) {
+        throw new Error('Expected OTP to begin with an ASCII digit.');
+    }
+
+    return `${(firstDigit + 1) % 10}${code.slice(1)}`;
+}
+
+export async function submitEmailOtp(page: Page, code: string): Promise<void> {
+    await page.getByLabel('One-time code').fill(code);
+    await page.getByRole('button', { name: 'Sign in with code' }).click();
 }
 
 export async function expectAuthCookie(page: Page, app: ExampleAppDefinition): Promise<Cookie> {
@@ -80,17 +130,10 @@ export async function openSignInEntry(
 }
 
 export async function expectSubmissionFeedback(page: Page): Promise<void> {
-    const hostedConfirmationHeading = page.getByRole('heading', { name: 'Check your email' });
-    try {
-        await expect(hostedConfirmationHeading).toBeVisible({ timeout: 1_000 });
-        return;
-    } catch {
-        // Fall through to the app-local confirmation UI.
-    }
-
-    await expect(page.getByRole('status')).toContainText(
-        /Verification email sent|Email sent, check your inbox/u,
-    );
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+    await expect(
+        page.getByText('If your email can sign in, you will receive a link shortly.'),
+    ).toBeVisible();
 }
 
 export async function expectHostedSignInPage(

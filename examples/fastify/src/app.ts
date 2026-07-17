@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import { readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { protectedBadgeUrl, signinBadgeUrl } from 'magic-sso-example-ui';
@@ -37,6 +37,7 @@ interface SignInBody {
 interface LoginQuery {
     error?: string;
     message?: string;
+    resetOtp?: string;
     returnUrl?: string;
     status?: string;
 }
@@ -52,6 +53,11 @@ interface VerifyEmailBody {
     token?: string;
 }
 
+interface VerifyOtpBody {
+    code?: string;
+    returnUrl?: string;
+}
+
 interface VerifyEmailResponse {
     accessToken: string;
 }
@@ -62,6 +68,13 @@ interface VerifyEmailPreviewResponse {
 
 interface SignInSuccessResponse {
     message: string;
+    otpChallengeId?: string;
+    otpLength?: number;
+}
+
+interface OtpChallengePayload {
+    challengeId: string;
+    otpLength: number;
 }
 
 interface CreateAppOptions {
@@ -76,6 +89,7 @@ const sharedSigninBadgeRoute = '/shared/assets/signin-page-badge.svg';
 const sharedProtectedBadgeRoute = '/shared/assets/protected-page-badge.svg';
 const verifyCsrfCookieName = 'magic-sso-verify-csrf';
 const verifyTokenCookieName = 'magic-sso-verify-token';
+const otpChallengeCookieName = 'magic-sso-otp-challenge';
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -109,6 +123,77 @@ function isSignInSuccessResponse(value: unknown): value is SignInSuccessResponse
         typeof value.message === 'string' &&
         value.message === 'Verification email sent'
     );
+}
+
+function readOtpChallengeMetadata(value: unknown): OtpChallengePayload | undefined {
+    return typeof value === 'object' &&
+        value !== null &&
+        'otpChallengeId' in value &&
+        typeof value.otpChallengeId === 'string' &&
+        value.otpChallengeId.length > 0 &&
+        'otpLength' in value &&
+        typeof value.otpLength === 'number' &&
+        Number.isInteger(value.otpLength) &&
+        value.otpLength > 0
+        ? { challengeId: value.otpChallengeId, otpLength: value.otpLength }
+        : undefined;
+}
+
+function buildOtpChallengeCookieOptions(request: FastifyRequest): {
+    httpOnly: true;
+    path: '/';
+    sameSite: 'strict';
+    secure: boolean;
+} {
+    return {
+        httpOnly: true,
+        path: '/',
+        sameSite: 'strict',
+        secure: getRequestOrigin(request).startsWith('https://'),
+    };
+}
+
+function signOtpChallenge(challenge: OtpChallengePayload, secret: string): string {
+    const payload = Buffer.from(JSON.stringify(challenge)).toString('base64url');
+    const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+    return `${payload}.${signature}`;
+}
+
+function readOtpChallenge(
+    value: string | undefined,
+    secret: string,
+): OtpChallengePayload | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const [payload, signature, extra] = value.split('.');
+    if (
+        typeof payload !== 'string' ||
+        typeof signature !== 'string' ||
+        typeof extra !== 'undefined'
+    ) {
+        return undefined;
+    }
+    const expectedSignature = createHmac('sha256', secret).update(payload).digest('base64url');
+    if (!safeCompare(signature, expectedSignature)) {
+        return undefined;
+    }
+    try {
+        const decoded: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        return typeof decoded === 'object' &&
+            decoded !== null &&
+            'challengeId' in decoded &&
+            typeof decoded.challengeId === 'string' &&
+            decoded.challengeId.length > 0 &&
+            'otpLength' in decoded &&
+            typeof decoded.otpLength === 'number' &&
+            Number.isInteger(decoded.otpLength) &&
+            decoded.otpLength > 0
+            ? { challengeId: decoded.challengeId, otpLength: decoded.otpLength }
+            : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function createVerifyCsrfToken(): string {
@@ -146,6 +231,7 @@ function buildVerifyTokenCookieOptions(request: FastifyRequest): {
 function clearVerifyEmailCookies(request: FastifyRequest, reply: FastifyReply): void {
     reply.clearCookie(verifyCsrfCookieName, buildVerifyCsrfCookieOptions(request));
     reply.clearCookie(verifyTokenCookieName, buildVerifyTokenCookieOptions(request));
+    reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
 }
 
 function buildUnexpectedUpstreamMessage(serverUrl: string): string {
@@ -183,7 +269,12 @@ function hasSameOriginMutationSource(request: FastifyRequest): boolean {
 function buildLoginRedirectUrl(
     request: FastifyRequest,
     returnUrl: string,
-    options: { error?: string; message?: string; status?: 'error' | 'success' } = {},
+    options: {
+        error?: string;
+        message?: string;
+        resetOtp?: '1';
+        status?: 'error' | 'success';
+    } = {},
 ): string {
     const loginUrl = new URL('/login', getRequestOrigin(request));
     loginUrl.searchParams.set('returnUrl', returnUrl);
@@ -193,6 +284,9 @@ function buildLoginRedirectUrl(
     }
     if (typeof options.message === 'string') {
         loginUrl.searchParams.set('message', options.message);
+    }
+    if (options.resetOtp === '1') {
+        loginUrl.searchParams.set('resetOtp', options.resetOtp);
     }
     if (typeof options.status === 'string') {
         loginUrl.searchParams.set('status', options.status);
@@ -256,6 +350,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     app.get<{ Querystring: LoginQuery }>('/login', async (request, reply) => {
         const appOrigin = getRequestOrigin(request);
         const returnUrl = normaliseReturnUrl(request.query.returnUrl, appOrigin, appOrigin);
+        const resolvedConfig = resolveMagicSsoConfig();
+        const resetOtp = request.query.resetOtp === '1';
+        if (resetOtp) {
+            reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
+        }
+        const otpChallenge = resetOtp
+            ? undefined
+            : readOtpChallenge(
+                  readCookieValue(request.headers.cookie, otpChallengeCookieName),
+                  resolvedConfig.jwtSecret,
+              );
         const errorMessage = getLoginErrorMessage(readString(request.query.error));
         const status = readString(request.query.status);
         const rawMessage = readString(request.query.message);
@@ -276,10 +381,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         return reply.send(
             renderLoginPage({
                 appOrigin,
+                hasOtpChallenge: typeof otpChallenge === 'object',
+                isConfirmation: typeof otpChallenge === 'object' || message?.kind === 'success',
                 loginTarget: buildLoginTarget(appOrigin, returnUrl),
                 message: typeof message === 'undefined' ? undefined : message,
+                otpLength: otpChallenge?.otpLength,
                 returnUrl,
                 signinBadgePath: sharedSigninBadgeRoute,
+                useDifferentEmailHref: buildLoginRedirectUrl(request, returnUrl, {
+                    resetOtp: '1',
+                }),
                 verifyUrl: buildVerifyUrl(appOrigin, returnUrl),
             }),
         );
@@ -379,6 +490,25 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 );
             }
 
+            const otpChallenge = readOtpChallengeMetadata(payload);
+            if (typeof otpChallenge === 'object') {
+                if (resolvedConfig.jwtSecret.length === 0) {
+                    return reply.redirect(
+                        buildLoginRedirectUrl(request, returnUrl, {
+                            message: 'MAGICSSO_JWT_SECRET is not configured.',
+                            status: 'error',
+                        }),
+                    );
+                }
+                reply.setCookie(
+                    otpChallengeCookieName,
+                    signOtpChallenge(otpChallenge, resolvedConfig.jwtSecret),
+                    buildOtpChallengeCookieOptions(request),
+                );
+            } else {
+                reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
+            }
+
             return reply.redirect(
                 buildLoginRedirectUrl(request, returnUrl, {
                     message: 'Verification email sent.',
@@ -395,12 +525,95 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         }
     });
 
+    app.post<{ Body: VerifyOtpBody }>('/verify-email/otp', async (request, reply) => {
+        const appOrigin = getRequestOrigin(request);
+        const returnUrl = normaliseReturnUrl(
+            readString(request.body.returnUrl),
+            appOrigin,
+            appOrigin,
+        );
+        const code = readString(request.body.code);
+        const resolvedConfig = resolveMagicSsoConfig();
+        const challenge = readOtpChallenge(
+            readCookieValue(request.headers.cookie, otpChallengeCookieName),
+            resolvedConfig.jwtSecret,
+        );
+
+        if (
+            !hasSameOriginMutationSource(request) ||
+            typeof code !== 'string' ||
+            challenge === undefined
+        ) {
+            return reply.redirect(
+                buildLoginRedirectUrl(request, returnUrl, {
+                    message: 'Invalid or expired code.',
+                    status: 'error',
+                }),
+            );
+        }
+
+        if (resolvedConfig.serverUrl.length === 0 || resolvedConfig.jwtSecret.length === 0) {
+            return reply.redirect(
+                buildLoginRedirectUrl(request, returnUrl, {
+                    message: 'Invalid or expired code.',
+                    status: 'error',
+                }),
+            );
+        }
+
+        try {
+            const verifyResponse = await fetch(
+                new URL('/verify-email/otp', resolvedConfig.serverUrl),
+                {
+                    method: 'POST',
+                    headers: { accept: 'application/json', 'content-type': 'application/json' },
+                    body: JSON.stringify({ challengeId: challenge.challengeId, code }),
+                    cache: 'no-store',
+                },
+            );
+            const payload: unknown = await readResponsePayload(verifyResponse);
+            const jwtSecret = getJwtSecret();
+            const accessToken = isVerifyEmailResponse(payload) ? payload.accessToken : undefined;
+            const auth =
+                typeof accessToken === 'string' && jwtSecret !== null
+                    ? await verifyAuthToken(accessToken, jwtSecret, {
+                          expectedAudience: appOrigin,
+                          expectedIssuer: new URL(resolvedConfig.serverUrl).origin,
+                      })
+                    : null;
+            if (!verifyResponse.ok || auth === null || typeof accessToken !== 'string') {
+                return reply.redirect(
+                    buildLoginRedirectUrl(request, returnUrl, {
+                        message: 'Invalid or expired code.',
+                        status: 'error',
+                    }),
+                );
+            }
+
+            reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
+            reply.setCookie(
+                resolvedConfig.cookieName,
+                accessToken,
+                buildAuthCookieOptions(resolvedConfig),
+            );
+            return reply.redirect(returnUrl);
+        } catch {
+            return reply.redirect(
+                buildLoginRedirectUrl(request, returnUrl, {
+                    message: 'Invalid or expired code.',
+                    status: 'error',
+                }),
+            );
+        }
+    });
+
     app.get<{ Querystring: VerifyEmailQuery }>('/verify-email', async (request, reply) => {
         const appOrigin = getRequestOrigin(request);
         const token = readString(request.query.token);
         const returnUrl = normaliseReturnUrl(request.query.returnUrl, appOrigin, appOrigin);
 
         if (typeof token !== 'string') {
+            clearVerifyEmailCookies(request, reply);
             return reply.redirect(
                 buildLoginRedirectUrl(request, returnUrl, {
                     error: 'missing-verification-token',
@@ -410,6 +623,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
         const resolvedConfig = resolveMagicSsoConfig();
         if (resolvedConfig.serverUrl.length === 0) {
+            clearVerifyEmailCookies(request, reply);
             return reply.redirect(
                 buildLoginRedirectUrl(request, returnUrl, {
                     error: 'verify-email-misconfigured',
@@ -418,6 +632,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         }
         const previewSecret = readPreviewSecret();
         if (previewSecret === null) {
+            clearVerifyEmailCookies(request, reply);
             return reply.redirect(
                 buildLoginRedirectUrl(request, returnUrl, {
                     error: 'verify-email-misconfigured',
@@ -438,6 +653,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
             });
 
             if (!previewResponse.ok) {
+                clearVerifyEmailCookies(request, reply);
                 return reply.redirect(
                     buildLoginRedirectUrl(request, returnUrl, {
                         error: 'verify-email-failed',
@@ -447,6 +663,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
             const payload: unknown = await previewResponse.json();
             if (!isVerifyEmailPreviewResponse(payload)) {
+                clearVerifyEmailCookies(request, reply);
                 return reply.redirect(
                     buildLoginRedirectUrl(request, returnUrl, {
                         error: 'verify-email-failed',
@@ -467,6 +684,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 }),
             );
         } catch {
+            clearVerifyEmailCookies(request, reply);
             return reply.redirect(
                 buildLoginRedirectUrl(request, returnUrl, {
                     error: 'verify-email-failed',

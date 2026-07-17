@@ -18,6 +18,12 @@ export interface WaitForMagicLinkOptions {
     readonly timeoutMs?: number;
 }
 
+export interface WaitForEmailOtpOptions {
+    readonly length?: number;
+    readonly recipient: string;
+    readonly timeoutMs?: number;
+}
+
 const mailSinkBaseUrl = 'http://localhost:43126';
 
 export async function clearMailbox(request: APIRequestContext): Promise<void> {
@@ -62,6 +68,31 @@ export async function waitForMagicLink(
     throw new Error(`Timed out waiting for a magic link for ${options.recipient}.`);
 }
 
+export async function waitForEmailOtp(
+    request: APIRequestContext,
+    options: WaitForEmailOtpOptions,
+): Promise<string> {
+    const timeoutMs = options.timeoutMs ?? 15_000;
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+        const messages = await listMessages(request);
+        const matchingMessage = messages.find((message) =>
+            message.to.some((address) => address.toLowerCase() === options.recipient.toLowerCase()),
+        );
+
+        if (matchingMessage) {
+            return extractEmailOtp(matchingMessage, options.length ?? 6);
+        }
+
+        await new Promise((resolve) => {
+            setTimeout(resolve, 250);
+        });
+    }
+
+    throw new Error(`Timed out waiting for an email OTP for ${options.recipient}.`);
+}
+
 export async function expectNoMessagesForRecipient(
     request: APIRequestContext,
     recipient: string,
@@ -95,6 +126,19 @@ function extractMagicLink(message: SinkMessage, callbackUrlPrefix: string): stri
     }
 
     throw new Error(`No magic link found in email message ${message.id}.`);
+}
+
+export function extractEmailOtp(message: SinkMessage, length: number): string {
+    const otpPattern = new RegExp(
+        `one-time code in the app you already opened:\\s*([0-9]{${length}})(?![0-9])`,
+        'iu',
+    );
+    const match = message.text.match(otpPattern);
+    if (match?.[1]) {
+        return match[1];
+    }
+
+    throw new Error(`No ${length}-digit OTP found in email message ${message.id}.`);
 }
 
 function escapeRegExp(value: string): string {

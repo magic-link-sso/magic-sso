@@ -18,6 +18,7 @@ The gate keeps all infrastructure routes under `/_magicgate/*` by default:
 - `POST /_magicgate/signin`
 - `GET /_magicgate/verify-email`
 - `POST /_magicgate/verify-email`
+- `POST /_magicgate/verify-email/otp`
 - `POST /_magicgate/logout`
 - `GET /_magicgate/session`
 - `GET /_magicgate/healthz`
@@ -95,6 +96,11 @@ Run it:
 cp gate/.env.example gate/.env
 docker compose --env-file gate/.env -f gate/docker-compose.yml up --build
 ```
+
+Use `pnpm dev:gate:otp:stack` to enable OTP for this local Gate stack. The
+normal `pnpm dev:gate:stack` command keeps OTP disabled; set
+`MAGICSSO_OTP_SECRET` only when you need to override the local development
+secret.
 
 Then open:
 

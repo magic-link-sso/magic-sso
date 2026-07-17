@@ -1,80 +1,85 @@
 @startuml MagicLinkSSO-Flow
 
-title Magic Link SSO Authentication Flow (Site + Scope Aware)
+title Magic Link SSO Authentication Flow (Magic Link + Optional Email OTP)
 
 actor User
 participant "Client App\n(Angular / Fastify /\nNext.js / Nuxt / Django)" as Client
 participant "SSO Server" as SSO
 participant "Email Server" as Email
-collections "Token Service\n(verification JWT signing,\naccess JWT signing,\n+ used-token replay cache)" as TokenService
+collections "Grant + Token Services\n(verification JWT, OTP challenge,\naccess JWT, replay cache)" as GrantService
 
-== Redirect Flow ==
-
-User -> Client: Access Protected Page (/protected)
-Client -> Client: Check auth cookie
-alt Cookie exists and is valid
-    Client -> User: Render protected content
-else Cookie missing or invalid
-    Client -> User: Redirect to SSO /signin\n?returnUrl=...&verifyUrl=...&scope=...
-    User -> SSO: Open /signin
-    SSO -> User: Render hosted sign-in page
-    User -> SSO: Submit email address\n(scope is optional app-provided context)
-    SSO -> SSO: Resolve site from returnUrl/verifyUrl\nand authorize email + requested scope
-    SSO -> TokenService: Sign verification token\n(JWT + iss + aud(siteId) + scope + jti)
-    SSO -> Email: Send magic link to configured verifyUrl?token=...
-    Email --> User: Receive magic link email
-
-    User -> Email: Click magic link
-    Email -> User: Open client /verify-email?token=...
-    User -> Client: GET /verify-email?token=...
-    Client -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
-    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
-    SSO --> Client: 200 JSON { email }
-    Client -> User: Render no-store confirmation page\n(preview token is not consumed)
-    Client -> SSO: POST /verify-email { token } (Accept: application/json)
-    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
-    SSO --> Client: 200 JSON { accessToken(email, scope) }
-    Client -> Client: Verify access token\n(expected iss + aud + signature)\nand set auth cookie
-    Client -> User: Redirect to protected page
-end
-
-== API Flow ==
+== Start Sign-In ==
 
 User -> Client: Access Protected Page (/protected)
 Client -> Client: Check auth cookie
 alt Cookie exists and is valid
     Client -> User: Render protected content
 else Cookie missing or invalid
-    Client -> User: Render local login UI
-    User -> Client: Submit email address
-    Client -> SSO: POST /signin { email, returnUrl, verifyUrl, scope? }
+    alt Hosted direct flow
+        Client -> User: Redirect to SSO /signin\n?returnUrl=...&verifyUrl=...&scope=...
+        User -> SSO: Open /signin and submit email
+    else App-owned login flow
+        Client -> User: Render local login UI
+        User -> Client: Submit email address
+        Client -> SSO: POST /signin\n{ email, returnUrl, verifyUrl, scope? }
+    end
     SSO -> SSO: Resolve site from returnUrl/verifyUrl\nand authorize email + requested scope
-    SSO -> TokenService: Sign verification token\n(JWT + iss + aud(siteId) + scope + jti)
-    SSO -> Email: Send magic link to configured verifyUrl?token=...
-    Email --> User: Receive magic link email
+    SSO -> GrantService: Create one-time grant\n(siteId + scope + jti + trusted URLs)
+    opt Email OTP enabled
+        SSO -> GrantService: Store HMAC-protected OTP challenge\nlinked to the same jti
+    end
+    SSO -> Email: Send magic link + optional OTP
+    Email --> User: Deliver sign-in email
 
-    User -> Email: Click magic link
-    Email -> User: Open client /verify-email?token=...
-    User -> Client: GET /verify-email?token=...
-    Client -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
-    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
-    SSO --> Client: 200 JSON { email }
-    Client -> User: Render no-store confirmation page\n(preview token is not consumed)
-    Client -> SSO: POST /verify-email { token } (Accept: application/json)
-    SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
-    SSO --> Client: 200 JSON { accessToken(email, scope) }
-    Client -> Client: Verify access token\n(expected iss + aud + signature)\nand set auth cookie
-    Client -> User: Redirect to protected page
+    == Complete One-Time Grant ==
+
+    alt Magic link
+        User -> Email: Click magic link
+        Email -> User: Open trusted /verify-email?token=...
+        alt App-owned callback
+            User -> Client: GET /verify-email?token=...
+            Client -> SSO: GET /verify-email?token=...\n(preview secret, JSON)
+            SSO -> GrantService: Validate without consuming
+            SSO --> Client: 200 JSON { email }
+            Client -> User: Render no-store confirmation
+            Client -> SSO: POST /verify-email { token }
+        else Server-managed callback
+            User -> SSO: GET /verify-email?token=...
+            SSO -> GrantService: Validate without consuming
+            SSO -> User: No-store confirmation;\nHttpOnly token + CSRF cookies
+            User -> SSO: POST /verify-email (CSRF)
+        end
+        SSO -> GrantService: Validate and atomically consume jti
+        SSO --> Client: Access token or trusted verification callback
+    else Email OTP enabled
+        alt App-owned code field
+            User -> Client: Enter code in already-open app
+            Client -> SSO: POST /verify-email/otp\n{ challengeId, code } (JSON)
+        else Hosted code field
+            User -> SSO: Enter code in already-open hosted page
+            SSO -> SSO: POST /verify-email/otp (CSRF)
+        end
+        SSO -> GrantService: Verify code, expiry, and attempts
+        alt Invalid code with attempts remaining
+            SSO --> User: Generic error + same code-only form
+        else Expired, exhausted, or consumed
+            SSO --> User: Return to email form and start again
+        else Valid code
+            SSO -> GrantService: Atomically consume the same jti
+            SSO --> Client: Access token or trusted verification callback
+        end
+    end
+
+    opt Grant completed successfully
+        Client -> Client: Verify expected issuer + audience\nand set HTTP-only auth cookie
+        Client -> User: Redirect to protected page
+    end
 end
 
-== Server-Managed Verify Flow ==
-
-User -> SSO: GET /verify-email?token=...
-SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, and scope without consuming the token
-SSO -> User: Render no-store confirmation page\nset temporary HttpOnly token cookie + CSRF cookie\nand remove token from URL
-User -> SSO: POST /verify-email\n(CSRF form token)
-SSO -> TokenService: Verify signature, expiry, iss, aud(siteId),\ntrusted returnUrl, scope, and one-time use
-SSO -> SSO: Clear temporary token cookie\nand set server auth cookie
-SSO -> User: Redirect to trusted returnUrl
+note over GrantService
+The magic link and OTP are alternate exchanges for one grant.
+Whichever succeeds first consumes its shared jti;
+the other path cannot be replayed.
+end note
 
 @enduml

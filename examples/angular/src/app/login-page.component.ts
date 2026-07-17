@@ -31,72 +31,134 @@ const sharedSigninBadgeUrl = '/assets/signin-page-badge.svg';
                     height="144"
                 />
                 <p class="eyebrow">Sign In</p>
-                <h1 id="login-title" class="login-title">Sign in</h1>
-                <p id="signin-help" class="login-copy">We'll email you a sign-in link.</p>
+                <h1 id="login-title" class="login-title">
+                    {{ isConfirmation() ? 'Check your email' : 'Sign in' }}
+                </h1>
+                <p id="signin-help" class="login-copy">
+                    @if (isConfirmation()) {
+                        If your email can sign in, you will receive a link shortly. Open the email
+                        and click the link to continue.
+                    } @else {
+                        We'll email you a sign-in link.
+                    }
+                </p>
 
-                <form
-                    class="login-form"
-                    aria-describedby="signin-help"
-                    ngNativeValidate
-                    (ngSubmit)="submitForm()"
-                >
-                    <label class="field-label" for="email">Email</label>
-                    <input
-                        id="email"
-                        [(ngModel)]="email"
-                        class="field-input"
-                        type="email"
-                        name="email"
-                        autocomplete="email"
-                        inputmode="email"
-                        placeholder="you@example.com"
-                        spellcheck="false"
-                        [attr.aria-describedby]="emailDescription()"
-                        [attr.aria-invalid]="hasError() ? true : undefined"
-                        required
-                    />
-                    <div class="login-actions">
-                        <button
-                            class="button button-primary button-submit button-block"
-                            type="submit"
-                            [attr.aria-disabled]="pending()"
-                            [disabled]="pending()"
-                        >
-                            <span
-                                class="button-spinner"
-                                [class.button-spinner-visible]="pending()"
-                                aria-hidden="true"
-                            ></span>
-                            <span>{{
-                                pending() ? 'Sending magic link...' : 'Send magic link'
-                            }}</span>
-                        </button>
+                @if (!isConfirmation()) {
+                    <form
+                        class="login-form"
+                        aria-describedby="signin-help"
+                        ngNativeValidate
+                        (ngSubmit)="submitForm()"
+                    >
+                        <label class="field-label" for="email">Email</label>
+                        <input
+                            id="email"
+                            [(ngModel)]="email"
+                            class="field-input"
+                            type="email"
+                            name="email"
+                            autocomplete="email"
+                            inputmode="email"
+                            placeholder="you@example.com"
+                            spellcheck="false"
+                            [attr.aria-describedby]="emailDescription()"
+                            [attr.aria-invalid]="hasError() ? true : undefined"
+                            required
+                        />
+                        <div class="login-actions">
+                            <button
+                                class="button button-primary button-submit button-block"
+                                type="submit"
+                                [attr.aria-disabled]="pending()"
+                                [disabled]="pending()"
+                            >
+                                <span
+                                    class="button-spinner"
+                                    [class.button-spinner-visible]="pending()"
+                                    aria-hidden="true"
+                                ></span>
+                                <span>{{
+                                    pending() ? 'Sending magic link...' : 'Send magic link'
+                                }}</span>
+                            </button>
+                        </div>
+                    </form>
+                } @else {
+                    <div class="confirmation-panel" role="status" aria-live="polite">
+                        @if (otpChallengeId() !== null) {
+                            <form
+                                class="login-form"
+                                aria-describedby="otp-help"
+                                ngNativeValidate
+                                (ngSubmit)="submitOtp()"
+                            >
+                                <label class="field-label" for="otp-code">One-time code</label>
+                                <input
+                                    id="otp-code"
+                                    [(ngModel)]="otpCode"
+                                    class="field-input"
+                                    type="text"
+                                    name="otpCode"
+                                    autocomplete="one-time-code"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    [attr.minlength]="otpLength()"
+                                    [attr.maxlength]="otpLength()"
+                                    [attr.placeholder]="otpLength() === 6 ? '123456' : undefined"
+                                    aria-describedby="otp-help"
+                                    required
+                                />
+                                <p id="otp-help" class="login-copy">
+                                    You can also enter the one-time code from the email here.
+                                </p>
+                                <div class="login-actions">
+                                    <button
+                                        class="button button-primary button-submit button-block"
+                                        type="submit"
+                                        [attr.aria-disabled]="pending()"
+                                        [disabled]="pending()"
+                                    >
+                                        <span>Sign in with code</span>
+                                    </button>
+                                    <button
+                                        class="button button-secondary"
+                                        type="button"
+                                        (click)="useDifferentEmail()"
+                                    >
+                                        Use a different email
+                                    </button>
+                                </div>
+                            </form>
+                        } @else {
+                            <div class="login-actions">
+                                <button
+                                    class="button button-secondary"
+                                    type="button"
+                                    (click)="useDifferentEmail()"
+                                >
+                                    Use a different email
+                                </button>
+                            </div>
+                        }
                     </div>
-                    @if (result()?.success) {
-                        <p
-                            id="signin-feedback"
-                            class="message message-success"
-                            role="status"
-                            aria-live="polite"
-                        >
-                            {{ result()?.message }}
-                        </p>
-                    }
-                    @if (hasError()) {
-                        <p id="signin-feedback" class="message message-error" role="alert">
-                            {{ result()?.message }}
-                        </p>
-                    }
-                </form>
+                }
+                @if (hasError()) {
+                    <p id="signin-feedback" class="message message-error" role="alert">
+                        {{ result()?.message }}
+                    </p>
+                }
             </section>
         </main>
     `,
 })
 export class LoginPageComponent {
     email = '';
+    otpCode = '';
     readonly pending = signal(false);
     readonly result = signal<SignInResult | null>(null);
     readonly signinBadgeUrl = sharedSigninBadgeUrl;
+    readonly otpChallengeId = signal<string | null>(null);
+    readonly otpLength = signal<number>(6);
 
     private readonly config = inject(MAGIC_SSO_CONFIG);
     private readonly route = inject(ActivatedRoute);
@@ -117,6 +179,9 @@ export class LoginPageComponent {
     );
 
     readonly hasError = computed(() => this.result()?.success === false);
+    readonly isConfirmation = computed(
+        () => this.result()?.success === true || this.otpChallengeId() !== null,
+    );
     readonly emailDescription = computed(() =>
         this.hasError() ? 'signin-help signin-feedback' : 'signin-help',
     );
@@ -176,6 +241,22 @@ export class LoginPageComponent {
                 success: true,
                 message: message ?? 'Verification email sent.',
             });
+            const otpChallengeId =
+                typeof payload === 'object' &&
+                payload !== null &&
+                'otpChallengeId' in payload &&
+                typeof payload.otpChallengeId === 'string'
+                    ? payload.otpChallengeId
+                    : null;
+            const otpLength =
+                typeof payload === 'object' &&
+                payload !== null &&
+                'otpLength' in payload &&
+                typeof payload.otpLength === 'number'
+                    ? payload.otpLength
+                    : 6;
+            this.otpChallengeId.set(otpChallengeId);
+            this.otpLength.set(otpLength);
         } catch {
             this.result.set({
                 success: false,
@@ -184,5 +265,43 @@ export class LoginPageComponent {
         } finally {
             this.pending.set(false);
         }
+    }
+
+    async submitOtp(): Promise<void> {
+        const challengeId = this.otpChallengeId();
+        if (challengeId === null) {
+            return;
+        }
+
+        this.pending.set(true);
+        try {
+            const response = await fetch('/api/verify-email/otp', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    challengeId,
+                    code: this.otpCode,
+                    returnUrl: this.returnUrl,
+                }),
+            });
+            await response.json().catch(() => null);
+            if (!response.ok) {
+                this.result.set({ success: false, message: 'Invalid or expired code.' });
+                return;
+            }
+
+            this.otpChallengeId.set(null);
+            window.location.assign(this.returnUrl);
+        } catch {
+            this.result.set({ success: false, message: 'Invalid or expired code.' });
+        } finally {
+            this.pending.set(false);
+        }
+    }
+
+    useDifferentEmail(): void {
+        this.otpChallengeId.set(null);
+        this.otpCode = '';
+        this.result.set(null);
     }
 }

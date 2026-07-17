@@ -4,6 +4,8 @@ x-manager-bootstrap-env: &manager-bootstrap-env
   MAGICSSO_DEV_CSRF_SECRET: ${MAGICSSO_DEV_CSRF_SECRET:-manager-dev-csrf-secret-1234567890abc}
   MAGICSSO_DEV_EMAIL_SECRET: ${MAGICSSO_DEV_EMAIL_SECRET:-manager-dev-email-secret-1234567890ab}
   MAGICSSO_JWT_SECRET: ${MAGICSSO_JWT_SECRET:-manager-dev-jwt-secret-1234567890abcd}
+  MAGICSSO_OTP_ENABLED: ${MAGICSSO_OTP_ENABLED:-false}
+  MAGICSSO_OTP_SECRET: ${MAGICSSO_OTP_SECRET:-manager-dev-otp-secret-1234567890abcd}
   MAGICSSO_PREVIEW_SECRET: ${MAGICSSO_PREVIEW_SECRET:-manager-dev-preview-secret-123456789}
   MANAGER_PUBLIC_HOST: ${MANAGER_PUBLIC_HOST:-manager.localhost}
   MANAGER_ALLOWED_EMAIL: ${MANAGER_ALLOWED_EMAIL:-manager@example.com}

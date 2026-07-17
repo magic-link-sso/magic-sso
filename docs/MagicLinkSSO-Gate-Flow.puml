@@ -34,29 +34,56 @@ else Cookie missing or invalid
     end
 
     SSO -> SSO: Resolve site from returnUrl / verifyUrl\nand authorize email + default scope
-    SSO -> Email: Send magic link
-    Email --> User: Receive email
+    SSO -> Email: Send magic link + optional OTP
+    opt Local Gate login and email OTP enabled
+        SSO --> Gate: Public OTP challenge metadata
+        Gate -> Gate: Store challenge in signed HttpOnly cookie
+        Gate --> Browser: Replace email form with one OTP field
+    end
+    Email --> User: Receive sign-in email
 
-    User -> Email: Click magic link
-    Email -> Browser: Open https://private.example.com/_magicgate/verify-email\n?token=...&returnUrl=...
-    Browser -> Gate: GET /_magicgate/verify-email?token=...
-    Gate -> SSO: GET /verify-email?token=...\n(Accept: application/json,\nX-Magic-SSO-Preview-Secret)
-    SSO --> Gate: 200 JSON { email }
-    Gate -> Gate: Validate preview JSON\nset temporary token cookie + signed CSRF cookie
-    Gate --> Browser: Confirmation page\nwith token removed from URL
-    Browser -> Gate: POST /_magicgate/verify-email\n{ csrfToken, returnUrl }
-    Gate -> Gate: Validate same-origin signal + CSRF\nand read token from temporary cookie
-    Gate -> SSO: POST /verify-email { token }
-    SSO --> Gate: 200 JSON { accessToken }
-    Gate -> Gate: Validate JWT locally\n(expected iss + aud + signature)
-    Gate -> Gate: Clear temporary cookies\nand set Gate-managed auth cookie
-    Gate --> Browser: Redirect to original returnUrl
+    alt Magic link
+        User -> Email: Click magic link
+        Email -> Browser: Open /_magicgate/verify-email\n?token=...&returnUrl=...
+        Browser -> Gate: GET /_magicgate/verify-email?token=...
+        Gate -> SSO: GET /verify-email?token=...\n(preview secret, JSON)
+        SSO --> Gate: 200 JSON { email }
+        Gate -> Gate: Set temporary token + signed CSRF cookies
+        Gate --> Browser: No-store confirmation page\nwith token removed from URL
+        Browser -> Gate: POST /_magicgate/verify-email
+        Gate -> SSO: POST /verify-email { token }
+        SSO --> Gate: 200 JSON { accessToken }
+    else OTP on local Gate login
+        User -> Browser: Enter code in existing Gate page
+        Browser -> Gate: POST /_magicgate/verify-email/otp
+        Gate -> Gate: Read signed challenge cookie
+        Gate -> SSO: POST /verify-email/otp\n{ challengeId, code }
+        SSO --> Gate: Access token or generic error
+        alt Invalid or expired code
+            Gate --> Browser: Return to code form;\nuser may start again with another email
+        else Valid code
+            Gate -> Gate: Continue with returned access token
+        end
+    else OTP on hosted direct-use page
+        User -> Browser: Enter code in existing hosted SSO page
+        Browser -> SSO: POST /verify-email/otp (CSRF)
+        SSO -> Browser: Redirect to trusted Gate callback\nwith one-time verification token
+        Browser -> Gate: GET /_magicgate/verify-email?token=...
+        Gate -> SSO: Preview then POST /verify-email
+        SSO --> Gate: 200 JSON { accessToken }
+    end
 
-    Browser -> Gate: GET /
-    Gate -> Gate: Check auth cookie
-    Gate -> Upstream: Proxy request with forwarded identity headers
-    Upstream --> Gate: Protected response
-    Gate --> Browser: Protected upstream response
+    opt Link or code exchange completed successfully
+        Gate -> Gate: Validate JWT locally\n(expected iss + aud + signature)
+        Gate -> Gate: Clear temporary cookies\nand set Gate-managed auth cookie
+        Gate --> Browser: Redirect to original returnUrl
+
+        Browser -> Gate: GET /
+        Gate -> Gate: Check auth cookie
+        Gate -> Upstream: Proxy request with forwarded identity headers
+        Upstream --> Gate: Protected response
+        Gate --> Browser: Protected upstream response
+    end
 end
 
 == Authenticated Follow-up ==
@@ -70,7 +97,8 @@ Gate --> Browser: Response
 note over Gate, Upstream
 The upstream can be a dynamic app-style service (`private1`) or a static site
 (`private2`). In both cases, authentication stays in Gate and the upstream
-remains unaware of the Magic Link SSO flow.
+remains unaware of the Magic Link SSO flow. Link and OTP completion both end
+with the same Gate-owned, HTTP-only authenticated session.
 end note
 
 @enduml

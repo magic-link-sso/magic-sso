@@ -38,6 +38,10 @@ export interface HostedAuthSigninCopy {
     emailLabel: string;
     emailPlaceholder: string;
     helpText: string;
+    otpHelpText: string;
+    otpLabel: string;
+    otpPlaceholder: string;
+    otpSubmitButton: string;
     pageTitle: string;
     skipLink: string;
     submitButton: string;
@@ -57,6 +61,7 @@ export interface HostedAuthFeedbackCopy {
     failedToSendEmail: string;
     forbidden: string;
     invalidOrExpiredToken: string;
+    invalidOrExpiredOtp: string;
     invalidOrUntrustedReturnUrl: string;
     invalidOrUntrustedVerifyUrl: string;
     invalidRequest: string;
@@ -140,6 +145,15 @@ export interface SecurityStateConfig {
     redisUrl: string | undefined;
 }
 
+export interface OtpConfig {
+    allowedAttempts: number;
+    enabled: boolean;
+    expirationSeconds: number;
+    length: number;
+    resendStrategy: 'rotate';
+    secret: string | undefined;
+}
+
 export interface ReloadConfig {
     secret: string;
 }
@@ -170,6 +184,7 @@ export interface AppConfig extends HostedAuthConfig {
     healthzRateLimitMax: number;
     logFormat: 'json' | 'pretty';
     logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+    otp: OtpConfig;
     rateLimitWindowMs: number;
     reload?: ReloadConfig | undefined;
     securityState: SecurityStateConfig;
@@ -213,6 +228,10 @@ const hostedAuthSigninCopyOverrideSchema = z
         emailLabel: z.string().min(1).optional(),
         emailPlaceholder: z.string().min(1).optional(),
         helpText: z.string().min(1).optional(),
+        otpHelpText: z.string().min(1).optional(),
+        otpLabel: z.string().min(1).optional(),
+        otpPlaceholder: z.string().min(1).optional(),
+        otpSubmitButton: z.string().min(1).optional(),
         pageTitle: z.string().min(1).optional(),
         skipLink: z.string().min(1).optional(),
         submitButton: z.string().min(1).optional(),
@@ -236,6 +255,7 @@ const hostedAuthFeedbackCopyOverrideSchema = z
         failedToSendEmail: z.string().min(1).optional(),
         forbidden: z.string().min(1).optional(),
         invalidOrExpiredToken: z.string().min(1).optional(),
+        invalidOrExpiredOtp: z.string().min(1).optional(),
         invalidOrUntrustedReturnUrl: z.string().min(1).optional(),
         invalidOrUntrustedVerifyUrl: z.string().min(1).optional(),
         invalidRequest: z.string().min(1).optional(),
@@ -382,6 +402,34 @@ const rawConfigSchema = z
                 emailSecret: configuredSecretSchema('auth.emailSecret'),
                 jwtExpiration: z.union([z.number().positive(), z.string().min(1)]).default('1h'),
                 jwtSecret: configuredSecretSchema('auth.jwtSecret'),
+                otp: z
+                    .object({
+                        allowedAttempts: z.number().int().min(1).max(10).default(3),
+                        enabled: z.boolean().default(false),
+                        expiration: z
+                            .union([z.number().positive(), z.string().min(1)])
+                            .default('5m'),
+                        length: z.number().int().min(6).max(10).default(6),
+                        resendStrategy: z.literal('rotate').default('rotate'),
+                        secret: z.string().optional(),
+                    })
+                    .strict()
+                    .superRefine((value, context) => {
+                        if (value.enabled && typeof value.secret !== 'string') {
+                            context.addIssue({
+                                code: z.ZodIssueCode.custom,
+                                message:
+                                    'auth.otp.secret must be configured when auth.otp.enabled = true.',
+                            });
+                        }
+                    })
+                    .default({
+                        allowedAttempts: 3,
+                        enabled: false,
+                        expiration: '5m',
+                        length: 6,
+                        resendStrategy: 'rotate',
+                    }),
                 previewSecret: configuredSecretSchema('auth.previewSecret'),
             })
             .strict(),
@@ -463,6 +511,10 @@ export function createDefaultHostedAuthPageCopy(): HostedAuthPageCopy {
             pageTitle: 'Sign In',
             title: 'Sign in',
             helpText: "We'll email you a sign-in link.",
+            otpHelpText: 'You can also enter the one-time code from the email here.',
+            otpLabel: 'One-time code',
+            otpPlaceholder: '123456',
+            otpSubmitButton: 'Sign in with code',
             emailLabel: 'Email',
             emailPlaceholder: 'you@example.com',
             submitButton: 'Send magic link',
@@ -485,6 +537,7 @@ export function createDefaultHostedAuthPageCopy(): HostedAuthPageCopy {
             tooManyRequests: 'Too many requests',
             verificationEmailSent: 'Verification email sent',
             invalidOrExpiredToken: 'Invalid or expired token',
+            invalidOrExpiredOtp: 'Invalid or expired code.',
         },
     };
 }
@@ -561,6 +614,7 @@ const placeholderSecretsByField = new Map<string, Set<string>>([
     ['auth.emailSecret', new Set(['replace-me-with-a-different-long-random-email-secret'])],
     ['auth.csrfSecret', new Set(['replace-me-with-a-different-long-random-csrf-secret'])],
     ['auth.previewSecret', new Set(['replace-me-with-a-different-long-random-preview-secret'])],
+    ['auth.otp.secret', new Set(['replace-me-with-a-dedicated-long-random-otp-secret'])],
 ]);
 
 function parseConfiguredSecret(value: string, fieldName: string): string {
@@ -582,6 +636,7 @@ function validateDistinctSecrets(
     emailSecret: string,
     csrfSecret: string,
     previewSecret: string,
+    otpSecret: string | undefined,
 ): void {
     if (csrfSecret === jwtSecret) {
         throw new Error('auth.csrfSecret must differ from auth.jwtSecret.');
@@ -600,6 +655,12 @@ function validateDistinctSecrets(
     }
     if (previewSecret === csrfSecret) {
         throw new Error('auth.previewSecret must differ from auth.csrfSecret.');
+    }
+    if (
+        typeof otpSecret === 'string' &&
+        [jwtSecret, emailSecret, csrfSecret, previewSecret].includes(otpSecret)
+    ) {
+        throw new Error('auth.otp.secret must differ from every other auth secret.');
     }
 }
 
@@ -932,6 +993,12 @@ function resolveHostedAuthPageCopy(
             emailPlaceholder:
                 parsedCopy.data.signin?.emailPlaceholder ?? defaults.signin.emailPlaceholder,
             helpText: parsedCopy.data.signin?.helpText ?? defaults.signin.helpText,
+            otpHelpText: parsedCopy.data.signin?.otpHelpText ?? defaults.signin.otpHelpText,
+            otpLabel: parsedCopy.data.signin?.otpLabel ?? defaults.signin.otpLabel,
+            otpPlaceholder:
+                parsedCopy.data.signin?.otpPlaceholder ?? defaults.signin.otpPlaceholder,
+            otpSubmitButton:
+                parsedCopy.data.signin?.otpSubmitButton ?? defaults.signin.otpSubmitButton,
             pageTitle: parsedCopy.data.signin?.pageTitle ?? defaults.signin.pageTitle,
             skipLink: parsedCopy.data.signin?.skipLink ?? defaults.signin.skipLink,
             submitButton: parsedCopy.data.signin?.submitButton ?? defaults.signin.submitButton,
@@ -955,6 +1022,9 @@ function resolveHostedAuthPageCopy(
             invalidOrExpiredToken:
                 parsedCopy.data.feedback?.invalidOrExpiredToken ??
                 defaults.feedback.invalidOrExpiredToken,
+            invalidOrExpiredOtp:
+                parsedCopy.data.feedback?.invalidOrExpiredOtp ??
+                defaults.feedback.invalidOrExpiredOtp,
             invalidOrUntrustedReturnUrl:
                 parsedCopy.data.feedback?.invalidOrUntrustedReturnUrl ??
                 defaults.feedback.invalidOrUntrustedReturnUrl,
@@ -1079,6 +1149,15 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         parsedConfig.auth.previewSecret,
         'auth.previewSecret',
     );
+    const otpSecret =
+        typeof parsedConfig.auth.otp.secret === 'string'
+            ? parseConfiguredSecret(parsedConfig.auth.otp.secret, 'auth.otp.secret')
+            : undefined;
+    const otpExpirationSeconds = parseDurationToSeconds(parsedConfig.auth.otp.expiration);
+    const emailExpirationSeconds = parseDurationToSeconds(parsedConfig.auth.emailExpiration);
+    if (parsedConfig.auth.otp.enabled && otpExpirationSeconds > emailExpirationSeconds) {
+        throw new Error('auth.otp.expiration must not exceed auth.emailExpiration.');
+    }
     const securityStateAdapter = securityStateConfig.adapter ?? 'file';
     const securityStateRedisUrl =
         securityStateAdapter === 'redis'
@@ -1092,7 +1171,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
                   'server.securityState.redisUrl',
               )
             : undefined;
-    validateDistinctSecrets(jwtSecret, emailSecret, csrfSecret, previewSecret);
+    validateDistinctSecrets(jwtSecret, emailSecret, csrfSecret, previewSecret, otpSecret);
 
     const sites = parsedConfig.sites.map((site) => ({
         id: site.id,
@@ -1152,7 +1231,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         cookiePath: cookieConfig.path,
         cookieSameSite: parseCookieSameSite(cookieConfig.sameSite, appUrl),
         cookieSecure: parseCookieSecure(cookieConfig.secure, appUrl),
-        emailExpirationSeconds: parseDurationToSeconds(parsedConfig.auth.emailExpiration),
+        emailExpirationSeconds,
         emailFrom: parsedConfig.email.from,
         emailSecret,
         emailSignature: parsedConfig.email.signature,
@@ -1170,6 +1249,14 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         jwtSecret,
         previewSecret,
         logLevel: serverConfig.logLevel ?? 'info',
+        otp: {
+            allowedAttempts: parsedConfig.auth.otp.allowedAttempts,
+            enabled: parsedConfig.auth.otp.enabled,
+            expirationSeconds: otpExpirationSeconds,
+            length: parsedConfig.auth.otp.length,
+            resendStrategy: parsedConfig.auth.otp.resendStrategy,
+            secret: otpSecret,
+        },
         rateLimitWindowMs: rateLimitConfig.windowMs ?? 10 * 60 * 1000,
         reload:
             typeof reloadConfig === 'undefined'

@@ -22,10 +22,14 @@ export interface HomePageOptions {
 
 export interface LoginPageOptions {
     appOrigin: string;
+    hasOtpChallenge: boolean;
+    isConfirmation: boolean;
     loginTarget: string;
     message: LoginPageMessage | undefined;
+    otpLength: number | undefined;
     returnUrl: string;
     signinBadgePath: string;
+    useDifferentEmailHref: string;
     verifyUrl: string;
 }
 
@@ -59,12 +63,8 @@ function buildDocument(options: RenderPageOptions): string {
 }
 
 function renderMessage(message: LoginPageMessage | undefined): string {
-    if (typeof message === 'undefined') {
+    if (typeof message === 'undefined' || message.kind === 'success') {
         return '';
-    }
-
-    if (message.kind === 'success') {
-        return `<p id="signin-feedback" class="message message-success" role="status" aria-live="polite">${escapeHtml(message.text)}</p>`;
     }
 
     return `<p id="signin-feedback" class="message message-error" role="alert">${escapeHtml(message.text)}</p>`;
@@ -142,6 +142,10 @@ export function renderHomePage(options: HomePageOptions): string {
 export function renderLoginPage(options: LoginPageOptions): string {
     const hasError = options.message?.kind === 'error';
     const emailDescription = hasError ? 'signin-help signin-feedback' : 'signin-help';
+    const heading = options.isConfirmation ? 'Check your email' : 'Sign in';
+    const helpText = options.isConfirmation
+        ? 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.'
+        : 'We&apos;ll email you a sign-in link.';
 
     return buildDocument({
         title: 'Sign In | Magic Link SSO Fastify',
@@ -150,10 +154,43 @@ export function renderLoginPage(options: LoginPageOptions): string {
   <section id="login-panel" class="login-panel" aria-labelledby="login-title">
     <img src="${escapeHtml(options.signinBadgePath)}" alt="Sign-in flow badge" class="badge login-badge" width="144" height="144" />
     <p class="eyebrow">Sign In</p>
-    <h1 id="login-title" class="login-title">Sign in</h1>
-    <p id="signin-help" class="login-copy">We&apos;ll email you a sign-in link.</p>
+    <h1 id="login-title" class="login-title">${heading}</h1>
+    <p id="signin-help" class="login-copy">${helpText}</p>
 
-    <form class="login-form" aria-describedby="signin-help" action="/api/signin" method="post" data-login-form>
+    ${
+        options.isConfirmation
+            ? `<div class="confirmation-panel" role="status" aria-live="polite">
+      ${
+          options.hasOtpChallenge
+              ? `<form class="login-form" action="/verify-email/otp" method="post" aria-describedby="otp-help">
+      <label class="field-label" for="otp-code">One-time code</label>
+      <input
+        id="otp-code"
+        class="field-input"
+        type="text"
+        name="code"
+        autocomplete="one-time-code"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        minlength="${options.otpLength}"
+        maxlength="${options.otpLength}"
+        ${options.otpLength === 6 ? 'placeholder="123456"' : ''}
+        aria-describedby="otp-help"
+        required
+      />
+      <input type="hidden" name="returnUrl" value="${escapeHtml(options.returnUrl)}" />
+      <p id="otp-help" class="login-copy">You can also enter the one-time code from the email here.</p>
+      <div class="login-actions">
+        <button class="button button-primary button-submit button-block" type="submit">Sign in with code</button>
+      </div>
+    </form>`
+              : ''
+      }
+      <div class="login-actions">
+        <a href="${escapeHtml(options.useDifferentEmailHref)}" class="button button-secondary">Use a different email</a>
+      </div>
+    </div>`
+            : `<form class="login-form" aria-describedby="signin-help" action="/api/signin" method="post" data-login-form>
       <label class="field-label" for="email">Email</label>
       <input
         id="email"
@@ -177,8 +214,9 @@ export function renderLoginPage(options: LoginPageOptions): string {
         </button>
         <a href="/" class="button button-secondary">Back Home</a>
       </div>
-      ${renderMessage(options.message)}
-    </form>
+    </form>`
+    }
+    ${renderMessage(options.message)}
   </section>
 </main>
 ${renderLoginEnhancements()}`,

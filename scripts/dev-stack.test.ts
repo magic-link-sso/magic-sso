@@ -20,7 +20,30 @@ describe('workspace stack scripts', () => {
         expect(packageJson.scripts?.['dev:manager:stack']).toBe(
             'docker compose --env-file manager/.env -f manager/docker-compose.yml up --build',
         );
+        expect(packageJson.scripts?.['dev:otp']).toBe('node scripts/dev-otp.mjs');
+        expect(packageJson.scripts?.['dev:otp:direct']).toBe('node scripts/dev-otp.mjs --direct');
+        expect(packageJson.scripts?.['dev:manager:otp']).toBe(
+            'MAGICSSO_OTP_ENABLED=true pnpm dev:manager',
+        );
+        expect(packageJson.scripts?.['dev:manager:otp:stack']).toBe(
+            'MAGICSSO_OTP_ENABLED=true pnpm dev:manager:stack',
+        );
+        expect(packageJson.scripts?.['dev:gate:otp:stack']).toBe(
+            'MAGICSSO_OTP_ENABLED=true pnpm dev:gate:stack',
+        );
         expect(packageJson.scripts?.['dev:photos']).toBe('pnpm --filter example-app-photos dev');
+    });
+
+    it('passes the temporary server config through the root Turbo dev task', async () => {
+        const turboConfig = JSON.parse(await readRepositoryFile('turbo.json')) as {
+            tasks?: {
+                dev?: {
+                    env?: string[];
+                };
+            };
+        };
+
+        expect(turboConfig.tasks?.dev?.env).toContain('MAGICSSO_CONFIG_FILE');
     });
 
     it('keeps the manager stack build context files inside the docker context', async () => {
@@ -50,6 +73,8 @@ describe('workspace stack scripts', () => {
                 MAGICSSO_DEV_CSRF_SECRET: 'manager-dev-csrf-secret-1234567890abc',
                 MAGICSSO_DEV_EMAIL_SECRET: 'manager-dev-email-secret-1234567890ab',
                 MAGICSSO_JWT_SECRET: 'manager-dev-jwt-secret-1234567890abcd',
+                MAGICSSO_OTP_ENABLED: 'false',
+                MAGICSSO_OTP_SECRET: 'manager-dev-otp-secret-1234567890abcd',
                 MAGICSSO_PREVIEW_SECRET: 'manager-dev-preview-secret-123456789',
                 MANAGER_ALLOWED_EMAIL: 'manager@example.com',
                 MANAGER_PUBLIC_HOST: 'manager.localhost',
@@ -80,6 +105,7 @@ describe('workspace stack scripts', () => {
 
             expect(config.cookieName).toBe('magic-sso');
             expect(config.jwtExpirationSeconds).toBe(3600);
+            expect(config.otp.enabled).toBe(false);
         } finally {
             await rm(tempDirectory, { force: true, recursive: true });
         }

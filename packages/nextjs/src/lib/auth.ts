@@ -152,6 +152,46 @@ export function readFirstHeaderValue(value: string | null): string | null {
     return typeof firstValue === 'string' && firstValue.length > 0 ? firstValue.trim() : null;
 }
 
+export function getExpectedMutationOrigin(request: Request): string {
+    const publicOrigin = getPublicOrigin();
+    if (publicOrigin !== null) {
+        return publicOrigin;
+    }
+
+    if (isTrustProxyEnabled()) {
+        const forwardedHost = readFirstHeaderValue(request.headers.get('x-forwarded-host'));
+        const host = forwardedHost ?? readFirstHeaderValue(request.headers.get('host'));
+        if (host !== null) {
+            const forwardedProtocol = readFirstHeaderValue(
+                request.headers.get('x-forwarded-proto'),
+            );
+            const protocol = forwardedProtocol ?? new URL(request.url).protocol.slice(0, -1);
+            return `${protocol}://${host}`;
+        }
+    }
+
+    return new URL(request.url).origin;
+}
+
+export function hasSameOriginMutationSource(request: Request): boolean {
+    const expectedOrigin = getExpectedMutationOrigin(request);
+    const originHeader = request.headers.get('origin');
+    if (typeof originHeader === 'string' && originHeader.length > 0) {
+        return originHeader === expectedOrigin;
+    }
+
+    const refererHeader = request.headers.get('referer');
+    if (typeof refererHeader !== 'string' || refererHeader.length === 0) {
+        return false;
+    }
+
+    try {
+        return new URL(refererHeader).origin === expectedOrigin;
+    } catch {
+        return false;
+    }
+}
+
 async function getRequestOrigin(): Promise<string | null> {
     const publicOrigin = getPublicOrigin();
     if (publicOrigin !== null) {

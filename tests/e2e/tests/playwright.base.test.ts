@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createE2eConfig, createManagerE2eConfig } from '../playwright.base.js';
 
@@ -11,6 +12,19 @@ function collectGateConfigFiles(config: ReturnType<typeof createE2eConfig>): rea
 
     return webServers.flatMap((server) => {
         const filePath = server.env?.MAGIC_GATE_CONFIG_FILE;
+        return typeof filePath === 'string' ? [filePath] : [];
+    });
+}
+
+function collectServerConfigFiles(config: ReturnType<typeof createE2eConfig>): readonly string[] {
+    const webServers = Array.isArray(config.webServer)
+        ? config.webServer
+        : typeof config.webServer === 'undefined'
+          ? []
+          : [config.webServer];
+
+    return webServers.flatMap((server) => {
+        const filePath = server.env?.MAGICSSO_CONFIG_FILE;
         return typeof filePath === 'string' ? [filePath] : [];
     });
 }
@@ -66,6 +80,40 @@ describe('playwright base config', () => {
             expect(contents).toContain('directUse = false');
             expect(contents).not.toContain('directUse = true');
         }
+    });
+
+    it('enables OTP only in the ephemeral direct and indirect SSO server config', () => {
+        const configs = [
+            createE2eConfig({
+                directUse: true,
+                testMatch: /example-apps-magic-link\.direct\.spec\.ts/u,
+            }),
+            createE2eConfig({
+                directUse: false,
+                testMatch: /example-apps-magic-link\.indirect\.spec\.ts/u,
+            }),
+        ];
+
+        for (const config of configs) {
+            expect(collectServerConfigFiles(config)).toHaveLength(1);
+        }
+        for (const filePath of configs.flatMap(collectServerConfigFiles)) {
+            const contents = readFileSync(filePath, 'utf8');
+            expect(contents).toContain('[auth.otp]');
+            expect(contents).toContain('enabled = true');
+            expect(contents).toContain('length = 6');
+            expect(contents).toContain('expiration = "5m"');
+            expect(contents).toContain('allowedAttempts = 3');
+            expect(contents).toContain('resendStrategy = "rotate"');
+            expect(contents).toContain('secret = "test-otp-secret-for-e2e-suite-1234567890"');
+        }
+
+        const fixtureContents = readFileSync(
+            fileURLToPath(new URL('../fixtures/server.config.toml', import.meta.url)),
+            'utf8',
+        );
+        expect(fixtureContents).not.toContain('[auth.otp]');
+        expect(fixtureContents).not.toContain('test-otp-secret-for-e2e-suite-1234567890');
     });
 
     it('writes a dedicated manager stack with Gate auth and runtime apply wiring', () => {

@@ -19,15 +19,57 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    createRedisOtpChallengeStore,
     createRedisPerEmailSignInLimiter,
     createRedisSessionRevocationStore,
     createRedisVerificationTokenReplayStore,
     type RedisSecurityStateClient,
 } from './redisSecurityState.js';
+import { hashOtpCode } from './otp.js';
+import { parseOtpChallenge, type OtpChallenge } from './otpChallengeStore.js';
+
+function createOtpChallenge(overrides: Partial<OtpChallenge> = {}): OtpChallenge {
+    const challengeId = overrides.challengeId ?? 'challenge-1';
+    const jti = overrides.jti ?? 'grant-1';
+    const siteId = overrides.siteId ?? 'site-1';
+    return {
+        attemptsRemaining: 3,
+        challengeId,
+        createdAt: Date.now(),
+        email: 'user@example.com',
+        expiresAt: Date.now() + 60_000,
+        jti,
+        otpHash: hashOtpCode({
+            challengeId,
+            code: '012345',
+            jti,
+            secret: 'otp-secret',
+            siteId,
+        }),
+        rotationKey: 'rotation-1',
+        safeReturnUrl: 'http://client.example.com/',
+        safeVerifyUrl: 'http://client.example.com/verify-email',
+        scope: '*',
+        siteId,
+        ...overrides,
+    };
+}
 
 class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
-    private readonly replayKeys = new Map<string, number>();
     private readonly signInAttempts = new Map<string, number[]>();
+    private readonly values = new Map<string, { expiresAt: number; value: string }>();
+
+    private readValue(key: string): string | null {
+        const stored = this.values.get(key);
+        if (typeof stored === 'undefined') {
+            return null;
+        }
+        if (stored.expiresAt <= Date.now()) {
+            this.values.delete(key);
+            return null;
+        }
+        return stored.value;
+    }
 
     async connect(): Promise<void> {
         return undefined;
@@ -37,11 +79,80 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
         return undefined;
     }
 
-    async eval(
-        _script: string,
-        numKeys: number,
-        ...args: Array<number | string>
-    ): Promise<unknown> {
+    async eval(script: string, numKeys: number, ...args: Array<number | string>): Promise<unknown> {
+        if (script.includes('-- otp_rotate')) {
+            if (numKeys !== 2) {
+                throw new Error(`Expected exactly two Redis keys, received ${numKeys}.`);
+            }
+            const [challengeKey, activeKey, payload, expiresAtValue] = args;
+            if (
+                typeof challengeKey !== 'string' ||
+                typeof activeKey !== 'string' ||
+                typeof payload !== 'string'
+            ) {
+                throw new Error('Invalid OTP rotation arguments.');
+            }
+            if (this.readValue(challengeKey) !== null) {
+                return [0];
+            }
+            const expiresAt = Number(expiresAtValue);
+            const previousChallengeKey = this.readValue(activeKey);
+            this.values.set(challengeKey, { expiresAt, value: payload });
+            this.values.set(activeKey, { expiresAt, value: challengeKey });
+            if (previousChallengeKey !== null && previousChallengeKey !== challengeKey) {
+                this.values.delete(previousChallengeKey);
+            }
+            return [1];
+        }
+
+        if (script.includes('-- otp_verify')) {
+            if (numKeys !== 2) {
+                throw new Error(`Expected exactly two Redis keys, received ${numKeys}.`);
+            }
+            const [challengeKey, activeKey, submittedHash, nowValue] = args;
+            if (
+                typeof challengeKey !== 'string' ||
+                typeof activeKey !== 'string' ||
+                typeof submittedHash !== 'string'
+            ) {
+                throw new Error('Invalid OTP verification arguments.');
+            }
+            const payload = this.readValue(challengeKey);
+            if (payload === null) {
+                return ['not_found'];
+            }
+            if (this.readValue(activeKey) !== challengeKey) {
+                this.values.delete(challengeKey);
+                return ['consumed'];
+            }
+            const challenge = parseOtpChallenge(JSON.parse(payload));
+            if (challenge === null) {
+                throw new Error('Invalid stored OTP challenge.');
+            }
+            const now = Number(nowValue);
+            if (challenge.expiresAt <= now) {
+                this.values.delete(challengeKey);
+                this.values.delete(activeKey);
+                return ['expired'];
+            }
+            if (challenge.otpHash !== submittedHash) {
+                challenge.attemptsRemaining -= 1;
+                if (challenge.attemptsRemaining <= 0) {
+                    this.values.delete(challengeKey);
+                    this.values.delete(activeKey);
+                    return ['too_many_attempts'];
+                }
+                this.values.set(challengeKey, {
+                    expiresAt: challenge.expiresAt,
+                    value: JSON.stringify(challenge),
+                });
+                return ['invalid'];
+            }
+            this.values.delete(challengeKey);
+            this.values.delete(activeKey);
+            return ['valid', payload];
+        }
+
         if (numKeys !== 1) {
             throw new Error(`Expected exactly one Redis key, received ${numKeys}.`);
         }
@@ -71,12 +182,7 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
     }
 
     async get(key: string): Promise<string | null> {
-        const expiresAt = this.replayKeys.get(key);
-        if (typeof expiresAt !== 'number' || expiresAt <= Date.now()) {
-            return null;
-        }
-
-        return `${expiresAt}`;
+        return this.readValue(key);
     }
 
     async quit(): Promise<string> {
@@ -85,20 +191,61 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
 
     async set(
         key: string,
-        _value: string,
+        value: string,
         _mode: 'PXAT',
         expiresAt: number,
         _condition: 'NX',
     ): Promise<'OK' | null> {
-        const existingExpiresAt = this.replayKeys.get(key);
-        if (typeof existingExpiresAt === 'number' && existingExpiresAt > Date.now()) {
+        if (this.readValue(key) !== null) {
             return null;
         }
 
-        this.replayKeys.set(key, expiresAt);
+        this.values.set(key, { expiresAt, value });
         return 'OK';
     }
 }
+
+describe('createRedisOtpChallengeStore', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-04-13T12:30:00Z'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('atomically invalidates the previous challenge for the same login transaction', async () => {
+        const store = createRedisOtpChallengeStore({
+            client: new FakeRedisSecurityStateClient(),
+            keyPrefix: 'magic-sso-test',
+        });
+        const firstChallenge = createOtpChallenge();
+        const secondChallenge = createOtpChallenge({
+            challengeId: 'challenge-2',
+            jti: 'grant-2',
+        });
+        await store.create(firstChallenge);
+        await store.create(secondChallenge);
+
+        await expect(
+            store.verify({
+                challengeId: firstChallenge.challengeId,
+                code: '012345',
+                now: Date.now(),
+                secret: 'otp-secret',
+            }),
+        ).resolves.not.toMatchObject({ category: 'valid' });
+        await expect(
+            store.verify({
+                challengeId: secondChallenge.challengeId,
+                code: '012345',
+                now: Date.now(),
+                secret: 'otp-secret',
+            }),
+        ).resolves.toMatchObject({ category: 'valid' });
+    });
+});
 
 describe('createRedisVerificationTokenReplayStore', () => {
     beforeEach(() => {

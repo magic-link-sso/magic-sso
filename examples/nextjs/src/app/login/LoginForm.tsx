@@ -44,11 +44,13 @@ export default function LoginForm({
           unoptimized
         />
         <p className="eyebrow">Sign In</p>
-        <h1 id="login-title" className="login-title">
-          Sign in
+        <h1 id="login-title" className="login-title" data-login-title>
+          {hasSuccess ? 'Check your email' : 'Sign in'}
         </h1>
-        <p id="login-help" className="login-copy">
-          We&apos;ll email you a sign-in link.
+        <p id="login-help" className="login-copy" data-login-help>
+          {hasSuccess
+            ? 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.'
+            : "We'll email you a sign-in link."}
         </p>
 
         <form
@@ -57,6 +59,7 @@ export default function LoginForm({
           aria-describedby="login-help"
           className="login-form"
           data-login-form
+          hidden={hasSuccess}
         >
           <label htmlFor="email" className="field-label">
             Email
@@ -90,24 +93,107 @@ export default function LoginForm({
               <span data-submit-label>Send magic link</span>
             </button>
           </div>
-          {hasSuccess && (
-            <p id={feedbackId} role="status" aria-live="polite" className="message message-success">
-              {initialSuccess}
-            </p>
-          )}
-          {hasError && (
-            <p id={feedbackId} role="alert" className="message message-error">
-              {errorMessage}
-            </p>
-          )}
         </form>
+        <form
+          action="/api/verify-email/otp"
+          method="post"
+          aria-describedby="otp-help"
+          className="login-form"
+          data-otp-form
+          hidden
+        >
+          <label htmlFor="otp-code" className="field-label">
+            One-time code
+          </label>
+          <p id="otp-help" className="login-copy">
+            Enter the code from your email to finish signing in.
+          </p>
+          <input
+            id="otp-code"
+            type="text"
+            name="code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-describedby="otp-help"
+            required
+            className="field-input"
+            data-otp-code
+          />
+          <input type="hidden" name="challengeId" data-otp-challenge />
+          <input type="hidden" name="returnUrl" value={returnUrl} />
+          <div className="login-actions">
+            <button type="submit" className="button button-primary button-submit button-block">
+              Sign in with code
+            </button>
+            <button type="button" className="button button-secondary" data-use-different-email>
+              Use a different email
+            </button>
+          </div>
+        </form>
+        <div data-confirmation role="status" aria-live="polite" hidden={!hasSuccess}>
+          <div className="login-actions">
+            <button
+              type="button"
+              className="button button-secondary"
+              data-use-different-email-no-otp
+            >
+              Use a different email
+            </button>
+          </div>
+        </div>
+        {hasError && (
+          <p id={feedbackId} role="alert" className="message message-error">
+            {errorMessage}
+          </p>
+        )}
         <Script id="login-form-enhancements" strategy="afterInteractive">
           {`
 const form = document.querySelector('[data-login-form]');
 const submitButton = document.querySelector('[data-submit-button]');
 const spinner = document.querySelector('[data-submit-spinner]');
 const label = document.querySelector('[data-submit-label]');
+const otpForm = document.querySelector('[data-otp-form]');
+const otpChallenge = document.querySelector('[data-otp-challenge]');
+const otpCode = document.querySelector('[data-otp-code]');
+const useDifferentEmailButton = document.querySelector('[data-use-different-email]');
+const useDifferentEmailNoOtpButton = document.querySelector('[data-use-different-email-no-otp]');
+const confirmation = document.querySelector('[data-confirmation]');
+const title = document.querySelector('[data-login-title]');
+const help = document.querySelector('[data-login-help]');
 const feedbackId = 'login-feedback';
+
+function showEmailForm() {
+  if (form instanceof HTMLFormElement) form.hidden = false;
+  if (otpForm instanceof HTMLFormElement) otpForm.hidden = true;
+  if (confirmation instanceof HTMLElement) confirmation.hidden = true;
+  if (title instanceof HTMLElement) title.textContent = 'Sign in';
+  if (help instanceof HTMLElement) help.textContent = "We'll email you a sign-in link.";
+  const emailInput = form?.querySelector('#email');
+  if (emailInput instanceof HTMLInputElement) emailInput.focus();
+}
+
+function showConfirmation(challengeId, otpLength) {
+  if (form instanceof HTMLFormElement) form.hidden = true;
+  if (title instanceof HTMLElement) title.textContent = 'Check your email';
+  if (help instanceof HTMLElement) {
+    help.textContent = 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.';
+  }
+  if (challengeId !== null && otpForm instanceof HTMLFormElement && otpChallenge instanceof HTMLInputElement) {
+    otpChallenge.value = challengeId;
+    otpForm.hidden = false;
+    if (confirmation instanceof HTMLElement) confirmation.hidden = true;
+    if (otpCode instanceof HTMLInputElement) {
+      otpCode.minLength = otpLength;
+      otpCode.maxLength = otpLength;
+      otpCode.placeholder = otpLength === 6 ? '123456' : '';
+      otpCode.focus();
+    }
+    return;
+  }
+  if (otpForm instanceof HTMLFormElement) otpForm.hidden = true;
+  if (confirmation instanceof HTMLElement) confirmation.hidden = false;
+}
 
 function ensureFeedbackElement() {
   const existing = document.getElementById(feedbackId);
@@ -115,14 +201,15 @@ function ensureFeedbackElement() {
     return existing;
   }
 
-  if (!(form instanceof HTMLFormElement)) {
+  const panel = form?.parentElement;
+  if (!(panel instanceof HTMLElement)) {
     return null;
   }
 
   const message = document.createElement('p');
   message.id = feedbackId;
   message.hidden = true;
-  form.append(message);
+  panel.append(message);
   return message;
 }
 
@@ -149,24 +236,22 @@ if (
         },
       });
       const payload = await response.json().catch(() => null);
-      const message =
-        typeof payload === 'object' &&
-        payload !== null &&
-        'message' in payload &&
-        typeof payload.message === 'string'
-          ? payload.message
-          : response.ok
-            ? 'Verification email sent'
+      if (response.ok && feedback instanceof HTMLParagraphElement) {
+        feedback.hidden = true;
+      }
+      if (!response.ok && feedback instanceof HTMLParagraphElement) {
+        const message =
+          typeof payload === 'object' &&
+          payload !== null &&
+          'message' in payload &&
+          typeof payload.message === 'string'
+            ? payload.message
             : 'We could not send the sign-in email. Please try again.';
-
-      if (feedback instanceof HTMLParagraphElement) {
         feedback.hidden = false;
         feedback.textContent = message;
-        feedback.setAttribute('role', response.ok ? 'status' : 'alert');
-        feedback.setAttribute('aria-live', response.ok ? 'polite' : 'assertive');
-        feedback.className = response.ok
-          ? 'message message-success'
-          : 'message message-error';
+        feedback.setAttribute('role', 'alert');
+        feedback.setAttribute('aria-live', 'assertive');
+        feedback.className = 'message message-error';
       }
 
       if (response.ok) {
@@ -174,6 +259,17 @@ if (
         if (emailInput instanceof HTMLInputElement) {
           emailInput.value = '';
         }
+        const challengeId =
+          typeof payload === 'object' && payload !== null &&
+          'otpChallengeId' in payload && typeof payload.otpChallengeId === 'string'
+            ? payload.otpChallengeId
+            : null;
+        const otpLength =
+          typeof payload === 'object' && payload !== null &&
+          'otpLength' in payload && Number.isInteger(payload.otpLength) && payload.otpLength > 0
+            ? payload.otpLength
+            : 6;
+        showConfirmation(challengeId, otpLength);
       }
     } catch {
       if (feedback instanceof HTMLParagraphElement) {
@@ -188,6 +284,52 @@ if (
       submitButton.setAttribute('aria-disabled', 'false');
       spinner.classList.remove('button-spinner-visible');
       label.textContent = 'Send magic link';
+    }
+  });
+}
+
+if (
+  form instanceof HTMLFormElement &&
+  otpForm instanceof HTMLFormElement &&
+  otpChallenge instanceof HTMLInputElement &&
+  useDifferentEmailButton instanceof HTMLButtonElement
+) {
+  useDifferentEmailButton.addEventListener('click', () => {
+    otpChallenge.value = '';
+    if (otpCode instanceof HTMLInputElement) otpCode.value = '';
+    const feedback = document.getElementById(feedbackId);
+    if (feedback instanceof HTMLParagraphElement) feedback.hidden = true;
+    showEmailForm();
+  });
+}
+
+if (useDifferentEmailNoOtpButton instanceof HTMLButtonElement) {
+  useDifferentEmailNoOtpButton.addEventListener('click', () => {
+    const feedback = document.getElementById(feedbackId);
+    if (feedback instanceof HTMLParagraphElement) feedback.hidden = true;
+    showEmailForm();
+  });
+}
+
+if (otpForm instanceof HTMLFormElement) {
+  otpForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const response = await fetch(otpForm.action, {
+      method: 'POST',
+      body: new FormData(otpForm),
+      headers: { accept: 'application/json' },
+    });
+    if (response.ok) {
+      const returnUrl = otpForm.querySelector('input[name="returnUrl"]');
+      if (returnUrl instanceof HTMLInputElement) window.location.assign(returnUrl.value);
+      return;
+    }
+    const feedback = ensureFeedbackElement();
+    if (feedback instanceof HTMLParagraphElement) {
+      feedback.hidden = false;
+      feedback.textContent = 'Invalid or expired code.';
+      feedback.setAttribute('role', 'alert');
+      feedback.className = 'message message-error';
     }
   });
 }

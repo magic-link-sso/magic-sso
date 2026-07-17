@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, '..');
 const DEFAULT_MANAGER_AUDIT_INTEGRITY_KEY = 'manager-dev-audit-integrity-key-1234567890';
+const DEFAULT_MANAGER_DEV_OTP_SECRET = 'manager-dev-otp-secret-1234567890abcd';
 
 /**
  * @typedef {{
@@ -171,14 +172,15 @@ export function buildManagerDevEnvironment(env, root = repositoryRoot) {
     const managerUpstreamPort = mergedEnv.MANAGER_UPSTREAM_PORT ?? '4311';
     const serverOrigin = mergedEnv.MANAGER_DEV_SERVER_ORIGIN ?? 'http://127.0.0.1:3000';
     const publicOrigin =
-        mergedEnv.MANAGER_DEV_PUBLIC_ORIGIN ?? `http://localhost:${managerPublicPort}`;
+        mergedEnv.MANAGER_DEV_PUBLIC_ORIGIN ?? `http://manager.localhost:${managerPublicPort}`;
     const gateUpstreamOrigin =
         mergedEnv.MANAGER_DEV_GATE_UPSTREAM_ORIGIN ?? `http://127.0.0.1:${managerUpstreamPort}`;
     const mailpitSmtpPort = mergedEnv.MAILPIT_SMTP_PORT ?? '1025';
-    const photosOrigin = mergedEnv.MANAGER_DEV_PHOTOS_ORIGIN ?? 'http://localhost:5001';
+    const photosOrigin = mergedEnv.MANAGER_DEV_PHOTOS_ORIGIN ?? 'http://photos.localhost:5001';
     const photosOwnerEmail = mergedEnv.PHOTOS_OWNER_EMAIL ?? 'owner@example.com';
     const photosFriendEmail = mergedEnv.PHOTOS_FRIEND_EMAIL ?? 'friend@example.com';
     const photosFamilyEmail = mergedEnv.PHOTOS_FAMILY_EMAIL ?? 'family@example.com';
+    const otpEnabled = mergedEnv.MAGICSSO_OTP_ENABLED === 'true';
 
     return {
         ...mergedEnv,
@@ -199,6 +201,8 @@ export function buildManagerDevEnvironment(env, root = repositoryRoot) {
         MAGIC_GATE_RENDER_WS_ENABLED: 'true',
         MAGICSSO_CONFIG_FILE: join(paths.managerRuntimeDirectory, 'magic-sso.runtime.toml'),
         MAGICSSO_MANAGER_CONFIG_FILE: paths.managerConfigFilePath,
+        MAGICSSO_OTP_ENABLED: otpEnabled ? 'true' : 'false',
+        MAGICSSO_OTP_SECRET: mergedEnv.MAGICSSO_OTP_SECRET ?? DEFAULT_MANAGER_DEV_OTP_SECRET,
         MAILPIT_SMTP_PORT: mailpitSmtpPort,
         MANAGER_DEV_PUBLIC_ORIGIN: publicOrigin,
         MANAGER_DEV_PHOTOS_ORIGIN: photosOrigin,

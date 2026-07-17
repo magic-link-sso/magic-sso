@@ -28,10 +28,48 @@
 
 'use server';
 
-export type SendMagicLinkResult = { success: true } | { message: string; success: false };
+import { cookies } from 'next/headers';
+import {
+    buildAuthCookieOptions,
+    getJwtSecret,
+    getPublicOrigin,
+    getServerIssuer,
+    verifyAuthToken,
+} from '../../lib/auth';
+
+export type SendMagicLinkResult =
+    | {
+          otpChallengeId?: string | undefined;
+          otpExpiresInSeconds?: number | undefined;
+          otpLength?: number | undefined;
+          success: true;
+      }
+    | { message: string; success: false };
+
+export type VerifyEmailOtpResult = { success: true } | { message: string; success: false };
 
 interface ErrorMessageResponse {
     message?: string;
+}
+
+function readOtpMetadata(
+    value: unknown,
+): Omit<Extract<SendMagicLinkResult, { success: true }>, 'success'> {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+    const challengeId = Reflect.get(value, 'otpChallengeId');
+    const expiresInSeconds = Reflect.get(value, 'otpExpiresInSeconds');
+    const length = Reflect.get(value, 'otpLength');
+    return typeof challengeId === 'string' &&
+        typeof expiresInSeconds === 'number' &&
+        typeof length === 'number'
+        ? {
+              otpChallengeId: challengeId,
+              otpExpiresInSeconds: expiresInSeconds,
+              otpLength: length,
+          }
+        : {};
 }
 
 async function readErrorMessage(response: Response): Promise<string | undefined> {
@@ -75,8 +113,56 @@ export async function sendMagicLink(
             };
         }
 
-        return { success: true };
+        const payload: unknown = await response.json().catch(() => null);
+        return { success: true, ...readOtpMetadata(payload) };
     } catch {
         return { success: false, message: 'Failed to send verification email.' };
+    }
+}
+
+export async function verifyEmailOtp(
+    challengeId: string,
+    code: string,
+): Promise<VerifyEmailOtpResult> {
+    const serverUrl = process.env.MAGICSSO_SERVER_URL;
+    const jwtSecret = getJwtSecret();
+    const audience = getPublicOrigin();
+    const issuer = getServerIssuer();
+    if (
+        typeof serverUrl !== 'string' ||
+        serverUrl.length === 0 ||
+        jwtSecret === null ||
+        audience === null ||
+        issuer === null
+    ) {
+        return { success: false, message: 'Magic Link SSO server configuration is incomplete.' };
+    }
+    try {
+        const response = await fetch(new URL('/verify-email/otp', serverUrl), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ challengeId, code }),
+            cache: 'no-store',
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        const token =
+            typeof payload === 'object' && payload !== null
+                ? Reflect.get(payload, 'accessToken')
+                : undefined;
+        if (!response.ok || typeof token !== 'string') {
+            return { success: false, message: 'Invalid or expired code.' };
+        }
+        const verified = await verifyAuthToken(token, jwtSecret, {
+            expectedAudience: audience,
+            expectedIssuer: issuer,
+        });
+        if (verified === null) {
+            return { success: false, message: 'Invalid or expired code.' };
+        }
+        const cookieStore = await cookies();
+        cookieStore.set(buildAuthCookieOptions(token));
+        return { success: true };
+    } catch {
+        return { success: false, message: 'Invalid or expired code.' };
     }
 }

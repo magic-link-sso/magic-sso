@@ -62,8 +62,14 @@ The example includes:
 
 - an SSR-aware `magicSsoAuthGuard`
 - a local `/api/signin` endpoint for requesting magic links
+- a local `/api/verify-email/otp` endpoint for server-side OTP exchange
 - `/verify-email` and POST-only `/logout` handlers in the Node SSR server
 - a same-origin `/api/session` endpoint used for client-side guard checks
+
+When the server enables `[auth.otp]`, the login page shows one paste-friendly
+code input after the email request. The browser sends the code only to the
+Angular SSR server, which validates the SSO response before setting its
+HTTP-only session cookie.
 
 Protect a route with the reusable guard:
 

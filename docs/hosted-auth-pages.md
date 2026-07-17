@@ -33,14 +33,24 @@ The hosted HTML flow now ships with security protections enabled by default:
 - hosted pages use a nonce-based Content Security Policy (CSP), so the bundled
   inline `<style>` and `<script>` tags are allowed without opening up
   `unsafe-inline`
-- browser form posts to `POST /signin` and `POST /verify-email` require a CSRF
-  token that is minted by the preceding hosted page response
+- browser form posts to `POST /signin`, `POST /verify-email`, and
+  `POST /verify-email/otp` require a CSRF token that is minted by the preceding
+  hosted page response
 - `GET /verify-email` is preview-only and never consumes the one-time token;
   trusted preview callers send the shared `X-Magic-SSO-Preview-Secret` /
   `MAGICSSO_PREVIEW_SECRET`, and only an explicit `POST /verify-email` exchange
   can mint an auth cookie or JSON access token
 - JSON API clients should exchange verification tokens with `POST /verify-email`
   and do not need to send a CSRF token
+
+When `[auth.otp].enabled = true`, a successful hosted sign-in also shows a
+single accessible code field in place of the email form.
+`POST /verify-email/otp` has the same CSRF and no-store protections, and the
+email contains both the regular magic link and the short code. An invalid code
+returns to that code-only view while attempts remain. An expired, exhausted, or
+already consumed challenge returns to the email form so the user can request a
+new message. The code is an alternative for an already-open mobile/PWA session,
+not a separate sign-in method or a second factor.
 
 If you terminate TLS at a reverse proxy, set `trustProxy` correctly so the
 server can recognize HTTPS requests and add HSTS on those responses.
@@ -148,6 +158,10 @@ Top-level fields:
 - `submitButton`
 - `skipLink`
 - `useDifferentEmailButton`
+- `otpLabel`
+- `otpPlaceholder`
+- `otpSubmitButton`
+- `otpHelpText`
 
 ### `verifyEmail`
 
@@ -168,6 +182,7 @@ their existing default-English messages.
 - `failedToSendEmail`
 - `verificationEmailSent`
 - `invalidOrExpiredToken`
+- `invalidOrExpiredOtp`
 
 Any missing field falls back to the built-in default text.
 
@@ -282,6 +297,7 @@ These settings affect only the server-hosted HTML pages:
 - `GET /verify-email?token=...`
 - `POST /signin` HTML responses
 - `POST /verify-email` HTML responses
+- `POST /verify-email/otp` HTML responses
 
 They do not change:
 

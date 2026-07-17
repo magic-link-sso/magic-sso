@@ -10,6 +10,7 @@ import {
     getMagicSsoConfig,
     getJwtSecret,
     getRequestOrigin,
+    hasSameOriginMutationSource,
     isPublicPath,
     normaliseReturnUrl,
     resolveMagicSsoConfig,
@@ -452,6 +453,48 @@ describe('getRequestOrigin', () => {
         expect(getRequestOrigin(event, { allowRequestUrlFallback: true })).toBe(
             'http://app.example.com',
         );
+    });
+});
+
+describe('hasSameOriginMutationSource', () => {
+    function createMutationEvent(headers: Record<string, string>) {
+        return {
+            ...createEvent('http://internal.example.local/verify-email/otp'),
+            context: {
+                nitro: {
+                    runtimeConfig: {
+                        magicSso: {
+                            publicOrigin: 'https://app.example.com',
+                        },
+                    },
+                },
+            },
+            node: {
+                req: {
+                    headers,
+                },
+            },
+        };
+    }
+
+    it('rejects cross-origin and source-less mutations', () => {
+        expect(
+            hasSameOriginMutationSource(
+                createMutationEvent({ origin: 'https://evil.example.com' }),
+            ),
+        ).toBe(false);
+        expect(hasSameOriginMutationSource(createMutationEvent({}))).toBe(false);
+    });
+
+    it('accepts an exact Origin or same-origin Referer', () => {
+        expect(
+            hasSameOriginMutationSource(createMutationEvent({ origin: 'https://app.example.com' })),
+        ).toBe(true);
+        expect(
+            hasSameOriginMutationSource(
+                createMutationEvent({ referer: 'https://app.example.com/login' }),
+            ),
+        ).toBe(true);
     });
 });
 

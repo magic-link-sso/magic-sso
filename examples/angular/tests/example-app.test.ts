@@ -71,6 +71,7 @@ describe('Angular example app', () => {
         ]);
 
         expect(serverSource).toMatch(/app\.post\(\s*'\/api\/signin'/u);
+        expect(serverSource).toMatch(/app\.post\(\s*'\/api\/verify-email\/otp'/u);
         expect(serverSource).toMatch(/app\.get\(\s*'\/verify-email'/u);
         expect(serverSource).toMatch(/app\.post\(\s*'\/verify-email'/u);
         expect(serverSource).toContain("app.post('/logout'");
@@ -89,6 +90,7 @@ describe('Angular example app', () => {
         expect(serverSource).toContain("method: 'POST'");
         expect(serverSource).toContain("'content-type': 'application/json'");
         expect(serverSource).toContain('hasSameOriginMutationSource');
+        expect(serverSource).toContain('exchangeEmailOtp');
         expect(serverSource).not.toContain('name="token"');
         expect(serverSource).toContain('@media (prefers-color-scheme: dark)');
         expect(signinUtils).toContain('readServerUrlConfigError');
@@ -110,6 +112,13 @@ describe('Angular example app', () => {
 
         expect(loginPage).toMatch(/buildVerifyUrl/u);
         expect(loginPage).toMatch(/buildLoginTarget/u);
+        expect(loginPage).toMatch(/one-time-code/u);
+        expect(loginPage).toMatch(/api\/verify-email\/otp/u);
+        expect(loginPage).toMatch(/isConfirmation\(\)/u);
+        expect(loginPage).toContain("'Check your email'");
+        expect(loginPage).toContain("'123456'");
+        expect(loginPage).toMatch(/Use a different email/u);
+        expect(loginPage).toMatch(/useDifferentEmail\(\): void/u);
         expect(loginUtils).toMatch(/getLoginErrorMessage/u);
         expect(loginUtils).toMatch(/normaliseReturnUrl/u);
         expect(loginUtils).toMatch(/buildLoginTarget/u);

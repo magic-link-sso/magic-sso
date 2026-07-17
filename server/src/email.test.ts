@@ -88,6 +88,14 @@ function createConfig(): AppConfig {
         jwtExpirationSeconds: 60 * 60,
         jwtSecret: 'jwt-secret',
         logLevel: 'info',
+        otp: {
+            allowedAttempts: 3,
+            enabled: false,
+            expirationSeconds: 5 * 60,
+            length: 6,
+            resendStrategy: 'rotate',
+            secret: undefined,
+        },
         rateLimitWindowMs: 60_000,
         securityState: {
             adapter: 'file',
@@ -170,6 +178,27 @@ describe('buildVerificationLink', () => {
                 to: 'allowed@example.com',
             }),
         );
+    });
+
+    it('includes a one-time code only when OTP is enabled for the email', async () => {
+        sendMailMock.mockResolvedValue(undefined);
+        const emailSender = createVerificationEmailSender(createConfig());
+
+        await emailSender.sendVerificationEmail({
+            email: 'allowed@example.com',
+            otpCode: '012345',
+            otpExpiresInSeconds: 300,
+            siteTitle: 'Client Portal',
+            token: 'email-token',
+            verifyUrl: 'http://client.example.com/verify-email',
+        });
+
+        const firstCall = sendMailMock.mock.calls[0]?.[0];
+        expect(firstCall?.text).toContain('012345');
+        expect(firstCall?.html).toContain('012345');
+        expect(firstCall?.text).toContain('This code expires in 5 minutes');
+        expect(firstCall?.html).toContain('This code expires in 5 minutes');
+        expect(firstCall?.html).not.toContain('token=email-token&otp=');
     });
 
     it('falls back to the next SMTP transport when the primary one fails', async () => {

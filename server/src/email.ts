@@ -23,6 +23,8 @@ import type { AppConfig, SmtpTransportConfig } from './config.js';
 
 export interface VerificationEmailInput {
     email: string;
+    otpCode?: string | undefined;
+    otpExpiresInSeconds?: number | undefined;
     siteTitle: string;
     token: string;
     verifyUrl: string;
@@ -86,14 +88,21 @@ function buildTextBody(
     siteTitle: string,
     expirationText: string,
     signature: string,
+    otpCode: string | undefined,
+    otpExpirationText: string | undefined,
 ): string {
     const signatureBlock = signature.length > 0 ? `\n${signature}` : '';
+
+    const otpBlock =
+        typeof otpCode === 'string' && typeof otpExpirationText === 'string'
+            ? `\n\nOr enter this one-time code in the app you already opened:\n\n${otpCode}\n\nThis code expires in ${otpExpirationText} and can only be used once.`
+            : '';
 
     return `Hello,
 
 Click the link below to sign in to ${siteTitle}:
 
-${verificationLink}
+${verificationLink}${otpBlock}
 
 For your security, this link expires in ${expirationText} and can only be used once.
 
@@ -107,12 +116,20 @@ function buildHtmlBody(
     siteTitle: string,
     expirationText: string,
     signature: string,
+    otpCode: string | undefined,
+    otpExpirationText: string | undefined,
 ): string {
     const escapedVerificationLink = escapeHtml(verificationLink);
     const escapedSiteTitle = escapeHtml(siteTitle);
     const escapedExpirationText = escapeHtml(expirationText);
     const escapedSignature = escapeHtml(signature);
     const signatureMarkup = escapedSignature.length > 0 ? `<br>${escapedSignature}` : '';
+    const otpMarkup =
+        typeof otpCode === 'string' && typeof otpExpirationText === 'string'
+            ? `<p>Or enter this one-time code in the app you already opened:</p>
+        <p><strong style="font-size: 1.5rem; letter-spacing: 0.18em;">${escapeHtml(otpCode)}</strong></p>
+        <p>This code expires in ${escapeHtml(otpExpirationText)} and can only be used once.</p>`
+            : '';
 
     return `<!DOCTYPE html>
 <html>
@@ -147,6 +164,7 @@ function buildHtmlBody(
         <h2>Hello,</h2>
         <p>Click the button below to sign in to ${escapedSiteTitle}:</p>
         <p><a href="${escapedVerificationLink}" class="button">Sign In</a></p>
+        ${otpMarkup}
         <p>For your security, this link expires in ${escapedExpirationText} and can only be used once.</p>
         <p>If you did not request this email, you can safely ignore it.</p>
         <p>Thanks,${signatureMarkup}</p>
@@ -179,6 +197,10 @@ export function createVerificationEmailSender(config: AppConfig): VerificationEm
                     ? input.siteTitle
                     : config.hostedAuthBranding.title;
             const expirationText = formatEmailExpiration(config.emailExpirationSeconds);
+            const otpExpirationText =
+                typeof input.otpCode === 'string' && typeof input.otpExpiresInSeconds === 'number'
+                    ? formatEmailExpiration(input.otpExpiresInSeconds)
+                    : undefined;
             const signature = normaliseEmailSignature(config.emailSignature);
             let lastError: unknown;
 
@@ -188,8 +210,22 @@ export function createVerificationEmailSender(config: AppConfig): VerificationEm
                         from: config.emailFrom,
                         to: input.email,
                         subject: `Sign in to ${siteTitle}`,
-                        text: buildTextBody(verificationLink, siteTitle, expirationText, signature),
-                        html: buildHtmlBody(verificationLink, siteTitle, expirationText, signature),
+                        text: buildTextBody(
+                            verificationLink,
+                            siteTitle,
+                            expirationText,
+                            signature,
+                            input.otpCode,
+                            otpExpirationText,
+                        ),
+                        html: buildHtmlBody(
+                            verificationLink,
+                            siteTitle,
+                            expirationText,
+                            signature,
+                            input.otpCode,
+                            otpExpirationText,
+                        ),
                     });
                     return;
                 } catch (error) {

@@ -15,6 +15,7 @@ const nextLoginFormPath = path.join(rootDir, 'src/app/login/LoginForm.tsx');
 const nextLoginPagePath = path.join(rootDir, 'src/app/login/page.tsx');
 const nextLoginSigninPath = path.join(rootDir, 'src/app/login/signin.ts');
 const nextSignInRoutePath = path.join(rootDir, 'src/app/api/signin/route.ts');
+const nextVerifyOtpRoutePath = path.join(rootDir, 'src/app/api/verify-email/otp/route.ts');
 const nextLogoutRoutePath = path.join(rootDir, 'src/app/logout/route.ts');
 const nextVerifyEmailRoutePath = path.join(rootDir, 'src/app/verify-email/route.ts');
 const nextProtectedPagePath = path.join(rootDir, 'src/app/protected/page.tsx');
@@ -59,13 +60,15 @@ test('protected page references the shared protected badge icon', async () => {
 });
 
 test('login flow sends sign-in requests with a client verify callback', async () => {
-    const [loginPage, loginForm, loginSignin, signInRoute, verifyEmailRoute] = await Promise.all([
-        readFile(nextLoginPagePath, 'utf8'),
-        readFile(nextLoginFormPath, 'utf8'),
-        readFile(nextLoginSigninPath, 'utf8'),
-        readFile(nextSignInRoutePath, 'utf8'),
-        readFile(nextVerifyEmailRoutePath, 'utf8'),
-    ]);
+    const [loginPage, loginForm, loginSignin, signInRoute, verifyOtpRoute, verifyEmailRoute] =
+        await Promise.all([
+            readFile(nextLoginPagePath, 'utf8'),
+            readFile(nextLoginFormPath, 'utf8'),
+            readFile(nextLoginSigninPath, 'utf8'),
+            readFile(nextSignInRoutePath, 'utf8'),
+            readFile(nextVerifyOtpRoutePath, 'utf8'),
+            readFile(nextVerifyEmailRoutePath, 'utf8'),
+        ]);
 
     assert.match(loginPage, /appOrigin/u);
     assert.match(loginPage, /getAppOrigin/u);
@@ -80,10 +83,17 @@ test('login flow sends sign-in requests with a client verify callback', async ()
     assert.match(loginSignin, /new URL\('\/signin', serverUrl\)/u);
     assert.match(signInRoute, /buildLoginRedirect/u);
     assert.match(signInRoute, /success: 'verification-email-sent'/u);
-    assert.match(
-        signInRoute,
-        /NextResponse\.json\(\{ message: 'Verification email sent', success: true \}\)/u,
-    );
+    assert.match(signInRoute, /otpChallengeId/u);
+    assert.match(loginForm, /one-time-code/u);
+    assert.match(loginForm, /api\/verify-email\/otp/u);
+    assert.match(loginForm, /form\.hidden = true/u);
+    assert.match(loginForm, /Use a different email/u);
+    assert.match(loginForm, /otpChallenge\.value = ''/u);
+    assert.match(loginForm, /Check your email/u);
+    assert.match(loginForm, /showConfirmation/u);
+    assert.match(loginForm, /otpCode\.maxLength = otpLength/u);
+    assert.match(loginForm, /otpCode\.placeholder = otpLength === 6 \? '123456' : ''/u);
+    assert.match(verifyOtpRoute, /VerifyEmailOtpRoute/u);
     assert.match(verifyEmailRoute, /verify-email/u);
     assert.match(verifyEmailRoute, /export async function POST/u);
     assert.match(verifyEmailRoute, /method:\s*'POST'/u);

@@ -32,6 +32,8 @@ from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.html import format_html
+from django.utils.safestring import SafeString
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from .auth_utils import verify_access_token
@@ -118,6 +120,26 @@ def normalise_scope(scope: str | None) -> str | None:
     return normalised_scope if normalised_scope else None
 
 
+def build_otp_input_attributes(otp_length: int | None) -> SafeString:
+    if not isinstance(otp_length, int) or otp_length < 1:
+        return SafeString('')
+    if otp_length == 6:
+        return format_html(
+            'minlength="{}" maxlength="{}" placeholder="123456"',
+            otp_length,
+            otp_length,
+        )
+    return format_html('minlength="{}" maxlength="{}"', otp_length, otp_length)
+
+
+def build_otp_code_input(otp_length: int | None) -> SafeString:
+    return format_html(
+        '<input id="otp-code" type="text" name="code" autocomplete="one-time-code" '
+        'inputmode="numeric" pattern="[0-9]*" {} aria-describedby="otp-help" required autofocus />',
+        build_otp_input_attributes(otp_length),
+    )
+
+
 @csrf_protect
 def login(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
@@ -148,11 +170,26 @@ def login(request: HttpRequest) -> HttpResponse:
                 },
             )
         if response.status_code == 200:
+            try:
+                response_data = response.json()
+            except ValueError:
+                response_data = {}
             data = {
-                'message': 'Email sent, check your inbox',
+                'confirmation': True,
                 'return_url': return_url,
                 'scope': scope,
             }
+            challenge_id = response_data.get('otpChallengeId')
+            otp_length = response_data.get('otpLength')
+            if (
+                isinstance(challenge_id, str)
+                and challenge_id != ''
+                and isinstance(otp_length, int)
+                and otp_length > 0
+            ):
+                data['otp_challenge_id'] = challenge_id
+                data['otp_length'] = otp_length
+                data['otp_code_input'] = build_otp_code_input(otp_length)
         elif response.status_code == 403:
             data = {'error': 'Forbidden', 'return_url': return_url, 'scope': scope}
         else:
@@ -300,4 +337,59 @@ def verify_token(request: HttpRequest) -> HttpResponse:
         request,
         'verify_email.html',
         {'email': email, 'return_url': return_url, 'token': token},
+    )
+
+
+@csrf_protect
+@require_POST
+def verify_otp(request: HttpRequest) -> HttpResponse:
+    challenge_id = request.POST.get('challengeId')
+    code = request.POST.get('code')
+    return_url = normalise_return_url(request, request.POST.get('returnUrl'))
+    otp_length_value = request.POST.get('otpLength')
+    otp_length = (
+        int(otp_length_value)
+        if otp_length_value and otp_length_value.isdigit() and int(otp_length_value) > 0
+        else None
+    )
+    otp_context = {
+        'confirmation': True,
+        'otp_challenge_id': challenge_id,
+        'otp_code_input': build_otp_code_input(otp_length),
+        'otp_length': otp_length,
+        'return_url': return_url,
+    }
+    if (
+        not isinstance(challenge_id, str)
+        or challenge_id == ''
+        or not isinstance(code, str)
+        or code == ''
+    ):
+        return render(
+            request,
+            'login.html',
+            {**otp_context, 'error': 'Invalid or expired code.'},
+        )
+
+    try:
+        response = requests.post(
+            f'{settings.MAGICSSO_SERVER_URL}/verify-email/otp',
+            json={'challengeId': challenge_id, 'code': code},
+            timeout=getattr(settings, 'MAGICSSO_REQUEST_TIMEOUT', REQUEST_TIMEOUT_SECONDS),
+        )
+        response_data = response.json() if response.status_code == 200 else {}
+    except (requests.RequestException, ValueError):
+        response_data = {}
+
+    access_token = response_data.get('accessToken')
+    if isinstance(access_token, str) and verify_access_token(access_token, request) is not None:
+        cookie_options = get_magic_sso_cookie_options()
+        redirect_response = redirect(return_url)
+        redirect_response.set_cookie(settings.MAGICSSO_COOKIE_NAME, access_token, **cookie_options)
+        return redirect_response
+
+    return render(
+        request,
+        'login.html',
+        {**otp_context, 'error': 'Invalid or expired code.'},
     )

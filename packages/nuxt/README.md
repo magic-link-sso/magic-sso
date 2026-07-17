@@ -17,7 +17,8 @@ Peer dependencies:
 
 - the default Nuxt module export
 - a named `magic-sso-auth` route middleware
-- `/verify-email` and POST-only `/logout` server routes
+- `/verify-email`, `POST /verify-email/otp`, and POST-only `/logout` server
+  routes
 - app composables such as `useMagicSsoAuth()` and `useMagicSsoConfig()`
 - server utilities exposed from `@magic-link-sso/nuxt/server`
 
@@ -129,6 +130,12 @@ const auth = await verifyAuthToken(token, secret, {
     expectedIssuer: 'https://sso.example.com',
 });
 ```
+
+### Exchange an email OTP
+
+The module installs `POST /verify-email/otp` for app-owned sign-in forms. Send
+`challengeId` and `code` to that local route; it exchanges and validates the
+access token server-side before setting the HTTP-only auth cookie.
 
 ## Example App
 

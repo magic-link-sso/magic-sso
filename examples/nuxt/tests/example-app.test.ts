@@ -86,6 +86,11 @@ describe('Nuxt example app', () => {
             ]);
 
         expect(loginPage).toMatch(/verifyUrl/u);
+        expect(loginPage).toContain('v-if="!isConfirmation"');
+        expect(loginPage).toContain("'Check your email'");
+        expect(loginPage).toContain("'123456'");
+        expect(loginPage).toContain('Use a different email');
+        expect(loginPage).toMatch(/\.\.\.result\.value/u);
         expect(signInRoute).toMatch(/verifyUrl/u);
         expect(signInRoute).toContain('fetch(`${serverUrl}/signin`');
         expect(signInRoute).toContain('process.env.MAGICSSO_SERVER_URL');

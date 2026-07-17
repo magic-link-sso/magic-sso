@@ -30,6 +30,8 @@ Peer dependencies:
   JWT.
 - `sendMagicLink(email, returnUrl, scope?)` Small server-action helper that
   posts to the SSO server.
+- `verifyEmailOtp(challengeId, code)` Exchanges an email code server-side and
+  sets the normal HTTP-only auth cookie.
 - `LogoutRoute(request)` Route-handler helper for clearing the auth cookie and
   redirecting home.
 
@@ -122,6 +124,14 @@ const payload = await verifyAuthToken(token, secret, {
     expectedIssuer: 'https://sso.example.com',
 });
 ```
+
+### Exchange an email OTP
+
+When the server enables `[auth.otp]`, `sendMagicLink()` returns public OTP
+metadata. Submit the code through the server action
+`verifyEmailOtp(challengeId, code)`: it calls the SSO server server-side,
+validates issuer/audience, and sets the same HTTP-only auth cookie. Do not keep
+codes or returned tokens in client storage.
 
 ## Example App
 

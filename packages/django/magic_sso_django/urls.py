@@ -31,4 +31,5 @@ urlpatterns = [
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
     path('verify-email/', views.verify_token, name='verify_email'),
+    path('verify-email/otp/', views.verify_otp, name='verify_email_otp'),
 ]

@@ -33,6 +33,18 @@ emailSecret = "replace-me-with-a-different-long-random-email-secret"
 previewSecret = "replace-me-with-a-different-long-random-preview-secret"
 emailExpiration = "15m"
 
+# Optional email OTP is an alternative way to consume the same one-time
+# verification grant. Leave it disabled to keep the existing magic-link flow.
+[auth.otp]
+enabled = false
+length = 6
+expiration = "5m"
+allowedAttempts = 3
+# A resend for the same email/site/scope/redirect binding revokes the older code.
+resendStrategy = "rotate"
+# Required only when enabled; use a distinct 32+ character secret.
+# secret = "replace-me-with-a-dedicated-long-random-otp-secret"
+
 [cookie]
 name = "magic-sso"
 httpOnly = true

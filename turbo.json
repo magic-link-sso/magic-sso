@@ -80,6 +80,7 @@
         "dev": {
             "cache": false,
             "env": [
+                "MAGICSSO_CONFIG_FILE",
                 "MAGICSSO_COOKIE_NAME",
                 "MAGICSSO_DIRECT_USE",
                 "MAGICSSO_JWT_SECRET",

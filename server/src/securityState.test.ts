@@ -58,6 +58,14 @@ function createConfig(): AppConfig {
         jwtSecret: 'jwt-secret',
         logFormat: 'json',
         logLevel: 'info',
+        otp: {
+            allowedAttempts: 3,
+            enabled: false,
+            expirationSeconds: 5 * 60,
+            length: 6,
+            resendStrategy: 'rotate',
+            secret: undefined,
+        },
         rateLimitWindowMs: 60_000,
         securityState: {
             adapter: 'redis',

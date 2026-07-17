@@ -120,6 +120,10 @@ The manager never edits `magic-sso.base.toml` in place. If an operator changes
 the base config, the manager reacts by rebuilding `magic-sso.runtime.toml` from
 the base file and manager state.
 
+Email OTP remains operator-owned in v1. Put `[auth.otp]` (including its
+dedicated secret) in `magic-sso.base.toml`; the manager preserves that table in
+generated runtime TOML, but never displays or edits the secret.
+
 For setup, volume ownership, and permissions guidance, see
 [Managed mode setup and operations](../docs/managed-mode.md).
 
@@ -274,6 +278,16 @@ For day-to-day manager UI work, use the workspace-level hot-reload stack:
 ```sh
 pnpm dev:manager
 ```
+
+To exercise its OTP flow, use `pnpm dev:manager:otp`. For container parity, use
+`pnpm dev:manager:otp:stack`. These are explicit opt-ins; the existing manager
+commands continue to render OTP as disabled. You can override the local-only
+`MAGICSSO_OTP_SECRET` when needed.
+
+The hot-reload stack uses `http://manager.localhost:4306` for the manager and
+`http://photos.localhost:5001` for Photos. The distinct hostnames keep manager
+and Photos authentication and OTP cookies isolated; browser cookies are shared
+between different ports of the same hostname.
 
 That command:
 

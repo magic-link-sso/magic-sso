@@ -8,5 +8,7 @@ export default authMiddleware;
 
 // Apply auth to all routes except the explicitly public ones.
 export const config = {
-    matcher: ['/((?!login|logout|verify-email|api/signin|public|_next|favicon.ico).+)'],
+    matcher: [
+        '/((?!login|logout|verify-email|api/signin|api/verify-email/otp|public|_next|favicon.ico).+)',
+    ],
 };

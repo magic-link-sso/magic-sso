@@ -11,15 +11,22 @@ rectangle "Email Inbox" as Email
 
 User --> App : 1. Open protected page
 App --> SSO : 2. Start sign-in flow\n(framework integration or Gate)
-SSO --> Email : 3. Send magic link
-Email --> User : 4. Deliver sign-in link
-User --> App : 5. Return with verified session
+SSO --> Email : 3. Send magic link\n+ optional short OTP
+Email --> User : 4. Deliver one email verification grant
+User --> App : 5. Complete with link or code\nand return with verified session
 App --> User : 6. Serve protected page,\nAPI, or asset
 
 note bottom of App
 The protected target can be:
 - a framework app with direct integration
 - a private upstream behind Magic Link SSO Gate
+end note
+
+note bottom of SSO
+OTP is disabled by default.
+When enabled, it is an alternate way to
+consume the same one-time email grant,
+not a second authentication factor.
 end note
 
 @enduml

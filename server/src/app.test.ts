@@ -96,6 +96,14 @@ function createTestConfig(): AppConfig {
         jwtExpirationSeconds: 60 * 60,
         jwtSecret: 'jwt-secret',
         logLevel: 'info',
+        otp: {
+            allowedAttempts: 3,
+            enabled: false,
+            expirationSeconds: 5 * 60,
+            length: 6,
+            resendStrategy: 'rotate',
+            secret: undefined,
+        },
         rateLimitWindowMs: 60_000,
         previewSecret,
         securityState: {
@@ -1199,6 +1207,385 @@ describe('buildApp', () => {
         expect(payload?.siteId).toBe('client');
     });
 
+    it('issues a site-bound access token after a valid email OTP exchange', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 3,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+            sentEmails,
+        });
+
+        try {
+            const signInResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'allowed@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            expect(signInResponse.statusCode).toBe(200);
+            const signInPayload = signInResponse.json();
+            expect(signInPayload).toMatchObject({
+                message: 'Verification email sent',
+                otpExpiresInSeconds: 300,
+                otpLength: 6,
+            });
+            expect(signInPayload.otpChallengeId).toEqual(expect.any(String));
+            expect(signInResponse.body).not.toContain(sentEmails[0]?.otpCode ?? '');
+
+            const response = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    challengeId: signInPayload.otpChallengeId,
+                    code: sentEmails[0]?.otpCode,
+                },
+            });
+            expect(response.statusCode).toBe(200);
+            expect(response.headers['cache-control']).toContain('no-store');
+            const accessToken = response.json().accessToken;
+            expect(
+                await verifyAccessToken(accessToken, config.jwtSecret, {
+                    expectedAudience: 'http://client.example.com',
+                    expectedIssuer: config.appUrl,
+                }),
+            ).toMatchObject({ email: 'allowed@example.com', siteId: 'client' });
+        } finally {
+            await otpApp.close();
+        }
+    });
+
+    it('invalidates the previous OTP after resending the same login transaction', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 3,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+            sentEmails,
+        });
+
+        try {
+            const firstSignIn = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'allowed@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            const secondSignIn = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'allowed@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            const firstChallengeId = firstSignIn.json().otpChallengeId;
+            const secondChallengeId = secondSignIn.json().otpChallengeId;
+
+            const firstOtpResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    challengeId: firstChallengeId,
+                    code: sentEmails[0]?.otpCode,
+                },
+            });
+            expect(firstOtpResponse.statusCode).toBe(400);
+            expect(firstOtpResponse.json()).toEqual({ message: 'Invalid or expired code.' });
+
+            const secondOtpResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    challengeId: secondChallengeId,
+                    code: sentEmails[1]?.otpCode,
+                },
+            });
+            expect(secondOtpResponse.statusCode).toBe(200);
+        } finally {
+            await otpApp.close();
+        }
+    });
+
+    it('returns a valid browser OTP exchange through the trusted app callback', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 3,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+            sentEmails,
+        });
+        const returnUrl = 'http://client.example.com/protected';
+        const verifyUrl = `${returnUrl.replace('/protected', '/verify-email')}?returnUrl=${encodeURIComponent(returnUrl)}`;
+
+        try {
+            const signInPage = await otpApp.inject({
+                method: 'GET',
+                url: `/signin?returnUrl=${encodeURIComponent(returnUrl)}&verifyUrl=${encodeURIComponent(verifyUrl)}`,
+                headers: { accept: 'text/html' },
+            });
+            const signInResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: {
+                    accept: 'text/html',
+                    'content-type': 'application/x-www-form-urlencoded',
+                    cookie: getCookieHeader(signInPage),
+                },
+                payload: new URLSearchParams({
+                    csrfToken: extractHiddenInputValue(signInPage.body, 'csrfToken'),
+                    email: 'allowed@example.com',
+                    returnUrl,
+                    verifyUrl,
+                }).toString(),
+            });
+
+            expect(signInResponse.statusCode).toBe(200);
+            expect(signInResponse.headers['content-security-policy']).toContain(
+                "form-action 'self' http://client.example.com",
+            );
+            const code = sentEmails[0]?.otpCode ?? '';
+            const invalidCode = `${(Number.parseInt(code.slice(0, 1), 10) + 1) % 10}${code.slice(1)}`;
+
+            const invalidOtpResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: {
+                    accept: 'text/html',
+                    'content-type': 'application/x-www-form-urlencoded',
+                    cookie: getCookieHeader(signInResponse),
+                },
+                payload: new URLSearchParams({
+                    challengeId: extractHiddenInputValue(signInResponse.body, 'challengeId'),
+                    code: invalidCode,
+                    csrfToken: extractHiddenInputValue(signInResponse.body, 'csrfToken'),
+                    returnUrl,
+                    verifyUrl,
+                }).toString(),
+            });
+
+            expect(invalidOtpResponse.statusCode).toBe(200);
+            expect(invalidOtpResponse.body).toContain('autocomplete="one-time-code"');
+            expect(invalidOtpResponse.body).not.toContain('type="email"');
+            expect(invalidOtpResponse.headers['content-security-policy']).toContain(
+                "form-action 'self'",
+            );
+            expect(invalidOtpResponse.headers['content-security-policy']).toContain(
+                'http://client.example.com',
+            );
+            expect(invalidOtpResponse.headers['content-security-policy']).toContain(
+                'http://sso.example.com',
+            );
+            expect(extractHiddenInputValue(invalidOtpResponse.body, 'challengeId')).toBe(
+                extractHiddenInputValue(signInResponse.body, 'challengeId'),
+            );
+            expect(extractHiddenInputValue(invalidOtpResponse.body, 'returnUrl')).toBe(returnUrl);
+            expect(extractHiddenInputValue(invalidOtpResponse.body, 'verifyUrl')).toBe(verifyUrl);
+
+            const otpResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: {
+                    accept: 'text/html',
+                    'content-type': 'application/x-www-form-urlencoded',
+                    cookie: getCookieHeader(invalidOtpResponse),
+                },
+                payload: new URLSearchParams({
+                    challengeId: extractHiddenInputValue(invalidOtpResponse.body, 'challengeId'),
+                    code,
+                    csrfToken: extractHiddenInputValue(invalidOtpResponse.body, 'csrfToken'),
+                    returnUrl,
+                    verifyUrl,
+                }).toString(),
+            });
+
+            expect(otpResponse.statusCode).toBe(302);
+            const callbackUrl = new URL(otpResponse.headers.location ?? '');
+            expect(callbackUrl.origin).toBe('http://client.example.com');
+            expect(callbackUrl.pathname).toBe('/verify-email');
+            expect(callbackUrl.searchParams.get('returnUrl')).toBe(returnUrl);
+            const callbackToken = callbackUrl.searchParams.get('token');
+            expect(callbackToken).not.toBeNull();
+            await expect(
+                verifyEmailToken(callbackToken ?? '', config.emailSecret),
+            ).resolves.toMatchObject({
+                email: 'allowed@example.com',
+                returnUrl,
+                scope: FULL_ACCESS_SCOPE,
+                siteId: 'client',
+            });
+            expect(
+                getSetCookieHeaders(otpResponse).some((cookie) =>
+                    cookie.startsWith(`${config.cookieName}=`),
+                ),
+            ).toBe(false);
+        } finally {
+            await otpApp.close();
+        }
+    });
+
+    it('keeps the OTP sign-in response shape for forbidden emails', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 3,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+        });
+
+        try {
+            const response = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'blocked@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            expect(response.statusCode).toBe(200);
+            expect(response.json()).toMatchObject({
+                message: 'Verification email sent',
+                otpChallengeId: expect.any(String),
+                otpExpiresInSeconds: 300,
+                otpLength: 6,
+            });
+        } finally {
+            await otpApp.close();
+        }
+    });
+
+    it('invalidates the OTP challenge after the configured number of wrong attempts', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 2,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+            sentEmails,
+        });
+
+        try {
+            const signInResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'allowed@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            const challengeId = signInResponse.json().otpChallengeId;
+
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                const response = await otpApp.inject({
+                    method: 'POST',
+                    url: '/verify-email/otp',
+                    headers: { 'content-type': 'application/json' },
+                    payload: { challengeId, code: '999999' },
+                });
+                expect(response.statusCode).toBe(400);
+                expect(response.json()).toEqual({ message: 'Invalid or expired code.' });
+            }
+
+            const response = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: { 'content-type': 'application/json' },
+                payload: { challengeId, code: sentEmails[0]?.otpCode },
+            });
+            expect(response.statusCode).toBe(400);
+            expect(response.json()).toEqual({ message: 'Invalid or expired code.' });
+        } finally {
+            await otpApp.close();
+        }
+    });
+
+    it('shares verification-grant replay protection between magic links and OTP', async () => {
+        const otpApp = await createTestApp({
+            config: {
+                otp: {
+                    allowedAttempts: 3,
+                    enabled: true,
+                    expirationSeconds: 5 * 60,
+                    length: 6,
+                    resendStrategy: 'rotate',
+                    secret: 'otp-secret-0123456789-0123456789',
+                },
+            },
+            sentEmails,
+        });
+
+        try {
+            const signInResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/signin',
+                headers: { 'content-type': 'application/json' },
+                payload: {
+                    email: 'allowed@example.com',
+                    returnUrl: 'http://client.example.com/protected',
+                },
+            });
+            const challengeId = signInResponse.json().otpChallengeId;
+            const magicLinkResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email',
+                headers: { 'content-type': 'application/json' },
+                payload: { token: sentEmails[0]?.token },
+            });
+            expect(magicLinkResponse.statusCode).toBe(200);
+
+            const otpResponse = await otpApp.inject({
+                method: 'POST',
+                url: '/verify-email/otp',
+                headers: { 'content-type': 'application/json' },
+                payload: { challengeId, code: sentEmails[0]?.otpCode },
+            });
+            expect(otpResponse.statusCode).toBe(400);
+            expect(otpResponse.json()).toEqual({ message: 'Invalid or expired code.' });
+        } finally {
+            await otpApp.close();
+        }
+    });
+
     it('rejects JSON-like sign-in requests without an application/json content type', async () => {
         const response = await app.inject({
             method: 'POST',
@@ -1405,6 +1792,9 @@ describe('buildApp', () => {
         expect(response.body).not.toContain('id="signIn"');
         expect(response.body).not.toContain('allowed@example.com');
         expect(response.body).not.toContain('Verification email sent');
+        expect(response.headers['content-security-policy']).toContain(
+            "form-action 'self' http://client.example.com",
+        );
         expect(sentEmails).toHaveLength(1);
     });
 

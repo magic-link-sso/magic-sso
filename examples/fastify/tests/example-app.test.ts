@@ -51,6 +51,7 @@ describe('Fastify example app', () => {
         ]);
 
         expect(appSource).toContain("app.post<{ Body: SignInBody }>('/api/signin'");
+        expect(appSource).toContain("app.post<{ Body: VerifyOtpBody }>('/verify-email/otp'");
         expect(appSource).toContain("app.get<{ Querystring: VerifyEmailQuery }>('/verify-email'");
         expect(appSource).toContain("app.post('/logout'");
         expect(appSource).toContain("app.get('/protected'");
@@ -58,6 +59,8 @@ describe('Fastify example app', () => {
         expect(appSource).toContain('hasSameOriginMutationSource');
         expect(appSource).toContain('MAGICSSO_PREVIEW_SECRET');
         expect(appSource).toContain('x-magic-sso-preview-secret');
+        expect(appSource).toContain('magic-sso-otp-challenge');
+        expect(appSource).toContain('signOtpChallenge');
         expect(authSource).toContain('buildLoginTarget');
         expect(authSource).toContain('normaliseReturnUrl');
         expect(authSource).toContain('getLoginErrorMessage');

@@ -70,6 +70,29 @@ describe('sendMagicLink', () => {
         });
     });
 
+    it('returns OTP metadata without exposing an OTP code', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    message: 'Verification email sent',
+                    otpChallengeId: 'c4bc2a37-0190-4bd6-8dc6-bcf3186b0e74',
+                    otpExpiresInSeconds: 300,
+                    otpLength: 6,
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+        );
+
+        await expect(
+            sendMagicLink('user@example.com', 'http://app.example.com/protected'),
+        ).resolves.toEqual({
+            success: true,
+            otpChallengeId: 'c4bc2a37-0190-4bd6-8dc6-bcf3186b0e74',
+            otpExpiresInSeconds: 300,
+            otpLength: 6,
+        });
+    });
+
     it('returns a generic failure without logging request details', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network failed'));
         const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
