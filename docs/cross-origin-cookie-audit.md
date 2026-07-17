@@ -46,6 +46,11 @@ Because the session is established by the application itself, the resulting
 cookie behaves like normal first-party session state instead of a third-party
 cookie that may be blocked, partitioned, or inaccessible.
 
+Optional email OTP does not change this browser model. In an app-owned flow, the
+app exchanges the code server-side and sets its own first-party cookie. In a
+hosted direct flow, the same same-site or shared-cookie-domain constraints still
+apply after the hosted page accepts the code.
+
 ## When To Use Each Flow
 
 ### App-Owned `/verify-email`

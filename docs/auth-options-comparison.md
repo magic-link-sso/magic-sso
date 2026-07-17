@@ -12,15 +12,16 @@ federation, and centralized identity administration.
 
 ## Quick Recommendation
 
-| Need                                                                            | Best fit       | Why                                                                                                                                                            |
-| ------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protect a few private apps with email magic links and little infrastructure     | Magic Link SSO | It is purpose-built for small self-hosted deployments, can run without a database, and includes Magic Link SSO Gate for static, CSR, or unknown upstream apps. |
-| Add auth directly inside a TypeScript app                                       | Better Auth    | It is a framework-agnostic TypeScript auth framework with built-in methods, database adapters, and a large plugin ecosystem.                                   |
-| Run a central identity provider for many apps, teams, protocols, or directories | Keycloak       | It provides OpenID Connect, OAuth 2.0, SAML, user federation, identity brokering, admin consoles, and authorization services.                                  |
+| Need                                                                                          | Best fit       | Why                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protect a few private apps with email links or optional short codes and little infrastructure | Magic Link SSO | It is purpose-built for small self-hosted deployments, can run without a database, and includes Magic Link SSO Gate for static, CSR, or unknown upstream apps. |
+| Add auth directly inside a TypeScript app                                                     | Better Auth    | It is a framework-agnostic TypeScript auth framework with built-in methods, database adapters, and a large plugin ecosystem.                                   |
+| Run a central identity provider for many apps, teams, protocols, or directories               | Keycloak       | It provides OpenID Connect, OAuth 2.0, SAML, user federation, identity brokering, admin consoles, and authorization services.                                  |
 
 ## Choose Magic Link SSO When
 
-- You want passwordless email sign-in for a small private deployment.
+- You want passwordless email sign-in with magic links and an optional short
+  code for already-open mobile or PWA sessions.
 - You want one TOML-driven server that issues site-bound JWT session tokens.
 - You want the option to run without a database in classic mode.
 - You need framework integrations for Angular SSR, Django, Fastify, Next.js, or
@@ -74,7 +75,7 @@ with a larger operational surface.
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Primary shape               | Separate self-hosted email SSO server plus optional Gate and framework packages.                                      | Auth framework embedded in a TypeScript app, or run as a self-hosted auth server.                                | Standalone identity and access management server.                                                                 |
 | Best audience               | Operators protecting small private deployments.                                                                       | TypeScript product teams building app-owned auth.                                                                | Teams that need centralized IAM, standards, federation, and admin workflows.                                      |
-| Main login model            | Email magic links.                                                                                                    | Email/password and social sign-on built in, with magic links and many other methods through plugins.             | Configurable login flows, federation, social login, MFA, and standard protocol clients.                           |
+| Main login model            | Email magic links with optional short OTP as an alternate exchange for the same grant; OTP is not MFA.                | Email/password and social sign-on built in, with magic links and many other methods through plugins.             | Configurable login flows, federation, social login, MFA, and standard protocol clients.                           |
 | Database needs              | Classic mode can run without a database; file or Redis state can back replay protection and throttling.               | A database is required for normal user data; stateless session mode exists, but most plugins require a database. | Production deployments should plan for a database-backed identity service.                                        |
 | Protocols                   | Site-bound JWT sessions for integrated apps and Gate.                                                                 | App/session APIs plus plugins for JWT, SSO, SCIM, OAuth/OIDC provider, and related features.                     | OpenID Connect, OAuth 2.0, SAML, and federation/brokering features.                                               |
 | App integration             | Framework packages for supported stacks, or Magic Link SSO Gate in front of upstreams.                                | Route handlers and clients for many TypeScript/web frameworks.                                                   | Client adapters, standard protocols, and app configuration against a central IdP.                                 |

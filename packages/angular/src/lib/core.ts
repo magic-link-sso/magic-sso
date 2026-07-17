@@ -24,6 +24,19 @@ export interface AuthCookieOptions {
     value: string;
 }
 
+export interface EmailOtpExchangeOptions {
+    challengeId: string;
+    code: string;
+    config?: MagicSsoConfig;
+    expectedAudience: string;
+    fetcher?: typeof fetch;
+}
+
+export interface EmailOtpExchangeResult {
+    accessToken: string;
+    auth: AuthPayload;
+}
+
 export interface MagicSsoConfig {
     cookieMaxAge?: number;
     cookieName?: string;
@@ -220,6 +233,43 @@ export async function verifyAuthToken(
                 : {}),
         });
         return isAuthPayload(payload) ? payload : null;
+    } catch {
+        return null;
+    }
+}
+
+export async function exchangeEmailOtp(
+    options: EmailOtpExchangeOptions,
+): Promise<EmailOtpExchangeResult | null> {
+    const config = resolveMagicSsoConfig(options.config);
+    const secret = getJwtSecret(config);
+    const issuer = readJwtIssuer(config.serverUrl);
+    if (config.serverUrl.length === 0 || secret === null || issuer === null) {
+        return null;
+    }
+    try {
+        const response = await (options.fetcher ?? fetch)(
+            new URL('/verify-email/otp', config.serverUrl),
+            {
+                method: 'POST',
+                headers: { accept: 'application/json', 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeId: options.challengeId, code: options.code }),
+                cache: 'no-store',
+            },
+        );
+        const payload: unknown = await response.json().catch(() => null);
+        const accessToken =
+            typeof payload === 'object' && payload !== null
+                ? Reflect.get(payload, 'accessToken')
+                : undefined;
+        if (!response.ok || typeof accessToken !== 'string') {
+            return null;
+        }
+        const auth = await verifyAuthToken(accessToken, secret, {
+            expectedAudience: options.expectedAudience,
+            expectedIssuer: issuer,
+        });
+        return auth === null ? null : { accessToken, auth };
     } catch {
         return null;
     }

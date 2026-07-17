@@ -31,7 +31,7 @@ import Fastify, {
     type FastifyRequest,
     type FastifyServerOptions,
 } from 'fastify';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {
@@ -53,6 +53,8 @@ import { createVerificationEmailSender, type VerificationEmailSender } from './e
 import { createLoggerOptions } from './logger.js';
 import type { PerEmailSignInLimiter } from './perEmailSignInLimiter.js';
 import { FULL_ACCESS_SCOPE, normalizeRequestedScope } from './scope.js';
+import { createOtpRotationKey, generateOtpCode, hashOtpCode, normaliseOtpCode } from './otp.js';
+import type { OtpChallengeStore } from './otpChallengeStore.js';
 import { createSecurityState, type SharedSecurityState } from './securityState.js';
 import type { SessionRevocationStore } from './sessionRevocationStore.js';
 import { type VerificationTokenReplayStore } from './verificationTokenReplayStore.js';
@@ -62,6 +64,7 @@ interface BuildAppOptions {
     config?: AppConfig;
     logger?: FastifyServerOptions['logger'];
     mailer?: VerificationEmailSender;
+    otpChallengeStore?: OtpChallengeStore;
     perEmailSignInLimiter?: PerEmailSignInLimiter;
     securityState?: SharedSecurityState;
     sessionRevocationStore?: SessionRevocationStore;
@@ -126,6 +129,14 @@ const sessionRevocationCheckBodySchema = z.object({
 
 const verifyEmailBodySchema = z.object({
     token: z.string().min(1).optional(),
+});
+
+const verifyEmailOtpBodySchema = z.object({
+    challengeId: z.string().uuid(),
+    code: z.string().max(64),
+    returnUrl: z.string().optional(),
+    scope: z.string().optional(),
+    verifyUrl: z.string().optional(),
 });
 
 function wantsHtmlResponse(request: FastifyRequest): boolean {
@@ -193,6 +204,8 @@ async function renderSigninPage(
         error: false | string;
         message: false | string;
         mode?: SigninPageMode;
+        otpChallengeId?: string | undefined;
+        otpLength?: number | undefined;
         returnUrl: string;
         scope: string;
         verifyUrl: string;
@@ -210,6 +223,8 @@ async function renderSigninPage(
             cspNonce: security.cspNonce,
             csrfToken: security.csrfToken,
             mode,
+            otpChallengeId: options.otpChallengeId,
+            otpLength: options.otpLength,
             lang: viewConfig.hostedAuthPageCopy.lang,
             returnUrl: options.returnUrl,
             scope: options.scope,
@@ -290,6 +305,17 @@ function parseTrustedAbsoluteUrl(url: string): URL | null {
     }
 }
 
+function collectTrustedOrigins(urls: readonly string[]): string[] {
+    return urls.flatMap((url) => {
+        if (url === '') {
+            return [];
+        }
+
+        const parsedUrl = parseTrustedAbsoluteUrl(url);
+        return parsedUrl === null ? [] : [parsedUrl.origin];
+    });
+}
+
 function buildSigninPath(options: { returnUrl: string; scope: string; verifyUrl: string }): string {
     const query = new URLSearchParams();
     if (options.returnUrl !== '') {
@@ -304,6 +330,12 @@ function buildSigninPath(options: { returnUrl: string; scope: string; verifyUrl:
 
     const queryString = query.toString();
     return queryString === '' ? '/signin' : `/signin?${queryString}`;
+}
+
+function buildOtpVerificationCallbackUrl(verifyUrl: string, token: string): string {
+    const callbackUrl = new URL(verifyUrl);
+    callbackUrl.searchParams.set('token', token);
+    return callbackUrl.toString();
 }
 
 function findSiteById(config: AppConfig, siteId: string): SiteConfig | undefined {
@@ -516,11 +548,12 @@ function clearVerifyEmailTokenCookie(reply: FastifyReply, config: AppConfig): vo
     );
 }
 
-function buildContentSecurityPolicy(nonce: string): string {
+function buildContentSecurityPolicy(nonce: string, formActionOrigins: readonly string[]): string {
+    const formActionSources = ["'self'", ...new Set(formActionOrigins)];
     return [
         "default-src 'self'",
         "base-uri 'none'",
-        "form-action 'self'",
+        `form-action ${formActionSources.join(' ')}`,
         "frame-ancestors 'none'",
         "img-src 'self' data: https: http:",
         "object-src 'none'",
@@ -621,11 +654,15 @@ function createHtmlSecurityContext(
     reply: FastifyReply,
     config: AppConfig,
     options: {
+        formActionOrigins?: readonly string[] | undefined;
         includeCsrfToken: boolean;
     },
 ): HtmlSecurityContext {
     const cspNonce = createCspNonce();
-    reply.header('Content-Security-Policy', buildContentSecurityPolicy(cspNonce));
+    reply.header(
+        'Content-Security-Policy',
+        buildContentSecurityPolicy(cspNonce, options.formActionOrigins ?? []),
+    );
 
     if (!options.includeCsrfToken) {
         return {
@@ -791,10 +828,20 @@ async function respondWithVerificationEmailSent(
         returnUrl: string;
         verifyUrl: string;
         config: AppConfig;
+        otpChallengeId?: string | undefined;
     },
 ): Promise<void> {
     if (options.isJson) {
-        reply.send({ message: getDefaultFeedbackMessage('verificationEmailSent') });
+        reply.send({
+            message: getDefaultFeedbackMessage('verificationEmailSent'),
+            ...(options.config.otp.enabled
+                ? {
+                      otpChallengeId: options.otpChallengeId,
+                      otpExpiresInSeconds: options.config.otp.expirationSeconds,
+                      otpLength: options.config.otp.length,
+                  }
+                : {}),
+        });
         return;
     }
 
@@ -802,6 +849,7 @@ async function respondWithVerificationEmailSent(
         reply,
         options.site,
         createHtmlSecurityContext(reply, options.config, {
+            formActionOrigins: collectTrustedOrigins([options.verifyUrl, options.returnUrl]),
             includeCsrfToken: true,
         }),
         {
@@ -810,6 +858,8 @@ async function respondWithVerificationEmailSent(
             verifyUrl: options.verifyUrl,
             message: false,
             mode: 'confirmation',
+            otpChallengeId: options.otpChallengeId,
+            otpLength: options.config.otp.length,
             error: false,
         },
     );
@@ -1122,6 +1172,145 @@ async function completeEmailVerification(
         .redirect(validation.safeReturnUrl ?? '/');
 }
 
+async function completeOtpVerification(
+    reply: FastifyReply,
+    options: {
+        challengeId: string;
+        code: string;
+        config: AppConfig;
+        isJson: boolean;
+        logger: FastifyBaseLogger;
+        otpChallengeStore: OtpChallengeStore;
+        retryView:
+            | {
+                  returnUrl: string;
+                  scope: string;
+                  site: HostedAuthViewConfig;
+                  verifyUrl: string;
+              }
+            | undefined;
+        verificationTokenReplayStore: VerificationTokenReplayStore;
+    },
+): Promise<void> {
+    const otpSecret = options.config.otp.secret;
+    const normalizedCode = normaliseOtpCode(options.code, options.config.otp.length);
+    const failure = async (preserveChallenge = false): Promise<void> => {
+        if (options.isJson) {
+            reply.code(400).send({ message: getDefaultFeedbackMessage('invalidOrExpiredOtp') });
+            return;
+        }
+        const retryView = preserveChallenge ? options.retryView : undefined;
+        await renderSigninPage(
+            reply,
+            retryView?.site ?? options.config,
+            createHtmlSecurityContext(reply, options.config, {
+                formActionOrigins:
+                    typeof retryView === 'undefined'
+                        ? []
+                        : collectTrustedOrigins([
+                              getAppOrigin(options.config),
+                              retryView.returnUrl,
+                              retryView.verifyUrl,
+                          ]),
+                includeCsrfToken: true,
+            }),
+            {
+                error: getHostedAuthFeedbackMessage(options.config, 'invalidOrExpiredOtp'),
+                message: false,
+                mode: typeof retryView === 'undefined' ? 'form' : 'confirmation',
+                otpChallengeId: typeof retryView === 'undefined' ? undefined : options.challengeId,
+                otpLength: typeof retryView === 'undefined' ? undefined : options.config.otp.length,
+                returnUrl: retryView?.returnUrl ?? '',
+                scope: retryView?.scope ?? '',
+                verifyUrl: retryView?.verifyUrl ?? '',
+                statusCode: typeof retryView === 'undefined' ? 400 : 200,
+            },
+        );
+    };
+
+    if (normalizedCode === null) {
+        await failure(true);
+        return;
+    }
+    if (typeof otpSecret !== 'string') {
+        await failure();
+        return;
+    }
+
+    let result;
+    try {
+        result = await options.otpChallengeStore.verify({
+            challengeId: options.challengeId,
+            code: normalizedCode,
+            now: Date.now(),
+            secret: otpSecret,
+        });
+    } catch (error) {
+        options.logger.error({ err: error }, 'OTP challenge store verification failed');
+        await failure();
+        return;
+    }
+    if (result.category !== 'valid') {
+        options.logger.info({ category: result.category }, 'Rejected OTP verification');
+        await failure(result.category === 'invalid');
+        return;
+    }
+
+    const consumed = await options.verificationTokenReplayStore.consume(
+        result.challenge.jti,
+        result.challenge.expiresAt,
+    );
+    if (!consumed) {
+        await failure();
+        return;
+    }
+
+    const site = findSiteById(options.config, result.challenge.siteId);
+    if (typeof site === 'undefined') {
+        await failure();
+        return;
+    }
+
+    if (!options.isJson && typeof result.challenge.safeVerifyUrl === 'string') {
+        const verificationToken = await generateEmailToken(
+            result.challenge.email,
+            result.challenge.safeReturnUrl,
+            result.challenge.siteId,
+            result.challenge.scope,
+            getAppOrigin(options.config),
+            options.config.emailSecret,
+            options.config.emailExpirationSeconds,
+        );
+        reply
+            .header('Cache-Control', 'no-store')
+            .header('Pragma', 'no-cache')
+            .redirect(
+                buildOtpVerificationCallbackUrl(result.challenge.safeVerifyUrl, verificationToken),
+            );
+        return;
+    }
+
+    const accessToken = await signAccessToken(
+        result.challenge.email,
+        result.challenge.scope,
+        site.id,
+        [...site.origins].sort(),
+        getAppOrigin(options.config),
+        options.config.jwtSecret,
+        options.config.jwtExpirationSeconds,
+    );
+    if (options.isJson) {
+        setNoStoreHeaders(reply);
+        reply.send({ accessToken });
+        return;
+    }
+    reply
+        .header('Cache-Control', 'no-store')
+        .header('Pragma', 'no-cache')
+        .setCookie(options.config.cookieName, accessToken, buildAuthCookieOptions(options.config))
+        .redirect(result.challenge.safeReturnUrl ?? '/');
+}
+
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
     const config = options.config ?? loadConfig();
     const mailer = options.mailer ?? createVerificationEmailSender(config);
@@ -1130,6 +1319,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         options.verificationTokenReplayStore ?? securityState.verificationTokenReplayStore;
     const perEmailSignInLimiter =
         options.perEmailSignInLimiter ?? securityState.perEmailSignInLimiter;
+    const otpChallengeStore = options.otpChallengeStore ?? securityState.otpChallengeStore;
     const sessionRevocationStore =
         options.sessionRevocationStore ?? securityState.sessionRevocationStore;
 
@@ -1535,6 +1725,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 await respondWithVerificationEmailSent(reply, {
                     config,
                     isJson,
+                    otpChallengeId: config.otp.enabled ? randomUUID() : undefined,
                     returnUrl: resolvedRequest.safeReturnUrl ?? '',
                     scope: requestedScope,
                     site: resolvedRequest.site,
@@ -1553,9 +1744,71 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 config.emailExpirationSeconds,
             );
 
+            let otpChallengeId: string | undefined;
+            let otpCode: string | undefined;
+
             try {
+                if (config.otp.enabled) {
+                    const otpSecret = config.otp.secret;
+                    const verificationGrant = await verifyEmailToken(token, config.emailSecret, {
+                        expectedIssuer: getAppOrigin(config),
+                    });
+                    if (
+                        typeof otpSecret !== 'string' ||
+                        verificationGrant === null ||
+                        typeof verificationGrant.exp !== 'number'
+                    ) {
+                        throw new Error('Unable to create OTP challenge for a verification grant.');
+                    }
+                    otpChallengeId = randomUUID();
+                    otpCode = generateOtpCode(config.otp.length);
+                    const safeVerifyUrl =
+                        typeof verifyUrl === 'string' ? resolvedRequest.safeVerifyUrl : undefined;
+                    const expiresAt = Math.min(
+                        Date.now() + config.otp.expirationSeconds * 1000,
+                        verificationGrant.exp * 1000,
+                    );
+                    const otpChallenge = {
+                        attemptsRemaining: config.otp.allowedAttempts,
+                        challengeId: otpChallengeId,
+                        createdAt: Date.now(),
+                        email,
+                        expiresAt,
+                        jti: verificationGrant.jti,
+                        otpHash: hashOtpCode({
+                            challengeId: otpChallengeId,
+                            code: otpCode,
+                            jti: verificationGrant.jti,
+                            secret: otpSecret,
+                            siteId: resolvedRequest.site.id,
+                        }),
+                        rotationKey: createOtpRotationKey({
+                            email,
+                            safeReturnUrl: resolvedRequest.safeReturnUrl,
+                            safeVerifyUrl,
+                            scope: requestedScope,
+                            secret: otpSecret,
+                            siteId: resolvedRequest.site.id,
+                        }),
+                        safeReturnUrl: resolvedRequest.safeReturnUrl,
+                        safeVerifyUrl,
+                        scope: requestedScope,
+                        siteId: resolvedRequest.site.id,
+                    };
+                    switch (config.otp.resendStrategy) {
+                        case 'rotate':
+                            await otpChallengeStore.create(otpChallenge);
+                            break;
+                    }
+                }
                 await mailer.sendVerificationEmail({
                     email,
+                    ...(typeof otpCode === 'string'
+                        ? {
+                              otpCode,
+                              otpExpiresInSeconds: config.otp.expirationSeconds,
+                          }
+                        : {}),
                     siteTitle:
                         resolvedRequest.site.hostedAuthBranding.title ||
                         config.hostedAuthBranding.title,
@@ -1596,6 +1849,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             await respondWithVerificationEmailSent(reply, {
                 config,
                 isJson,
+                otpChallengeId,
                 returnUrl: resolvedRequest.safeReturnUrl ?? '',
                 scope: requestedScope,
                 site: resolvedRequest.site,
@@ -1783,6 +2037,95 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 isJson,
                 logger: request.log,
                 token: submittedToken,
+                verificationTokenReplayStore,
+            });
+        },
+    );
+
+    app.post<{ Body: unknown }>(
+        '/verify-email/otp',
+        {
+            config: {
+                rateLimit: {
+                    max: config.verifyRateLimitMax,
+                    timeWindow: config.rateLimitWindowMs,
+                },
+            },
+        },
+        async (request, reply): Promise<void> => {
+            const isJson = expectsJsonResponse(request);
+            setNoStoreHeaders(reply);
+            if (!config.otp.enabled) {
+                reply.code(404).send({ message: 'Not found' });
+                return;
+            }
+            if (
+                !hasSafeApiContentType(request, config) &&
+                !hasValidHtmlCsrfToken(request, config)
+            ) {
+                if (isJson) {
+                    reply.code(403).send({ message: 'Invalid or missing CSRF token' });
+                    return;
+                }
+                await renderSigninPage(
+                    reply,
+                    config,
+                    createHtmlSecurityContext(reply, config, { includeCsrfToken: true }),
+                    {
+                        error: getHostedAuthFeedbackMessage(config, 'invalidOrExpiredOtp'),
+                        message: false,
+                        returnUrl: '',
+                        scope: '',
+                        verifyUrl: '',
+                        statusCode: 403,
+                    },
+                );
+                return;
+            }
+
+            const parsedBody = verifyEmailOtpBodySchema.safeParse(request.body);
+            if (!parsedBody.success) {
+                if (isJson) {
+                    reply
+                        .code(400)
+                        .send({ message: getDefaultFeedbackMessage('invalidOrExpiredOtp') });
+                    return;
+                }
+                await renderSigninPage(
+                    reply,
+                    config,
+                    createHtmlSecurityContext(reply, config, { includeCsrfToken: true }),
+                    {
+                        error: getHostedAuthFeedbackMessage(config, 'invalidOrExpiredOtp'),
+                        message: false,
+                        returnUrl: '',
+                        scope: '',
+                        verifyUrl: '',
+                        statusCode: 400,
+                    },
+                );
+                return;
+            }
+
+            const retryRequest = resolveSignInRequest(config, {
+                returnUrl: parsedBody.data.returnUrl,
+                verifyUrl: parsedBody.data.verifyUrl,
+            });
+            await completeOtpVerification(reply, {
+                challengeId: parsedBody.data.challengeId,
+                code: parsedBody.data.code,
+                config,
+                isJson,
+                logger: request.log,
+                otpChallengeStore,
+                retryView: retryRequest.ok
+                    ? {
+                          returnUrl: retryRequest.safeReturnUrl ?? '',
+                          scope: normalizeRequestedScope(parsedBody.data.scope),
+                          site: retryRequest.site,
+                          verifyUrl: parsedBody.data.verifyUrl ?? '',
+                      }
+                    : undefined,
                 verificationTokenReplayStore,
             });
         },

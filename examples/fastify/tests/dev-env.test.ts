@@ -44,9 +44,10 @@ describe('fastify dev env loading', () => {
         expect(packageJson).not.toContain('[ -f ./.env ] && . ./.env');
     });
 
-    it('allows root turbo dev tasks to receive MAGICSSO_DIRECT_USE', async () => {
+    it('allows root turbo dev tasks to receive Magic Link SSO overrides', async () => {
         const turboJson = await readFile(new URL('../../../turbo.json', import.meta.url), 'utf8');
 
+        expect(turboJson).toContain('"MAGICSSO_CONFIG_FILE"');
         expect(turboJson).toContain('"MAGICSSO_COOKIE_NAME"');
         expect(turboJson).toContain('"MAGICSSO_DIRECT_USE"');
         expect(turboJson).toContain('"MAGICSSO_JWT_SECRET"');

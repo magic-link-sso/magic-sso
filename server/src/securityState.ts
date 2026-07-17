@@ -25,11 +25,13 @@ import {
 } from './perEmailSignInLimiter.js';
 import {
     createRedisPerEmailSignInLimiter,
+    createRedisOtpChallengeStore,
     createRedisSessionRevocationStore,
     createRedisSecurityStateClient,
     createRedisVerificationTokenReplayStore,
     type RedisSecurityStateClient,
 } from './redisSecurityState.js';
+import { createFileOtpChallengeStore, type OtpChallengeStore } from './otpChallengeStore.js';
 import {
     createFileSessionRevocationStore,
     type SessionRevocationStore,
@@ -42,6 +44,7 @@ import {
 export interface SharedSecurityState {
     close(): Promise<void>;
     perEmailSignInLimiter: PerEmailSignInLimiter;
+    otpChallengeStore: OtpChallengeStore;
     sessionRevocationStore: SessionRevocationStore;
     verificationTokenReplayStore: VerificationTokenReplayStore;
 }
@@ -82,6 +85,10 @@ export async function createSecurityState(
                 rateLimitWindowMs: config.rateLimitWindowMs,
                 signInEmailRateLimitMax: config.signInEmailRateLimitMax,
             }),
+            otpChallengeStore: createRedisOtpChallengeStore({
+                client,
+                keyPrefix: config.securityState.keyPrefix,
+            }),
             sessionRevocationStore: createRedisSessionRevocationStore({
                 client,
                 keyPrefix: config.securityState.keyPrefix,
@@ -104,10 +111,14 @@ export async function createSecurityState(
     const sessionRevocationStore = await createFileSessionRevocationStore({
         directory: join(config.verifyTokenStoreDir, 'sessions'),
     });
+    const otpChallengeStore = await createFileOtpChallengeStore({
+        directory: join(config.verifyTokenStoreDir, 'otp-challenges'),
+    });
 
     return {
         close: async (): Promise<void> => undefined,
         perEmailSignInLimiter,
+        otpChallengeStore,
         sessionRevocationStore,
         verificationTokenReplayStore,
     };

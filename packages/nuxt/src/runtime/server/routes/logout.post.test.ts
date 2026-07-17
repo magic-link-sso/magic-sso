@@ -7,7 +7,7 @@ const deleteCookieMock = vi.fn();
 const sendRedirectMock = vi.fn();
 const getCookieNameMock = vi.fn();
 const getMagicSsoConfigMock = vi.fn();
-const getRequestOriginMock = vi.fn();
+const hasSameOriginMutationSourceMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -18,15 +18,7 @@ vi.mock('h3', () => ({
 vi.mock('../utils/auth', () => ({
     getCookieName: getCookieNameMock,
     getMagicSsoConfig: getMagicSsoConfigMock,
-    getRequestOrigin: getRequestOriginMock,
-    readFirstHeaderValue: (value: string | string[] | undefined) =>
-        Array.isArray(value)
-            ? typeof value[0] === 'string'
-                ? value[0]
-                : null
-            : typeof value === 'string' && value.length > 0
-              ? value
-              : null,
+    hasSameOriginMutationSource: hasSameOriginMutationSourceMock,
 }));
 
 describe('logout route', () => {
@@ -35,7 +27,7 @@ describe('logout route', () => {
         sendRedirectMock.mockReset();
         getCookieNameMock.mockReset();
         getMagicSsoConfigMock.mockReset();
-        getRequestOriginMock.mockReset();
+        hasSameOriginMutationSourceMock.mockReset();
     });
 
     it('deletes the cookie with the configured path', async () => {
@@ -51,7 +43,7 @@ describe('logout route', () => {
         };
         getCookieNameMock.mockReturnValue('magic-sso');
         getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/auth' });
-        getRequestOriginMock.mockReturnValue('http://app.example.com');
+        hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
         await logoutRoute(event);
@@ -96,7 +88,7 @@ describe('logout route', () => {
                 },
             },
         };
-        getRequestOriginMock.mockReturnValue('http://app.example.com');
+        hasSameOriginMutationSourceMock.mockReturnValue(false);
 
         const { default: logoutRoute } = await import('./logout.post');
         const response = await logoutRoute(event);
@@ -119,7 +111,7 @@ describe('logout route', () => {
         };
         getCookieNameMock.mockReturnValue('magic-sso');
         getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/' });
-        getRequestOriginMock.mockReturnValue('http://photos.localhost:4306');
+        hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
         const response = await logoutRoute(event);
@@ -145,7 +137,7 @@ describe('logout route', () => {
         };
         getCookieNameMock.mockReturnValue('magic-sso');
         getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/' });
-        getRequestOriginMock.mockReturnValue('http://photos.localhost:4306');
+        hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
         const response = await logoutRoute(event);

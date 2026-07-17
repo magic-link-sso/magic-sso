@@ -303,6 +303,31 @@ export function getRequestOrigin(
     return options?.allowRequestUrlFallback === true ? getRequestURL(event).origin : null;
 }
 
+export function hasSameOriginMutationSource(event: H3Event): boolean {
+    const expectedOrigin = getRequestOrigin(event, {
+        allowRequestUrlFallback: true,
+    });
+    if (expectedOrigin === null) {
+        return false;
+    }
+
+    const originHeader = readFirstHeaderValue(event.node.req.headers.origin);
+    if (originHeader !== null) {
+        return originHeader === expectedOrigin;
+    }
+
+    const refererHeader = readFirstHeaderValue(event.node.req.headers.referer);
+    if (refererHeader === null) {
+        return false;
+    }
+
+    try {
+        return new URL(refererHeader).origin === expectedOrigin;
+    } catch {
+        return false;
+    }
+}
+
 function getExpectedAudience(event: H3Event): string | null {
     return getRequestOrigin(event);
 }

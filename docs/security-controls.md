@@ -52,6 +52,15 @@ source code.
   keys and invalid types instead of silently accepting misspelled security
   settings.
 
+- Optional email OTP uses a dedicated secret, CSPRNG-generated digits, HMAC
+  hashes at rest, short expiration, and a per-challenge attempt limit. It is an
+  alternate exchange for the same verification `jti` as the magic link, so the
+  first successful path consumes the grant. File state is permission-restricted
+  and locked for a single host; horizontally scaled deployments should use the
+  Redis adapter, whose Lua exchange makes attempts and consumption atomic.
+  Public sign-in and verification responses remain enumeration-resistant and
+  never include codes, hashes, tokens, or secrets.
+
 - Duration parsing accepts only seconds, minutes, hours, and days. Unknown units
   are rejected, avoiding accidental long or short token lifetimes from typos.
 

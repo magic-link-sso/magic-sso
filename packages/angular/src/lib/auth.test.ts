@@ -8,6 +8,7 @@ import {
     buildLoginPath,
     buildLoginTarget,
     buildVerifyUrl,
+    exchangeEmailOtp,
     getCookieMaxAge,
     getCookiePath,
     normaliseReturnUrl,
@@ -56,6 +57,27 @@ describe('@magic-link-sso/angular auth helpers', () => {
         expect(payload?.email).toBe('angular@example.com');
         expect(payload?.scope).toBe('*');
         expect(payload?.siteId).toBe('site-a');
+    });
+
+    it('exchanges OTP server-side and validates the returned access token', async () => {
+        const accessToken = await signToken(
+            'angular@example.com',
+            'test-secret',
+            'http://localhost:3004',
+            'http://localhost:3000',
+        );
+        const fetcher = async (): Promise<Response> =>
+            new Response(JSON.stringify({ accessToken }), { status: 200 });
+
+        await expect(
+            exchangeEmailOtp({
+                challengeId: 'c4bc2a37-0190-4bd6-8dc6-bcf3186b0e74',
+                code: '012345',
+                config: { jwtSecret: 'test-secret', serverUrl: 'http://localhost:3000' },
+                expectedAudience: 'http://localhost:3004',
+                fetcher,
+            }),
+        ).resolves.toMatchObject({ accessToken, auth: { email: 'angular@example.com' } });
     });
 
     it('reads and verifies the auth cookie from a request', async () => {

@@ -148,6 +148,8 @@ async function createGateApp(
     options: {
         directUse?: boolean;
         invalidAudience?: boolean;
+        otpChallengeId?: string;
+        otpVerifyStatus?: number;
         logger?: false | { level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' };
         publicOrigin?: string;
         rateLimitMax?: number;
@@ -161,12 +163,20 @@ async function createGateApp(
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const url = typeof input === 'string' ? input : input.toString();
         if (url === `${ssoOrigin}/signin`) {
-            return new Response(JSON.stringify({ message: 'Verification email sent' }), {
-                headers: {
-                    'content-type': 'application/json',
+            return new Response(
+                JSON.stringify({
+                    message: 'Verification email sent',
+                    ...(typeof options.otpChallengeId === 'string'
+                        ? { otpChallengeId: options.otpChallengeId, otpLength: 6 }
+                        : {}),
+                }),
+                {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                    status: 200,
                 },
-                status: 200,
-            });
+            );
         }
 
         if (url.startsWith(`${ssoOrigin}/verify-email?`)) {
@@ -193,6 +203,19 @@ async function createGateApp(
                     },
                     status: 200,
                 },
+            );
+        }
+
+        if (url === `${ssoOrigin}/verify-email/otp` && init?.method === 'POST') {
+            const status = options.otpVerifyStatus ?? 200;
+            const audience = options.invalidAudience ? 'http://wrong.example.com' : publicOrigin;
+            return new Response(
+                JSON.stringify(
+                    status === 200
+                        ? { accessToken: await createAccessToken({ audience, issuer: ssoOrigin }) }
+                        : { message: 'Invalid or expired code.' },
+                ),
+                { headers: { 'content-type': 'application/json' }, status },
             );
         }
 
@@ -317,6 +340,8 @@ describe('magic gate routes', () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.body).toContain('Sign in');
+        expect(response.body).toContain('id="email"');
+        expect(response.body).not.toContain('id="otp-code"');
         expect(response.body).toContain('referrerpolicy="same-origin"');
         expect(response.headers['cache-control']).toBe('no-store');
         expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
@@ -581,7 +606,7 @@ describe('magic gate routes', () => {
         const verifyResponse = await app.inject({
             headers: {
                 'content-type': 'application/x-www-form-urlencoded',
-                cookie: `magic-sso.verify-csrf=${csrfCookie?.value ?? ''}; magic-sso.verify-token=${tokenCookie?.value ?? ''}`,
+                cookie: `magic-sso.verify-csrf=${csrfCookie?.value ?? ''}; magic-sso.verify-token=${tokenCookie?.value ?? ''}; magic-sso.otp-challenge=stale-challenge`,
                 origin: gateOrigin,
             },
             method: 'POST',
@@ -593,6 +618,10 @@ describe('magic gate routes', () => {
         expect(verifyResponse.statusCode).toBe(302);
         expect(verifyResponse.headers.location).toBe('http://private.example.com/');
         expect(authCookie?.httpOnly).toBe(true);
+        expect(
+            verifyResponse.cookies.find((cookie) => cookie.name === 'magic-sso.otp-challenge')
+                ?.value,
+        ).toBe('');
         expect(fetchMock).toHaveBeenCalledWith(
             new URL('/verify-email', ssoOrigin),
             expect.objectContaining({
@@ -739,6 +768,16 @@ describe('magic gate routes', () => {
         expect(redirectUrl.searchParams.get('result')).toBe('signin-email-sent');
         expect(redirectUrl.searchParams.get('status')).toBeNull();
         expect(redirectUrl.searchParams.get('message')).toBeNull();
+        const confirmationResponse = await app.inject({
+            method: 'GET',
+            url: location,
+        });
+        expect(confirmationResponse.statusCode).toBe(200);
+        expect(confirmationResponse.body).toContain('Check your email');
+        expect(confirmationResponse.body).toContain(
+            'If your email can sign in, you will receive a link shortly.',
+        );
+        expect(confirmationResponse.body).not.toContain('Verification email sent.');
         expect(fetchMock).toHaveBeenCalledWith(
             new URL('/signin', ssoOrigin),
             expect.objectContaining({
@@ -746,6 +785,126 @@ describe('magic gate routes', () => {
                 redirect: 'error',
             }),
         );
+
+        await app.close();
+    });
+
+    it('exchanges an OTP challenge without exposing the protected upstream', async () => {
+        const { app, fetchMock, proxyStub } = await createGateApp({
+            otpChallengeId: 'challenge-123',
+        });
+
+        const signinResponse = await app.inject({
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                origin: gateOrigin,
+            },
+            method: 'POST',
+            payload: 'email=gate%40example.com&returnUrl=http%3A%2F%2Fprivate.example.com%2F',
+            url: '/_magicgate/signin',
+        });
+        const challengeCookie = signinResponse.cookies.find(
+            (cookie) => cookie.name === 'magic-sso.otp-challenge',
+        );
+        if (!challengeCookie?.value) {
+            throw new Error('Expected a signed OTP challenge cookie.');
+        }
+        expect(challengeCookie.httpOnly).toBe(true);
+
+        const loginResponse = await app.inject({
+            headers: {
+                cookie: `magic-sso.otp-challenge=${challengeCookie.value}`,
+            },
+            method: 'GET',
+            url: '/_magicgate/login?returnUrl=http%3A%2F%2Fprivate.example.com%2F',
+        });
+        expect(loginResponse.body).toContain('autocomplete="one-time-code"');
+        expect(loginResponse.body).toContain('Check your email');
+        expect(loginResponse.body).toContain('minlength="6"');
+        expect(loginResponse.body).toContain('placeholder="123456"');
+        expect(loginResponse.body).not.toContain('id="email"');
+        expect(loginResponse.body).not.toContain('Send magic link');
+        expect(loginResponse.body).toContain('Use a different email');
+        expect(loginResponse.body).not.toContain('challenge-123');
+
+        const resetResponse = await app.inject({
+            headers: {
+                cookie: `magic-sso.otp-challenge=${challengeCookie.value}`,
+            },
+            method: 'GET',
+            url: '/_magicgate/login?returnUrl=http%3A%2F%2Fprivate.example.com%2F&resetOtp=1',
+        });
+        expect(resetResponse.statusCode).toBe(302);
+        expect(resetResponse.headers.location).toBe(
+            '/_magicgate/login?returnUrl=http%3A%2F%2Fprivate.example.com%2F',
+        );
+        expect(
+            resetResponse.cookies.find((cookie) => cookie.name === 'magic-sso.otp-challenge')
+                ?.value,
+        ).toBe('');
+
+        const response = await app.inject({
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                cookie: `magic-sso.otp-challenge=${challengeCookie.value}`,
+                origin: gateOrigin,
+            },
+            method: 'POST',
+            payload: 'code=123456',
+            url: '/_magicgate/verify-email/otp',
+        });
+        expect(response.statusCode).toBe(302);
+        expect(response.headers.location).toBe('http://private.example.com/');
+        expect(response.cookies.find((cookie) => cookie.name === 'magic-sso')?.httpOnly).toBe(true);
+        expect(fetchMock).toHaveBeenCalledWith(
+            new URL('/verify-email/otp', ssoOrigin),
+            expect.objectContaining({
+                body: JSON.stringify({ challengeId: 'challenge-123', code: '123456' }),
+                method: 'POST',
+            }),
+        );
+        expect(proxyStub.webCalls).toHaveLength(0);
+
+        await app.close();
+    });
+
+    it('keeps an OTP challenge available after an invalid code', async () => {
+        const { app, proxyStub } = await createGateApp({
+            otpChallengeId: 'challenge-123',
+            otpVerifyStatus: 400,
+        });
+        const signinResponse = await app.inject({
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                origin: gateOrigin,
+            },
+            method: 'POST',
+            payload: 'email=gate%40example.com&returnUrl=http%3A%2F%2Fprivate.example.com%2F',
+            url: '/_magicgate/signin',
+        });
+        const challengeCookie = signinResponse.cookies.find(
+            (cookie) => cookie.name === 'magic-sso.otp-challenge',
+        );
+        if (!challengeCookie?.value) {
+            throw new Error('Expected a signed OTP challenge cookie.');
+        }
+
+        const response = await app.inject({
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                cookie: `magic-sso.otp-challenge=${challengeCookie.value}`,
+                origin: gateOrigin,
+            },
+            method: 'POST',
+            payload: 'code=000000',
+            url: '/_magicgate/verify-email/otp',
+        });
+        expect(response.statusCode).toBe(302);
+        expect(response.headers.location).toContain('error=verify-email-failed');
+        expect(response.cookies.find((cookie) => cookie.name === 'magic-sso.otp-challenge')).toBe(
+            undefined,
+        );
+        expect(proxyStub.webCalls).toHaveLength(0);
 
         await app.close();
     });

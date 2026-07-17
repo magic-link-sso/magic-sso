@@ -62,6 +62,7 @@ interface SignInBody {
 
 interface LoginQuery {
     error?: string;
+    resetOtp?: string;
     result?: string;
     returnUrl?: string;
 }
@@ -77,6 +78,10 @@ interface VerifyEmailBody {
     token?: string;
 }
 
+interface VerifyEmailOtpBody {
+    code?: string;
+}
+
 interface VerifyEmailResponse {
     accessToken: string;
 }
@@ -87,6 +92,14 @@ interface VerifyEmailPreviewResponse {
 
 interface SignInSuccessResponse {
     message: string;
+    otpChallengeId?: string;
+    otpLength?: number;
+}
+
+interface OtpChallengeCookie {
+    challengeId: string;
+    otpLength: number;
+    returnUrl: string;
 }
 
 interface GateProxyOptions {
@@ -643,6 +656,18 @@ function isSignInSuccessResponse(value: unknown): value is SignInSuccessResponse
     );
 }
 
+function hasOtpChallenge(value: SignInSuccessResponse): value is SignInSuccessResponse & {
+    otpChallengeId: string;
+    otpLength: number;
+} {
+    return (
+        typeof value.otpChallengeId === 'string' &&
+        value.otpChallengeId.length > 0 &&
+        Number.isInteger(value.otpLength) &&
+        (value.otpLength ?? 0) > 0
+    );
+}
+
 function createVerifyCsrfToken(secret: Buffer): string {
     const nonce = randomBytes(32).toString('base64url');
     const signature = createHmac('sha256', secret).update(nonce).digest('base64url');
@@ -704,13 +729,16 @@ function hasSameOriginMutationSource(request: FastifyRequest, config: GateConfig
 function buildLoginRedirectUrl(
     config: GateConfig,
     returnUrl: string,
-    options: { error?: string; result?: string } = {},
+    options: { error?: string; resetOtp?: boolean; result?: string } = {},
 ): string {
     const loginUrl = new URL(buildPublicUrl(config, buildGatePath(config, '/login')));
     loginUrl.searchParams.set('returnUrl', returnUrl);
 
     if (typeof options.error === 'string') {
         loginUrl.searchParams.set('error', options.error);
+    }
+    if (options.resetOtp === true) {
+        loginUrl.searchParams.set('resetOtp', '1');
     }
     if (typeof options.result === 'string') {
         loginUrl.searchParams.set('result', options.result);
@@ -743,11 +771,16 @@ function buildVerifyTokenCookieName(config: GateConfig): string {
     return `${config.cookieName}.verify-token`;
 }
 
+function buildOtpChallengeCookieName(config: GateConfig): string {
+    return `${config.cookieName}.otp-challenge`;
+}
+
 function buildBlockedResponseCookieNames(config: GateConfig): string[] {
     return [
         config.cookieName,
         buildVerifyCsrfCookieName(config),
         buildVerifyTokenCookieName(config),
+        buildOtpChallengeCookieName(config),
     ];
 }
 
@@ -777,6 +810,69 @@ function buildVerifyTokenCookieOptions(config: GateConfig): {
         sameSite: 'strict',
         secure: config.publicOrigin.startsWith('https://'),
     };
+}
+
+function buildOtpChallengeCookieOptions(config: GateConfig): {
+    httpOnly: true;
+    path: string;
+    sameSite: 'strict';
+    secure: boolean;
+} {
+    return {
+        httpOnly: true,
+        path: buildGatePath(config, '/'),
+        sameSite: 'strict',
+        secure: config.publicOrigin.startsWith('https://'),
+    };
+}
+
+function createOtpChallengeCookie(value: OtpChallengeCookie, config: GateConfig): string {
+    const payload = Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+    const signature = createHmac('sha256', config.jwtSecret).update(payload).digest('base64url');
+    return `${payload}.${signature}`;
+}
+
+function readOtpChallengeCookie(
+    value: string | undefined,
+    config: GateConfig,
+): OtpChallengeCookie | null {
+    if (typeof value !== 'string') {
+        return null;
+    }
+    const [payload, signature, ...rest] = value.split('.');
+    if (typeof payload !== 'string' || typeof signature !== 'string' || rest.length > 0) {
+        return null;
+    }
+    const expectedSignature = createHmac('sha256', config.jwtSecret)
+        .update(payload)
+        .digest('base64url');
+    if (!safeCompare(signature, expectedSignature)) {
+        return null;
+    }
+    try {
+        const parsed: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        const challengeId =
+            typeof parsed === 'object' && parsed !== null
+                ? Reflect.get(parsed, 'challengeId')
+                : undefined;
+        const returnUrl =
+            typeof parsed === 'object' && parsed !== null
+                ? Reflect.get(parsed, 'returnUrl')
+                : undefined;
+        const otpLength =
+            typeof parsed === 'object' && parsed !== null
+                ? Reflect.get(parsed, 'otpLength')
+                : undefined;
+        return typeof challengeId === 'string' &&
+            typeof returnUrl === 'string' &&
+            typeof otpLength === 'number' &&
+            Number.isInteger(otpLength) &&
+            otpLength > 0
+            ? { challengeId, otpLength, returnUrl: normaliseReturnUrl(returnUrl, config) }
+            : null;
+    } catch {
+        return null;
+    }
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -897,6 +993,11 @@ function writeProxyErrorResponse(
 function clearVerifyEmailCookies(reply: FastifyReply, config: GateConfig): void {
     reply.clearCookie(buildVerifyCsrfCookieName(config), buildVerifyCsrfCookieOptions(config));
     reply.clearCookie(buildVerifyTokenCookieName(config), buildVerifyTokenCookieOptions(config));
+    clearOtpChallengeCookie(reply, config);
+}
+
+function clearOtpChallengeCookie(reply: FastifyReply, config: GateConfig): void {
+    reply.clearCookie(buildOtpChallengeCookieName(config), buildOtpChallengeCookieOptions(config));
 }
 
 function buildUpstreamHeaders(auth: AuthPayload): Record<string, string> {
@@ -1193,6 +1294,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         buildGatePath(config, '/login'),
         async (request, reply) => {
             const returnUrl = normaliseReturnUrl(readString(request.query.returnUrl), config);
+            if (readString(request.query.resetOtp) === '1') {
+                clearOtpChallengeCookie(reply, config);
+                return reply.redirect(buildLoginRedirectUrl(config, returnUrl));
+            }
+            const otpChallenge = readOtpChallengeCookie(
+                readCookieValue(request.headers.cookie, buildOtpChallengeCookieName(config)),
+                config,
+            );
             reply.type('text/html; charset=utf-8');
             return reply.send(
                 renderLoginPage({
@@ -1200,10 +1309,25 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                         config.protectedRootPath === '/' ? '/' : `${config.protectedRootPath}/`,
                     loginAction: buildGatePath(config, '/signin'),
                     message: buildLoginMessage(request.query),
+                    isConfirmation:
+                        otpChallenge !== null ||
+                        buildLoginMessage(request.query)?.kind === 'success',
+                    otpChallengeId:
+                        otpChallenge !== null && otpChallenge.returnUrl === returnUrl
+                            ? otpChallenge.challengeId
+                            : undefined,
+                    otpLength:
+                        otpChallenge !== null && otpChallenge.returnUrl === returnUrl
+                            ? otpChallenge.otpLength
+                            : undefined,
+                    otpSubmitAction: buildGatePath(config, '/verify-email/otp'),
                     returnUrl,
                     signinBadgePath: buildSigninBadgeRoute(config),
                     stylesPath: buildStylesRoute(config),
                     title: resolvePageTitle(config),
+                    useDifferentEmailUrl: buildLoginRedirectUrl(config, returnUrl, {
+                        resetOtp: true,
+                    }),
                 }),
             );
         },
@@ -1273,6 +1397,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 );
             }
 
+            if (hasOtpChallenge(payload)) {
+                reply.setCookie(
+                    buildOtpChallengeCookieName(config),
+                    createOtpChallengeCookie(
+                        {
+                            challengeId: payload.otpChallengeId,
+                            otpLength: payload.otpLength,
+                            returnUrl,
+                        },
+                        config,
+                    ),
+                    buildOtpChallengeCookieOptions(config),
+                );
+            } else {
+                clearOtpChallengeCookie(reply, config);
+            }
+
             return reply.redirect(
                 buildLoginRedirectUrl(config, returnUrl, {
                     result: 'signin-email-sent',
@@ -1296,10 +1437,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
             reply.header('Referrer-Policy', 'no-referrer');
 
             if (typeof token !== 'string') {
-                reply.clearCookie(
-                    buildVerifyTokenCookieName(config),
-                    buildVerifyTokenCookieOptions(config),
-                );
+                clearVerifyEmailCookies(reply, config);
                 return reply.redirect(
                     buildLoginRedirectUrl(config, returnUrl, {
                         error: 'missing-verification-token',
@@ -1321,10 +1459,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 });
 
                 if (!previewResponse.ok) {
-                    reply.clearCookie(
-                        buildVerifyTokenCookieName(config),
-                        buildVerifyTokenCookieOptions(config),
-                    );
+                    clearVerifyEmailCookies(reply, config);
                     return reply.redirect(
                         buildLoginRedirectUrl(config, returnUrl, {
                             error: 'verify-email-failed',
@@ -1334,10 +1469,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
                 const payload: unknown = await previewResponse.json();
                 if (!isVerifyEmailPreviewResponse(payload)) {
-                    reply.clearCookie(
-                        buildVerifyTokenCookieName(config),
-                        buildVerifyTokenCookieOptions(config),
-                    );
+                    clearVerifyEmailCookies(reply, config);
                     return reply.redirect(
                         buildLoginRedirectUrl(config, returnUrl, {
                             error: 'verify-email-failed',
@@ -1369,10 +1501,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                     }),
                 );
             } catch {
-                reply.clearCookie(
-                    buildVerifyTokenCookieName(config),
-                    buildVerifyTokenCookieOptions(config),
-                );
+                clearVerifyEmailCookies(reply, config);
                 return reply.redirect(
                     buildLoginRedirectUrl(config, returnUrl, {
                         error: 'verify-email-failed',
@@ -1491,6 +1620,71 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 clearVerifyEmailCookies(reply, config);
                 return reply.redirect(
                     buildLoginRedirectUrl(config, returnUrl, {
+                        error: 'verify-email-failed',
+                    }),
+                );
+            }
+        },
+    );
+
+    app.post<{ Body: VerifyEmailOtpBody }>(
+        buildGatePath(config, '/verify-email/otp'),
+        async (request, reply) => {
+            if (!hasSameOriginMutationSource(request, config)) {
+                reply.code(403).send({ message: 'Forbidden' });
+                return;
+            }
+            const challenge = readOtpChallengeCookie(
+                readCookieValue(request.headers.cookie, buildOtpChallengeCookieName(config)),
+                config,
+            );
+            const code = readString(request.body.code);
+            if (challenge === null || typeof code !== 'string') {
+                clearOtpChallengeCookie(reply, config);
+                return reply.redirect(
+                    buildLoginRedirectUrl(
+                        config,
+                        challenge?.returnUrl ?? config.protectedRootPath,
+                        {
+                            error: 'verify-email-failed',
+                        },
+                    ),
+                );
+            }
+            try {
+                const response = await fetch(new URL('/verify-email/otp', config.serverUrl), {
+                    method: 'POST',
+                    headers: { accept: 'application/json', 'content-type': 'application/json' },
+                    body: JSON.stringify({ challengeId: challenge.challengeId, code }),
+                    cache: 'no-store',
+                    redirect: 'error',
+                });
+                const payload: unknown = await readResponsePayload(response);
+                const jwtSecret = getJwtSecret(config);
+                const auth =
+                    response.ok && isVerifyEmailResponse(payload) && jwtSecret !== null
+                        ? await verifyAuthToken(payload.accessToken, jwtSecret, {
+                              expectedAudience: config.publicOrigin,
+                              expectedIssuer: config.serverUrl,
+                          })
+                        : null;
+                if (auth === null || !isVerifyEmailResponse(payload)) {
+                    return reply.redirect(
+                        buildLoginRedirectUrl(config, challenge.returnUrl, {
+                            error: 'verify-email-failed',
+                        }),
+                    );
+                }
+                clearOtpChallengeCookie(reply, config);
+                reply.setCookie(
+                    config.cookieName,
+                    payload.accessToken,
+                    buildAuthCookieOptions(config),
+                );
+                return reply.redirect(challenge.returnUrl);
+            } catch {
+                return reply.redirect(
+                    buildLoginRedirectUrl(config, challenge.returnUrl, {
                         error: 'verify-email-failed',
                     }),
                 );

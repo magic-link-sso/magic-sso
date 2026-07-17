@@ -4,6 +4,8 @@
 export type {
     AuthCookieOptions,
     AuthPayload,
+    EmailOtpExchangeOptions,
+    EmailOtpExchangeResult,
     MagicSsoConfig,
     MagicSsoResolvedConfig,
     VerifyAuthTokenOptions,
@@ -13,6 +15,7 @@ export {
     buildLoginPath,
     buildLoginTarget,
     buildVerifyUrl,
+    exchangeEmailOtp,
     getCookieMaxAge,
     getCookieName,
     getCookiePath,

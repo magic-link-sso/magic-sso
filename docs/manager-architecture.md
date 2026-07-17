@@ -54,8 +54,8 @@ Managed mode uses separate files with explicit responsibilities:
 
 - `magic-sso.base.toml`: operator-authored, read-only to the manager. Owns
   secrets, SMTP settings, cookie settings, app URL, hosted auth copy and
-  branding, redirect URIs, site origins, bootstrap admin site configuration, and
-  any unmanaged sites.
+  branding, email OTP policy and secret, redirect URIs, site origins, bootstrap
+  admin site configuration, and any unmanaged sites.
 - `manager-state.json`: manager-owned mutable state. Owns which site IDs are
   manager-managed, per-site scope catalogs, per-site grants, and apply metadata.
 - `magic-sso.runtime.toml`: generated runtime config consumed by the server.
@@ -69,7 +69,9 @@ Managed mode uses separate files with explicit responsibilities:
 The manager never rewrites `magic-sso.base.toml` in place. Operators keep
 editing the base config through their normal deployment workflow, and the
 manager answers those changes by regenerating a runtime TOML instead of patching
-the base file directly.
+the base file directly. In particular, `[auth.otp]` is preserved as
+operator-owned configuration and is not editable through manager grants, scopes,
+APIs, or UI.
 
 The managed-mode file lifecycle is intentionally simple:
 

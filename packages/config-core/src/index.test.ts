@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     FULL_ACCESS_SCOPE,
     buildSiteAccessRules,
+    parseMagicSsoConfigToml,
     parseMagicSsoTomlConfig,
     renderSiteAccessRules,
     stringifyMagicSsoTomlConfig,
@@ -23,6 +24,65 @@ function createRawSite(overrides: Partial<MagicSsoTomlSite> = {}): MagicSsoTomlS
 }
 
 describe('config core helpers', () => {
+    it('uses safe OTP defaults and validates enabled OTP configuration', () => {
+        const base = `
+[auth]
+jwtSecret = "jwt-secret-0123456789-0123456789"
+csrfSecret = "csrf-secret-0123456789-012345678"
+emailSecret = "email-secret-0123456789-01234567"
+previewSecret = "preview-secret-0123456789-0123456"
+
+[email]
+from = "owner@example.com"
+
+[email.smtp]
+host = "smtp.example.com"
+user = "smtp-user"
+pass = "smtp-password"
+
+[[sites]]
+id = "client"
+origins = ["http://client.example.com"]
+allowedRedirectUris = ["http://client.example.com/verify-email"]
+allowedEmails = ["admin@example.com"]
+`.trimStart();
+
+        expect(parseMagicSsoConfigToml(base, '/tmp/magic-sso.toml').otp).toEqual({
+            allowedAttempts: 3,
+            enabled: false,
+            expirationSeconds: 300,
+            length: 6,
+            resendStrategy: 'rotate',
+            secret: undefined,
+        });
+        expect(() =>
+            parseMagicSsoConfigToml(
+                base.replace(
+                    'previewSecret = "preview-secret-0123456789-0123456"',
+                    `${'previewSecret = "preview-secret-0123456789-0123456"'}
+
+[auth.otp]
+enabled = true`,
+                ),
+                '/tmp/magic-sso.toml',
+            ),
+        ).toThrow(/auth\.otp\.secret/u);
+        expect(() =>
+            parseMagicSsoConfigToml(
+                base.replace(
+                    'previewSecret = "preview-secret-0123456789-0123456"',
+                    `${'previewSecret = "preview-secret-0123456789-0123456"'}
+
+[auth.otp]
+enabled = true
+secret = "jwt-secret-0123456789-0123456789"
+expiration = "16m"`,
+                ),
+                '/tmp/magic-sso.toml',
+            ),
+        ).toThrow(/auth\.otp\.expiration/u);
+    });
+
     it('normalizes emails and scopes when building site access rules', () => {
         const accessRules = buildSiteAccessRules(
             createRawSite({

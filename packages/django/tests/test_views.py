@@ -79,7 +79,9 @@ def test_login_post_sends_magic_link_request() -> None:
         )
 
     assert response.status_code == 200
-    assert b'Email sent, check your inbox' in response.content
+    assert b'Check your email' in response.content
+    assert b'If your email can sign in, you will receive a' in response.content
+    assert b'link shortly. Open the email and click the link to continue.' in response.content
     assert b'role="status"' in response.content
     assert b'user@example.com' not in response.content
     assert b'value="user@example.com"' not in response.content
@@ -113,6 +115,26 @@ def test_login_post_sends_scope_when_provided() -> None:
     assert response.status_code == 200
     payload: dict[str, Any] = post_mock.call_args.kwargs['json']
     assert payload['scope'] == 'album-A'
+
+
+def test_login_post_renders_otp_form_when_server_returns_a_challenge() -> None:
+    client = Client()
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {'otpChallengeId': 'challenge-123', 'otpLength': 6}
+
+    with patch('magic_sso_django.views.requests.post', return_value=mock_response):
+        response = client.post('/sso/login/', {'email': 'user@example.com'})
+
+    assert response.status_code == 200
+    assert b'name="challengeId" value="challenge-123"' in response.content
+    assert b'autocomplete="one-time-code"' in response.content
+    assert b'minlength="6"' in response.content
+    assert b'maxlength="6"' in response.content
+    assert b'placeholder="123456"' in response.content
+    assert b'formaction="/sso/verify-email/otp/"' in response.content
+    assert b'type="email"' not in response.content
+    assert b'Use a different email' in response.content
 
 
 def test_login_post_does_not_log_raw_email_addresses(
@@ -426,6 +448,65 @@ def test_verify_token_post_rejects_missing_csrf_token_without_global_middleware(
         response = client.post(
             '/sso/verify-email/',
             {'token': 'email-token', 'returnUrl': 'http://testserver/protected/'},
+        )
+
+    assert response.status_code == 403
+
+
+def test_verify_otp_sets_cookie_and_redirects_on_success() -> None:
+    client = Client()
+    verify_response = Mock()
+    verify_response.status_code = 200
+    verify_response.json.return_value = {'accessToken': sign_access_token()}
+
+    with patch('magic_sso_django.views.requests.post', return_value=verify_response) as post_mock:
+        response = client.post(
+            '/sso/verify-email/otp/',
+            {
+                'challengeId': 'challenge-123',
+                'code': '123456',
+                'returnUrl': 'http://testserver/protected/',
+            },
+        )
+
+    assert response.status_code == 302
+    assert response.url == 'http://testserver/protected/'
+    assert post_mock.call_args.kwargs['json'] == {
+        'challengeId': 'challenge-123',
+        'code': '123456',
+    }
+    assert post_mock.call_args.kwargs['timeout'] == 5
+    assert response.cookies['magic-sso'].value == verify_response.json.return_value['accessToken']
+    assert response.cookies['magic-sso']['httponly'] is True
+    assert response.cookies['magic-sso']['path'] == '/'
+    assert response.cookies['magic-sso']['samesite'] == 'Lax'
+    assert response.cookies['magic-sso']['secure'] is True
+
+
+def test_verify_otp_renders_generic_error_and_preserves_challenge_on_failure() -> None:
+    client = Client()
+    verify_response = Mock()
+    verify_response.status_code = 400
+
+    with patch('magic_sso_django.views.requests.post', return_value=verify_response):
+        response = client.post(
+            '/sso/verify-email/otp/',
+            {'challengeId': 'challenge-123', 'code': 'bad-code'},
+        )
+
+    assert response.status_code == 200
+    assert b'Invalid or expired code.' in response.content
+    assert b'name="challengeId" value="challenge-123"' in response.content
+    assert 'magic-sso' not in response.cookies
+
+
+def test_verify_otp_rejects_missing_csrf_token_without_global_middleware() -> None:
+    client = Client(enforce_csrf_checks=True)
+
+    with override_settings(MIDDLEWARE=[]):
+        response = client.post(
+            '/sso/verify-email/otp/',
+            {'challengeId': 'challenge-123', 'code': '123456'},
         )
 
     assert response.status_code == 403

@@ -19,6 +19,8 @@ Peer dependencies:
   `buildAuthCookieOptions()`, and `buildLoginTarget()`
 - return-url helpers such as `normaliseReturnUrl()` and `buildVerifyUrl()`
 - config helpers such as `resolveMagicSsoConfig()` and `getJwtSecret()`
+- `exchangeEmailOtp()` for server-side code exchange and site-bound token
+  validation
 
 `buildLoginPath()` and `buildLoginTarget()` both accept an optional final
 `scope` argument, verified auth payloads expose `email`, `scope`, and `siteId`,
@@ -90,6 +92,13 @@ const auth = await verifyAuthToken(token, secret, {
     expectedIssuer: 'http://localhost:3000',
 });
 ```
+
+### Exchange an email OTP
+
+`exchangeEmailOtp()` is for an Angular SSR/Node handler. It submits a challenge
+and code to the SSO server, validates issuer and audience, and returns the
+verified token for that handler to place in its HTTP-only cookie. Never invoke
+it from browser-only code or store the returned token client-side.
 
 ## Example App
 

@@ -3,8 +3,9 @@
 Passwordless sign-in for self-hosted apps.
 
 Magic Link SSO is a self-hosted email-based SSO server for small private
-deployments. It sends time-limited magic links, issues JWT session tokens, and
-can run without a database.
+deployments. It sends time-limited magic links, optionally includes a short
+email OTP for mobile and PWA sign-in, issues JWT session tokens, and can run
+without a database.
 
 This repository contains the server, reusable framework packages, the Magic Link
 SSO Gate reverse-proxy service, and example apps for Angular, Django, Fastify,
@@ -35,8 +36,10 @@ Magic Link SSO can protect private resources in two high-level ways:
 - framework integration: the app owns the callback and session handling
 - Gate reverse proxy: Gate owns the callback and protects a private upstream
 
-In both cases, access is granted through email-based magic links rather than
-passwords or HTTP Basic Auth.
+In both cases, access is granted through an email verification grant rather than
+passwords or HTTP Basic Auth. The email always contains a magic link and, when
+optional OTP is enabled, also contains a short code that can be entered in the
+app or hosted page that started sign-in.
 
 If you are deciding between Magic Link SSO, Better Auth, Keycloak, or a broader
 identity platform, see
@@ -74,16 +77,26 @@ Flows:
 
 1. Redirect flow: the client checks its auth cookie and redirects
    unauthenticated users to the hosted `/signin` page. The SSO server resolves
-   the target site, checks access rules, signs a one-time verification token,
-   and emails the magic link. The client exchanges that verification token for
-   an access token and stores the auth cookie.
+   the target site, checks access rules, creates one email verification grant,
+   and sends its magic link plus an optional OTP. The link or code consumes the
+   same one-time grant before the client stores the resulting auth cookie.
 2. API flow: the client renders its own login form and posts
    `{ email, returnUrl, verifyUrl, scope? }` to the SSO server. The remaining
-   flow is the same as the redirect flow.
+   flow is the same as the redirect flow. When OTP is enabled, the JSON response
+   includes public challenge metadata so the app can replace the email form with
+   one code field and exchange the code server-side.
 3. Server-managed verify flow: the built-in hosted `/verify-email` page lands on
    a no-store confirmation page that stores the email token in a temporary
    `HttpOnly` cookie, removes it from the URL, and completes sign-in with
    `POST /verify-email` before redirecting back to the trusted return URL.
+   Alternatively, the already-open hosted `/signin` page can submit the email
+   code to `POST /verify-email/otp`.
+
+OTP is disabled by default and is an alternative way to consume the emailed
+grant, not a second authentication factor. The supported `rotate` resend policy
+keeps one active challenge for the same normalized email, site, scope, return
+URL, and verify URL. Resending that login context immediately invalidates its
+previous code without disrupting independently bound login contexts.
 
 ## Getting Started
 
@@ -120,6 +133,18 @@ Flows:
     emailSecret = "replace-me-with-a-different-long-random-email-secret"
     previewSecret = "replace-me-with-a-different-long-random-preview-secret"
     emailExpiration = "15m"
+
+    # Optional: lets users type a short email code back into an already-open
+    # mobile/PWA session. It remains an alternate exchange for the same grant.
+    [auth.otp]
+    enabled = false
+    length = 6
+    expiration = "5m"
+    allowedAttempts = 3
+    # A resend for the same login context invalidates the previous challenge.
+    resendStrategy = "rotate"
+    # Required only when enabled; it must be a dedicated 32+ character secret.
+    # secret = "replace-me-with-a-dedicated-long-random-otp-secret"
 
     [cookie]
     name = "magic-sso"
@@ -256,6 +281,9 @@ pnpm dev:photos
 pnpm dev:django
 pnpm dev:private1
 pnpm dev:private2
+pnpm dev:manager:otp
+pnpm dev:manager:otp:stack
+pnpm dev:gate:otp:stack
 pnpm test:e2e
 ```
 
@@ -266,8 +294,24 @@ win, so you can switch modes without editing files, for example:
 pnpm dev:direct
 ```
 
-`pnpm test:e2e` runs the Playwright smoke suite against the bundled example apps
-and starts the local SMTP sink and SSO server for the run.
+`pnpm test:e2e` runs the Playwright suite against the bundled apps in both
+app-owned and hosted direct modes. It covers the existing magic-link flow plus
+OTP success and invalid-code behavior for Angular, Django, Fastify, Next.js,
+Nuxt, and both Gate upstreams. The command starts an isolated SMTP sink and SSO
+server for the run.
+
+For manual OTP checks without changing your local server TOML, use:
+
+```sh
+pnpm dev:otp
+pnpm dev:otp:direct
+```
+
+Each command uses a temporary copy of the active `MAGICSSO_CONFIG_FILE` (or the
+path in `server/.env`), enables the v1 OTP policy, and leaves the source file
+unchanged. Set `MAGICSSO_DEV_OTP_SECRET` only if you need a local override. The
+explicit manager and Gate `:otp` shortcuts shown above enable OTP only for their
+respective local run; their existing non-OTP commands stay unchanged.
 
 To watch the flow interactively, run `pnpm test:e2e:ui`. You can slow it down
 with `PW_SLOWMO_MS`, for example:
@@ -336,7 +380,11 @@ Top-level tables:
 - `[server.securityState]` selects whether replay protection and per-email
   sign-in throttling use local files or shared Redis state.
 - `[auth]` sets `jwtSecret`, `jwtExpiration`, `csrfSecret`, `emailSecret`, and
-  `emailExpiration`.
+  `emailExpiration`. `[auth.otp]` optionally enables short email codes as an
+  alternate way to consume the same magic-link grant. It is disabled by default
+  and requires a dedicated `secret` when enabled. Its `rotate` resend strategy
+  permits only the newest challenge for an identical email/site/scope/redirect
+  binding.
 - `[cookie]` sets cookie name and flags.
 - `[email]`, `[email.smtp]`, and `[[email.smtpFallbacks]]` configure delivery.
 - `[rateLimit]` sets `windowMs`, `healthzMax`, `signInEmailMax`, `signInMax`,
@@ -531,8 +579,10 @@ See the full guide in [docs/gate.md](./docs/gate.md).
 ## Security Considerations
 
 - Ensure all communications between the client and SSO server are over HTTPS.
-- Keep `auth.jwtSecret`, `auth.emailSecret`, `auth.csrfSecret`, and
-  `auth.previewSecret` secret and private.
+- Keep `auth.jwtSecret`, `auth.emailSecret`, `auth.csrfSecret`,
+  `auth.previewSecret`, and `auth.otp.secret` secret and private. OTP is useful
+  when a mobile/PWA session cannot receive a tapped email link; it does not add
+  a second authentication factor or protect a compromised inbox.
 - For a source-derived inventory of implemented server and Gate hardening
   measures, see [docs/security-controls.md](./docs/security-controls.md).
 - Prefer the app-owned `/verify-email` callback flow for cross-origin

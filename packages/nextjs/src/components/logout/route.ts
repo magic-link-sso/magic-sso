@@ -30,49 +30,9 @@ import { NextResponse } from 'next/server';
 import {
     getCookieName,
     getCookiePath,
-    getPublicOrigin,
-    isTrustProxyEnabled,
-    readFirstHeaderValue,
+    getExpectedMutationOrigin,
+    hasSameOriginMutationSource,
 } from '../../lib/auth';
-
-function getExpectedOrigin(request: Request): string {
-    const publicOrigin = getPublicOrigin();
-    if (publicOrigin !== null) {
-        return publicOrigin;
-    }
-
-    if (isTrustProxyEnabled()) {
-        const forwardedHost = readFirstHeaderValue(request.headers.get('x-forwarded-host'));
-        const host = forwardedHost ?? readFirstHeaderValue(request.headers.get('host'));
-        if (typeof host === 'string' && host.length > 0) {
-            const forwardedProtocol = readFirstHeaderValue(
-                request.headers.get('x-forwarded-proto'),
-            );
-            const protocol = forwardedProtocol ?? new URL(request.url).protocol.slice(0, -1);
-            return `${protocol}://${host}`;
-        }
-    }
-
-    return new URL(request.url).origin;
-}
-
-function hasSameOriginMutationSource(request: Request, expectedOrigin: string): boolean {
-    const originHeader = request.headers.get('origin');
-    if (typeof originHeader === 'string' && originHeader.length > 0) {
-        return originHeader === expectedOrigin;
-    }
-
-    const refererHeader = request.headers.get('referer');
-    if (typeof refererHeader !== 'string' || refererHeader.length === 0) {
-        return false;
-    }
-
-    try {
-        return new URL(refererHeader).origin === expectedOrigin;
-    } catch {
-        return false;
-    }
-}
 
 export async function LogoutRoute(request: Request): Promise<Response> {
     if (request.method !== 'POST') {
@@ -84,15 +44,13 @@ export async function LogoutRoute(request: Request): Promise<Response> {
         });
     }
 
-    const expectedOrigin = getExpectedOrigin(request);
-
-    if (!hasSameOriginMutationSource(request, expectedOrigin)) {
+    if (!hasSameOriginMutationSource(request)) {
         return new NextResponse('Forbidden', {
             status: 403,
         });
     }
 
-    const url = new URL('/', expectedOrigin);
+    const url = new URL('/', getExpectedMutationOrigin(request));
     url.pathname = '/';
     const response = NextResponse.redirect(url, 303);
 

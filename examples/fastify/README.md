@@ -76,6 +76,7 @@ The example includes:
 - a local `/api/signin` route that forwards to the Magic Link SSO server
 - a local `/verify-email` callback that exchanges the email token for the auth
   cookie
+- a local `/verify-email/otp` route for code entry when the server enables OTP
 - a `/protected` route gated by the auth cookie
 - a POST-only `/logout` route that clears the cookie and redirects home
 
@@ -84,6 +85,11 @@ the Fastify app first. That callback previews the email token with
 `MAGICSSO_PREVIEW_SECRET`, verifies the access token against
 `MAGICSSO_JWT_SECRET`, sets the auth cookie, and only then redirects to the
 normalized `returnUrl`.
+
+For OTP, the Fastify app stores only a signed HTTP-only challenge cookie, sends
+the code to Magic Link SSO from the server, verifies the returned JWT, and then
+sets the same auth cookie. It never stores the code or access token in browser
+storage.
 
 This example is the recommended plain Node integration reference in this
 repository. The Angular example remains the in-repo Express-style SSR reference.

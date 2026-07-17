@@ -94,15 +94,33 @@ describe('manager dev stack helpers', () => {
 
         expect(env.MAGICSSO_CONFIG_FILE).toBe(join(root, 'manager/runtime/magic-sso.runtime.toml'));
         expect(env.MAGICSSO_MANAGER_CONFIG_FILE).toBe(join(root, 'manager/runtime/manager.toml'));
-        expect(env.MAGIC_GATE_RENDER_PUBLIC_ORIGIN).toBe('http://localhost:4306');
+        expect(env.MAGICSSO_OTP_ENABLED).toBe('false');
+        expect(env.MAGICSSO_OTP_SECRET).toBe('manager-dev-otp-secret-1234567890abcd');
+        expect(env.MAGIC_GATE_RENDER_PUBLIC_ORIGIN).toBe('http://manager.localhost:4306');
         expect(env.MAGIC_GATE_RENDER_UPSTREAM_URL).toBe('http://127.0.0.1:4311');
-        expect(env.MANAGER_DEV_PHOTOS_ORIGIN).toBe('http://localhost:5001');
+        expect(env.MANAGER_DEV_PHOTOS_ORIGIN).toBe('http://photos.localhost:5001');
         expect(env.MANAGER_DEV_SMTP_HOST).toBe('127.0.0.1');
         expect(env.MANAGER_AUDIT_INTEGRITY_KEY).toBe('manager-dev-audit-integrity-key-1234567890');
         expect(env.MAILPIT_SMTP_PORT).toBe('1025');
         expect(env.PHOTOS_OWNER_EMAIL).toBe('owner@example.com');
         expect(env.PHOTOS_FRIEND_EMAIL).toBe('friend@example.com');
         expect(env.PHOTOS_FAMILY_EMAIL).toBe('family@example.com');
+    });
+
+    it('enables OTP only when the development environment opts in', async () => {
+        const root = await createTempRepository();
+        await writeRepositoryFile(root, 'manager/.env', 'MAGICSSO_OTP_ENABLED=false\n');
+
+        const env = buildManagerDevEnvironment(
+            {
+                MAGICSSO_OTP_ENABLED: 'true',
+                MAGICSSO_OTP_SECRET: 'custom-manager-dev-otp-secret-1234567890',
+            },
+            root,
+        );
+
+        expect(env.MAGICSSO_OTP_ENABLED).toBe('true');
+        expect(env.MAGICSSO_OTP_SECRET).toBe('custom-manager-dev-otp-secret-1234567890');
     });
 
     it('renders local manager dev configs with host-side URLs and relative manager paths', async () => {
@@ -170,10 +188,10 @@ describe('manager dev stack helpers', () => {
         expect(managerConfig).toContain('port = 4311');
         expect(baseConfig).toContain('appUrl = "http://127.0.0.1:3000"');
         expect(baseConfig).toContain('host = "127.0.0.1"');
-        expect(baseConfig).toContain('origin = "http://localhost:4306"');
-        expect(baseConfig).toContain('photosOrigin = "http://localhost:5001"');
+        expect(baseConfig).toContain('origin = "http://manager.localhost:4306"');
+        expect(baseConfig).toContain('photosOrigin = "http://photos.localhost:5001"');
         expect(gateConfig).toContain('port = 4306');
-        expect(gateConfig).toContain('publicOrigin = "http://localhost:4306"');
+        expect(gateConfig).toContain('publicOrigin = "http://manager.localhost:4306"');
         expect(gateConfig).toContain('upstreamUrl = "http://127.0.0.1:4311"');
         expect(gateConfig).toContain('serverUrl = "http://127.0.0.1:3000"');
         expect(stateFile).toContain('"email":"owner@example.com"');
@@ -301,7 +319,7 @@ describe('manager dev stack helpers', () => {
                     cwd: root,
                     env: expect.objectContaining({
                         MAGICSSO_DIRECT_USE: 'false',
-                        MAGICSSO_PUBLIC_ORIGIN: 'http://localhost:5001',
+                        MAGICSSO_PUBLIC_ORIGIN: 'http://photos.localhost:5001',
                         MAGICSSO_SERVER_URL: 'http://127.0.0.1:3000',
                     }),
                     stdio: 'inherit',

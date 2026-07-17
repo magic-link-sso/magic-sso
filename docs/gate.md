@@ -31,16 +31,29 @@ Flow:
 2. Gate checks its own `httpOnly` cookie.
 3. Anonymous document requests redirect to `/_magicgate/login` or straight to
    `https://sso.example.com/signin` when direct-use mode is enabled.
-4. The hosted sign-in page sends the magic link email.
-5. The email link returns to
-   `https://private.example.com/_magicgate/verify-email?...`.
-6. Gate previews the token with `GET /verify-email?token=...` and the shared
-   `MAGICSSO_PREVIEW_SECRET`, then exchanges the one-time token with
-   `POST /verify-email` on the SSO server.
+4. The sign-in flow sends an email containing a magic link and, when enabled, an
+   OTP for the page that initiated sign-in.
+5. The user either follows the email link back to
+   `https://private.example.com/_magicgate/verify-email?...` or enters the OTP
+   in the already-open local or hosted sign-in page.
+6. For a link, Gate previews the token with `GET /verify-email?token=...` and
+   the shared `MAGICSSO_PREVIEW_SECRET`, then exchanges it with
+   `POST /verify-email`. For a local OTP form, Gate exchanges the code
+   server-side with `POST /verify-email/otp`. In direct-use mode, the hosted SSO
+   page accepts the code and redirects through Gate's normal verification
+   callback.
 7. Gate validates the returned JWT locally with `auth.jwtSecret`,
    `expectedAudience`, and `expectedIssuer`.
 8. Gate stores its own auth cookie and redirects to the original `returnUrl`.
 9. Authenticated traffic is proxied to the private upstream.
+
+When the SSO server enables email OTP, local-login Gate keeps the challenge
+identifier in a signed HTTP-only cookie and replaces the email form with one
+code field. It exchanges the code server-side at `POST /verify-email/otp`,
+validates the same audience and issuer, then sets the normal Gate auth cookie.
+An invalid entry returns to the code form; the user can choose "Use a different
+email" to clear an expired or exhausted challenge and start again. This works
+for both static and dynamic upstreams without exposing upstream content first.
 
 The dedicated Gate flow source diagram lives in
 [`docs/MagicLinkSSO-Gate-Flow.puml`](./MagicLinkSSO-Gate-Flow.puml). It stays
@@ -64,6 +77,7 @@ Canonical endpoints:
 - `POST /_magicgate/signin`
 - `GET /_magicgate/verify-email`
 - `POST /_magicgate/verify-email`
+- `POST /_magicgate/verify-email/otp`
 - `POST /_magicgate/logout`
 - `GET /_magicgate/session`
 - `GET /_magicgate/healthz`

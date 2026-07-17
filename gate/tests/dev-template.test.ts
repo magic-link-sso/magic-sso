@@ -17,6 +17,8 @@ describe('gate dev bootstrap template', () => {
         expect(template).toContain('MAGICSSO_PREVIEW_SECRET');
         expect(template).toContain('MAGICSSO_DEV_CSRF_SECRET');
         expect(template).toContain('MAGICSSO_DEV_EMAIL_SECRET');
+        expect(template).toContain('enabled = ${MAGICSSO_OTP_ENABLED}');
+        expect(template).toContain('secret = "${MAGICSSO_OTP_SECRET}"');
         expect(template).toContain('secret = "${MANAGER_RELOAD_SECRET}"');
         expect(template).toContain('id = "manager-admin"');
         expect(template).toContain('MANAGER_PUBLIC_HOST');
@@ -64,6 +66,8 @@ describe('gate dev bootstrap template', () => {
     it('passes the gate auth render values through compose', () => {
         const compose = readGateFile('docker-compose.yml');
 
+        expect(compose).toContain('MAGICSSO_OTP_ENABLED');
+        expect(compose).toContain('MAGICSSO_OTP_SECRET');
         expect(compose).toContain('MAGIC_GATE_RENDER_JWT_SECRET');
         expect(compose).toContain('MAGIC_GATE_RENDER_PREVIEW_SECRET');
         expect(compose).toContain('MAGIC_GATE_RENDER_SERVER_URL');
@@ -89,6 +93,8 @@ describe('gate dev bootstrap template', () => {
         expect(exampleEnv).toContain('MANAGER_ALLOWED_EMAIL=manager@example.com');
         expect(exampleEnv).toContain('MANAGER_AUDIT_INTEGRITY_KEY=');
         expect(exampleEnv).toContain('MANAGER_RELOAD_SECRET=');
+        expect(exampleEnv).toContain('MAGICSSO_OTP_ENABLED=false');
+        expect(exampleEnv).toContain('MAGICSSO_OTP_SECRET=');
         expect(exampleEnv).not.toContain('MAGIC_GATE_RENDER_SSE_ENABLED');
         expect(exampleToml).not.toContain('sseEnabled');
     });

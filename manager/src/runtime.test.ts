@@ -18,6 +18,10 @@ csrfSecret = "csrf-secret-0123456789-012345678"
 emailSecret = "email-secret-0123456789-01234567"
 previewSecret = "preview-secret-0123456789-0123456"
 
+[auth.otp]
+enabled = true
+secret = "otp-secret-0123456789-012345678901"
+
 [email]
 from = "owner@example.com"
 
@@ -111,6 +115,10 @@ describe('runtime planning', () => {
             'client',
             'docs',
         ]);
+        expect(runtimePlan.runtimeConfig.auth.otp).toMatchObject({
+            enabled: true,
+            secret: 'otp-secret-0123456789-012345678901',
+        });
     });
 
     it('summarizes semantic access diffs instead of a text patch', () => {

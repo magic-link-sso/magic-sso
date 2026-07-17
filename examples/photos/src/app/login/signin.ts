@@ -23,7 +23,20 @@ async function readResponseMessage(response: Response): Promise<string | undefin
 export interface SignInResult {
     code?: string;
     message?: string;
+    otpChallengeId?: string;
+    otpLength?: number;
     success: boolean;
+}
+
+function readOtpMetadata(value: unknown): Pick<SignInResult, 'otpChallengeId' | 'otpLength'> {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+    const challengeId = Reflect.get(value, 'otpChallengeId');
+    const length = Reflect.get(value, 'otpLength');
+    return typeof challengeId === 'string' && typeof length === 'number'
+        ? { otpChallengeId: challengeId, otpLength: length }
+        : {};
 }
 
 export async function sendMagicLink(
@@ -70,7 +83,7 @@ export async function sendMagicLink(
             };
         }
 
-        return { success: true };
+        return { success: true, ...readOtpMetadata(await response.json().catch(() => null)) };
     } catch (error: unknown) {
         if (error instanceof Error) {
             console.error('Error sending magic link:', { message: error.message });

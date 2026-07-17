@@ -19,6 +19,15 @@ emailSecret = "${MAGICSSO_DEV_EMAIL_SECRET}"
 previewSecret = "${MAGICSSO_PREVIEW_SECRET}"
 emailExpiration = "15m"
 
+# Local OTP is enabled only by the explicit dev:manager:otp command.
+[auth.otp]
+enabled = ${MAGICSSO_OTP_ENABLED}
+length = 6
+expiration = "5m"
+allowedAttempts = 3
+resendStrategy = "rotate"
+secret = "${MAGICSSO_OTP_SECRET}"
+
 [cookie]
 name = "${MAGICSSO_COOKIE_NAME}"
 httpOnly = true

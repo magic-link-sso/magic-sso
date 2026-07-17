@@ -52,8 +52,14 @@ The Nuxt module registers:
 
 - a named `magic-sso-auth` route middleware
 - a `/verify-email` callback route
+- a `POST /verify-email/otp` route for server-side email-code exchange
 - a POST-only `/logout` route
 - auto-imported `useMagicSsoAuth()` and `useMagicSsoConfig()` helpers
+
+When the server enables `[auth.otp]`, the local login page replaces its email
+form with one code field after a successful request. The code is sent to the
+built-in Nuxt server route, which validates the returned token and sets the same
+HTTP-only auth cookie as the magic-link callback.
 
 Protect a page with server-side auth gating:
 

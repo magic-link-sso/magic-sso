@@ -20,6 +20,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import type { PerEmailSignInLimiter, SignInAttemptLimitResult } from './perEmailSignInLimiter.js';
+import {
+    parseOtpChallenge,
+    type OtpChallenge,
+    type OtpChallengeStore,
+    type OtpChallengeVerificationResult,
+} from './otpChallengeStore.js';
+import { hashOtpCode } from './otp.js';
 import type { SessionRevocationStore } from './sessionRevocationStore.js';
 import type { VerificationTokenReplayStore } from './verificationTokenReplayStore.js';
 
@@ -45,6 +52,64 @@ redis.call('PEXPIRE', key, window_ms)
 return {1, 0}
 `;
 
+const OTP_VERIFY_SCRIPT = `
+-- otp_verify
+local key = KEYS[1]
+local active_key = KEYS[2]
+local submitted_hash = ARGV[1]
+local now_ms = tonumber(ARGV[2])
+local payload = redis.call('GET', key)
+if not payload then return {'not_found'} end
+if redis.call('GET', active_key) ~= key then
+    redis.call('DEL', key)
+    return {'consumed'}
+end
+local challenge = cjson.decode(payload)
+if tonumber(challenge.expiresAt) <= now_ms then
+    redis.call('DEL', key)
+    redis.call('DEL', active_key)
+    return {'expired'}
+end
+if tonumber(challenge.attemptsRemaining) <= 0 then
+    redis.call('DEL', key)
+    redis.call('DEL', active_key)
+    return {'too_many_attempts'}
+end
+if challenge.otpHash ~= submitted_hash then
+    challenge.attemptsRemaining = tonumber(challenge.attemptsRemaining) - 1
+    if challenge.attemptsRemaining <= 0 then
+        redis.call('DEL', key)
+        redis.call('DEL', active_key)
+        return {'too_many_attempts'}
+    end
+    redis.call('SET', key, cjson.encode(challenge), 'PXAT', tonumber(challenge.expiresAt))
+    return {'invalid'}
+end
+redis.call('DEL', key)
+redis.call('DEL', active_key)
+return {'valid', payload}
+`;
+
+const OTP_ROTATE_SCRIPT = `
+-- otp_rotate
+local challenge_key = KEYS[1]
+local active_key = KEYS[2]
+local payload = ARGV[1]
+local expires_at = tonumber(ARGV[2])
+
+if redis.call('EXISTS', challenge_key) == 1 then
+    return {0}
+end
+
+local previous_challenge_key = redis.call('GET', active_key)
+redis.call('SET', challenge_key, payload, 'PXAT', expires_at)
+redis.call('SET', active_key, challenge_key, 'PXAT', expires_at)
+if previous_challenge_key and previous_challenge_key ~= challenge_key then
+    redis.call('DEL', previous_challenge_key)
+end
+return {1}
+`;
+
 export interface RedisSecurityStateClient {
     connect(): Promise<void>;
     disconnect(): void;
@@ -67,6 +132,14 @@ function buildReplayKey(keyPrefix: string, jti: string): string {
 
 function buildSessionRevocationKey(keyPrefix: string, jti: string): string {
     return `${keyPrefix}:session-revocation:${encodeURIComponent(jti)}`;
+}
+
+function buildOtpChallengeKey(keyPrefix: string, challengeId: string): string {
+    return `${keyPrefix}:otp-challenge:${encodeURIComponent(challengeId)}`;
+}
+
+function buildOtpRotationKey(keyPrefix: string, rotationKey: string): string {
+    return `${keyPrefix}:otp-active:${encodeURIComponent(rotationKey)}`;
 }
 
 function normaliseAttemptKey(email: string): string {
@@ -148,6 +221,82 @@ export function createRedisSessionRevocationStore(options: {
                 expiresAt,
                 'NX',
             );
+        },
+    };
+}
+
+export function createRedisOtpChallengeStore(options: {
+    client: RedisSecurityStateClient;
+    keyPrefix: string;
+}): OtpChallengeStore {
+    return {
+        async create(challenge: OtpChallenge): Promise<void> {
+            const result = await options.client.eval(
+                OTP_ROTATE_SCRIPT,
+                2,
+                buildOtpChallengeKey(options.keyPrefix, challenge.challengeId),
+                buildOtpRotationKey(options.keyPrefix, challenge.rotationKey),
+                JSON.stringify(challenge),
+                challenge.expiresAt,
+            );
+            if (!Array.isArray(result) || Number(result[0]) !== 1) {
+                throw new Error('OTP challenge already exists.');
+            }
+        },
+        async verify(input): Promise<OtpChallengeVerificationResult> {
+            const key = buildOtpChallengeKey(options.keyPrefix, input.challengeId);
+            const stored = await options.client.get(key);
+            if (stored === null) {
+                return { category: 'not_found' };
+            }
+            let storedChallenge: OtpChallenge | null;
+            try {
+                storedChallenge = parseOtpChallenge(JSON.parse(stored));
+            } catch {
+                return { category: 'store_error' };
+            }
+            if (storedChallenge === null) {
+                return { category: 'store_error' };
+            }
+            const result = await options.client.eval(
+                OTP_VERIFY_SCRIPT,
+                2,
+                key,
+                buildOtpRotationKey(options.keyPrefix, storedChallenge.rotationKey),
+                hashOtpCode({
+                    challengeId: input.challengeId,
+                    code: input.code,
+                    jti: storedChallenge.jti,
+                    secret: input.secret,
+                    siteId: storedChallenge.siteId,
+                }),
+                input.now,
+            );
+            if (!Array.isArray(result) || typeof result[0] !== 'string') {
+                return { category: 'store_error' };
+            }
+
+            const category = result[0];
+            if (category === 'valid' && typeof result[1] === 'string') {
+                try {
+                    const challenge = parseOtpChallenge(JSON.parse(result[1]));
+                    return challenge === null
+                        ? { category: 'store_error' }
+                        : { category: 'valid', challenge };
+                } catch {
+                    return { category: 'store_error' };
+                }
+            }
+            if (
+                category === 'expired' ||
+                category === 'invalid' ||
+                category === 'not_found' ||
+                category === 'consumed' ||
+                category === 'too_many_attempts'
+            ) {
+                return { category };
+            }
+            return { category: 'store_error' };
         },
     };
 }

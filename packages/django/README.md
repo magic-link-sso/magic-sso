@@ -88,6 +88,11 @@ Verified requests expose both `request.magic_sso_user_email` and
 also accepts an optional `scope` query or form field and forwards it to the SSO
 server.
 
+If the server enables `[auth.otp]`, the packaged login form renders a single OTP
+field after sign-in. Its CSRF-protected `/sso/verify-email/otp/` view exchanges
+the code server-side, validates the returned JWT, and sets the normal HTTP-only
+cookie.
+
 ### Local development
 
 ```sh

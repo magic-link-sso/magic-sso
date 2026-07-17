@@ -31,10 +31,19 @@ function createEphemeralServerConfigPath(): string {
     const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-server-'));
     const verifyTokenStoreDir = resolve(tempDir, 'verification-tokens');
     const signInEmailRateLimitStoreDir = resolve(tempDir, 'signin-email-rate-limit');
-    const configContents = readFileSync(serverFixtureConfigPath, 'utf8').replace(
+    const configContents = `${readFileSync(serverFixtureConfigPath, 'utf8').replace(
         'logLevel = "error"',
-        `logLevel = "error"\nverifyTokenStoreDir = "${verifyTokenStoreDir}"\nsignInEmailRateLimitStoreDir = "${signInEmailRateLimitStoreDir}"\n[rateLimit]\nsignInMax = 50\nsignInEmailMax = 50\nsignInPageMax = 50`,
-    );
+        `logLevel = "error"\nverifyTokenStoreDir = "${verifyTokenStoreDir}"\nsignInEmailRateLimitStoreDir = "${signInEmailRateLimitStoreDir}"\n[rateLimit]\nsignInMax = 100\nsignInEmailMax = 50\nsignInPageMax = 100\nverifyMax = 100`,
+    )}
+
+[auth.otp]
+enabled = true
+secret = "test-otp-secret-for-e2e-suite-1234567890"
+length = 6
+expiration = "5m"
+allowedAttempts = 3
+resendStrategy = "rotate"
+`;
     const configPath = resolve(tempDir, 'server.config.toml');
     writeFileSync(configPath, configContents, 'utf8');
     return configPath;

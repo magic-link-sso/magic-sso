@@ -9,6 +9,8 @@ import {
 
 export interface SignInResult {
     message: string;
+    otpChallengeId?: string;
+    otpLength?: number;
     success: boolean;
 }
 

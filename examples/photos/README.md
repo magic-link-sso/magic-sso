@@ -53,3 +53,7 @@ The intended demo flow is:
    `photo:red-kite-at-dusk`.
 4. Request a Magic Link SSO email for that exact scope and verify that the SSR
    page changes immediately after sign-in.
+
+With server-side `[auth.otp]` enabled, the Photos login page also accepts the
+short code sent in the same email. The code is exchanged by a local Next.js
+route and never written to browser storage.

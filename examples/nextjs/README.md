@@ -45,6 +45,11 @@ MAGICSSO_DIRECT_USE=true pnpm --filter example-app-nextjs dev
 Open [http://localhost:3001](http://localhost:3001) with your browser to see the
 result.
 
+When the server enables `[auth.otp]`, the login screen also accepts the short
+email code. The Next.js route exchanges it server-side and sets the same
+HTTP-only auth cookie, which is useful when the mail link opens outside an
+installed/PWA session.
+
 To customize public routes, wrap the package middleware in your own
 `src/proxy.ts`:
 

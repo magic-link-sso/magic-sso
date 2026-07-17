@@ -14,6 +14,29 @@ interface SignInRequestBody {
 interface SignInResult {
     success: boolean;
     message: string;
+    otpChallengeId?: string;
+    otpExpiresInSeconds?: number;
+    otpLength?: number;
+}
+
+function readOtpMetadata(
+    value: unknown,
+): Pick<SignInResult, 'otpChallengeId' | 'otpExpiresInSeconds' | 'otpLength'> {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+    const challengeId = Reflect.get(value, 'otpChallengeId');
+    const expiresInSeconds = Reflect.get(value, 'otpExpiresInSeconds');
+    const length = Reflect.get(value, 'otpLength');
+    return typeof challengeId === 'string' &&
+        typeof expiresInSeconds === 'number' &&
+        typeof length === 'number'
+        ? {
+              otpChallengeId: challengeId,
+              otpExpiresInSeconds: expiresInSeconds,
+              otpLength: length,
+          }
+        : {};
 }
 
 function getServerUrl(magicSsoConfig: unknown): string {
@@ -91,9 +114,11 @@ export default defineEventHandler(async (event): Promise<SignInResult> => {
             };
         }
 
+        const payload: unknown = await response.json().catch(() => null);
         return {
             success: true,
             message: 'Verification email sent.',
+            ...readOtpMetadata(payload),
         };
     } catch (error: unknown) {
         const message = readMessage(error);

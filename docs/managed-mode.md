@@ -103,6 +103,11 @@ The manager does not send the new TOML contents to the server over HTTP. It
 writes the runtime file to shared storage, and the server either reloads or
 restarts to pick up that already-written file.
 
+Email OTP remains operator-owned. Configure `[auth.otp]`, including its
+dedicated secret, in `magic-sso.base.toml`; the manager preserves that table
+when it renders the runtime TOML and does not expose OTP settings as managed
+access data.
+
 ## Files and Permissions
 
 Managed mode uses these files with explicit ownership boundaries:
@@ -162,6 +167,11 @@ Recommended host ownership:
 - operator-owned: `magic-sso.base.toml`
 - manager-owned mutable files: `manager-state.json`, `magic-sso.runtime.toml`,
   `magic-sso.runtime.last-good.toml`, `manager-audit.ndjson`, `manager.lock`
+
+For local evaluation, `pnpm dev:manager:otp` enables OTP in the hot-reload
+manager environment and `pnpm dev:manager:otp:stack` enables it in the manager
+Compose stack. The existing `dev:manager` and `dev:manager:stack` commands keep
+OTP disabled.
 
 For stricter production isolation, you can split the bind mount into separate
 read-only and read-write file mounts. The bundled compose example keeps one

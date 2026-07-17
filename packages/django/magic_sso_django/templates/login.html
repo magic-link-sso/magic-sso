@@ -225,6 +225,25 @@
         opacity: 0.75;
       }
 
+      .secondary-link {
+        min-height: 2.9rem;
+        margin-top: 0.75rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        color: var(--color-text);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .secondary-link:hover {
+        background-color: rgba(148, 163, 184, 0.12);
+      }
+
       :focus-visible {
         outline: 3px solid var(--color-focus);
         outline-offset: 3px;
@@ -280,9 +299,54 @@
     <a class="skip-link" href="#main-content">Skip to sign-in form</a>
     <main class="page-shell" id="main-content">
       <section class="form-container" aria-labelledby="signin-title">
-        <h1 id="signin-title">Sign in</h1>
-        <p class="lede" id="signin-help">We&apos;ll email you a sign-in link.</p>
+        <h1 id="signin-title">
+          {% if confirmation or otp_challenge_id %}Check your email{% else %}Sign in{% endif %}
+        </h1>
+        <p class="lede" id="signin-help">
+          {% if confirmation or otp_challenge_id %} If your email can sign in, you will receive a
+          link shortly. Open the email and click the link to continue. {% else %} We&apos;ll email
+          you a sign-in link. {% endif %}
+        </p>
 
+        {% if confirmation or otp_challenge_id %}
+        <div class="confirmation-panel" role="status" aria-live="polite">
+          {% if otp_challenge_id %}
+          <form class="signin-form" method="post" aria-describedby="otp-help">
+            {% csrf_token %}
+            <input type="hidden" name="challengeId" value="{{ otp_challenge_id }}" />
+            <input type="hidden" name="returnUrl" value="{{ return_url }}" />
+            {% if otp_length %}
+            <input type="hidden" name="otpLength" value="{{ otp_length }}" />
+            {% endif %}
+            <div class="field-group">
+              <label class="field-label" for="otp-code">One-time code</label>
+              {{ otp_code_input }}
+              <p id="otp-help" class="lede">
+                You can also enter the one-time code from the email here.
+              </p>
+            </div>
+            <button
+              type="submit"
+              class="submit-button"
+              formaction="{% url 'magic_sso:verify_email_otp' %}"
+            >
+              <span class="button-content"><span>Sign in with code</span></span>
+            </button>
+            <a
+              class="secondary-link"
+              href="?returnUrl={{ return_url|urlencode }}{% if scope %}&scope={{ scope|urlencode }}{% endif %}"
+              >Use a different email</a
+            >
+          </form>
+          {% else %}
+          <a
+            class="secondary-link"
+            href="?returnUrl={{ return_url|urlencode }}{% if scope %}&scope={{ scope|urlencode }}{% endif %}"
+            >Use a different email</a
+          >
+          {% endif %}
+        </div>
+        {% else %}
         <form
           class="signin-form"
           method="post"
@@ -321,11 +385,6 @@
             </span>
           </button>
         </form>
-
-        {% if message %}
-        <div class="message success" id="signin-feedback" role="status" aria-live="polite">
-          {{ message }}
-        </div>
         {% endif %} {% if error %}
         <div class="message error" id="signin-feedback" role="alert">{{ error }}</div>
         {% endif %}

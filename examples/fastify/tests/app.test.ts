@@ -34,6 +34,7 @@ describe('fastify example routes', () => {
         try {
             const response = await app.inject({
                 headers: {
+                    cookie: 'magic-sso-otp-challenge=stale-challenge',
                     host: 'localhost:3005',
                 },
                 method: 'GET',
@@ -289,6 +290,143 @@ describe('fastify example routes', () => {
         }
     });
 
+    it('exchanges an OTP challenge stored in an HTTP-only cookie', async () => {
+        const secret = new TextEncoder().encode(testJwtSecret);
+        const accessToken = await new SignJWT({
+            email: 'fastify@example.com',
+            scope: '*',
+            siteId: 'site-a',
+        })
+            .setProtectedHeader({ alg: 'HS256' })
+            .setAudience('http://localhost:3005')
+            .setIssuer('http://localhost:3000')
+            .sign(secret);
+        const fetchMock = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        message: 'Verification email sent',
+                        otpChallengeId: 'challenge-123',
+                        otpLength: 6,
+                    }),
+                    { headers: { 'content-type': 'application/json' }, status: 200 },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ accessToken }), {
+                    headers: { 'content-type': 'application/json' },
+                    status: 200,
+                }),
+            );
+        const app = await createApp({ logger: false });
+
+        try {
+            const signinResponse = await app.inject({
+                headers: { host: 'localhost:3005' },
+                method: 'POST',
+                payload: {
+                    email: 'fastify@example.com',
+                    returnUrl: 'http://localhost:3005/protected',
+                    verifyUrl: 'http://localhost:3005/verify-email',
+                },
+                url: '/api/signin',
+            });
+            const challengeCookie = signinResponse.cookies.find(
+                (cookie) => cookie.name === 'magic-sso-otp-challenge',
+            );
+            if (!challengeCookie?.value) {
+                throw new Error('Expected sign-in response to store the OTP challenge cookie.');
+            }
+            expect(challengeCookie.httpOnly).toBe(true);
+
+            const loginResponse = await app.inject({
+                headers: {
+                    cookie: `magic-sso-otp-challenge=${challengeCookie.value}`,
+                    host: 'localhost:3005',
+                },
+                method: 'GET',
+                url: '/login?returnUrl=http://localhost:3005/protected',
+            });
+            expect(loginResponse.body).toContain('autocomplete="one-time-code"');
+            expect(loginResponse.body).toContain('Check your email');
+            expect(loginResponse.body).toContain('minlength="6"');
+            expect(loginResponse.body).toContain('placeholder="123456"');
+            expect(loginResponse.body).not.toContain('challenge-123');
+            expect(loginResponse.body).not.toContain('type="email"');
+            expect(loginResponse.body).toContain('Use a different email');
+
+            const resetResponse = await app.inject({
+                headers: {
+                    cookie: `magic-sso-otp-challenge=${challengeCookie.value}`,
+                    host: 'localhost:3005',
+                },
+                method: 'GET',
+                url: '/login?returnUrl=http://localhost:3005/protected&resetOtp=1',
+            });
+            expect(resetResponse.body).toContain('type="email"');
+            expect(resetResponse.body).not.toContain('autocomplete="one-time-code"');
+            expect(
+                resetResponse.cookies.find((cookie) => cookie.name === 'magic-sso-otp-challenge')
+                    ?.value,
+            ).toBe('');
+
+            const response = await app.inject({
+                headers: {
+                    'content-type': 'application/x-www-form-urlencoded',
+                    cookie: `magic-sso-otp-challenge=${challengeCookie.value}`,
+                    host: 'localhost:3005',
+                    origin: 'http://localhost:3005',
+                },
+                method: 'POST',
+                payload: 'code=123456&returnUrl=http%3A%2F%2Flocalhost%3A3005%2Fprotected',
+                url: '/verify-email/otp',
+            });
+
+            expect(response.statusCode).toBe(302);
+            expect(response.headers.location).toBe('http://localhost:3005/protected');
+            expect(response.cookies.find((cookie) => cookie.name === 'magic-sso')?.httpOnly).toBe(
+                true,
+            );
+            expect(fetchMock).toHaveBeenNthCalledWith(
+                2,
+                new URL('http://localhost:3000/verify-email/otp'),
+                {
+                    method: 'POST',
+                    headers: { accept: 'application/json', 'content-type': 'application/json' },
+                    body: JSON.stringify({ challengeId: 'challenge-123', code: '123456' }),
+                    cache: 'no-store',
+                },
+            );
+        } finally {
+            await app.close();
+        }
+    });
+
+    it('rejects cross-origin OTP verification without contacting the SSO server', async () => {
+        const app = await createApp({ logger: false });
+        const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+        try {
+            const response = await app.inject({
+                headers: {
+                    cookie: 'magic-sso-otp-challenge=not-a-valid-challenge',
+                    host: 'localhost:3005',
+                    origin: 'https://evil.example.com',
+                },
+                method: 'POST',
+                payload: { code: '123456', returnUrl: 'http://localhost:3005/protected' },
+                url: '/verify-email/otp',
+            });
+
+            expect(response.statusCode).toBe(302);
+            expect(response.headers.location).toContain('Invalid+or+expired+code.');
+            expect(fetchMock).not.toHaveBeenCalled();
+        } finally {
+            await app.close();
+        }
+    });
+
     it('rejects returned verify-email tokens that are bound to a different site origin', async () => {
         const secret = new TextEncoder().encode(testJwtSecret);
         const accessToken = await new SignJWT({
@@ -403,6 +541,9 @@ describe('fastify example routes', () => {
             expect(response.headers.location).toBe(
                 '/login?returnUrl=http%3A%2F%2Flocalhost%3A3005%2Fprotected&error=verify-email-failed',
             );
+            expect(
+                response.cookies.find((cookie) => cookie.name === 'magic-sso-otp-challenge')?.value,
+            ).toBe('');
             expect(fetchMock).toHaveBeenNthCalledWith(
                 1,
                 new URL('http://localhost:3000/verify-email?token=test-token'),

@@ -97,5 +97,10 @@ export default defineNuxtModule<MagicSsoModuleOptions>({
             handler: resolver.resolve('./runtime/server/routes/verify-email.post'),
             method: 'post',
         });
+        addServerHandler({
+            route: '/verify-email/otp',
+            handler: resolver.resolve('./runtime/server/routes/verify-email-otp.post'),
+            method: 'post',
+        });
     },
 });

@@ -26,7 +26,9 @@
  * THE SOFTWARE.
  */
 
-export { sendMagicLink } from './components/login/actions';
+export { sendMagicLink, verifyEmailOtp } from './components/login/actions';
+export type { SendMagicLinkResult, VerifyEmailOtpResult } from './components/login/actions';
+export { VerifyEmailOtpRoute } from './components/login/otpRoute';
 export { LogoutRoute } from './components/logout/route';
 export type { AuthPayload, VerifyAuthTokenOptions } from './lib/auth';
 export {
@@ -34,6 +36,7 @@ export {
     getCookieMaxAge,
     getCookieName,
     getJwtSecret,
+    hasSameOriginMutationSource,
     redirectToLogin,
     verifyAuthToken,
     verifyToken,
