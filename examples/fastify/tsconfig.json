@@ -10,6 +10,9 @@
         "exactOptionalPropertyTypes": true,
         "declaration": true,
         "sourceMap": true,
+        "paths": {
+            "fastify": ["./node_modules/fastify"]
+        },
         "skipLibCheck": true,
         "types": ["node", "vitest/globals"]
     },

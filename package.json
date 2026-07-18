@@ -56,8 +56,8 @@
         "prepare": "husky"
     },
     "devDependencies": {
-        "@types/node": "^25.9.3",
-        "fallow": "^2.97.0",
+        "@types/node": "^25.9.5",
+        "fallow": "^2.104.0",
         "git-cliff": "^2.13.1",
         "husky": "^9.1.7",
         "lint-staged": "^16.4.0",
@@ -65,7 +65,7 @@
         "oxfmt": "latest",
         "oxlint": "latest",
         "turbo": "latest",
-        "vitest": "^4.1.9"
+        "vitest": "^4.1.10"
     },
     "lint-staged": {
         "*": "oxfmt --write --no-error-on-unmatched-pattern",

@@ -60,9 +60,9 @@
         "jose": "^6.2.3"
     },
     "devDependencies": {
-        "@types/node": "^25.9.3",
+        "@types/node": "^25.9.5",
         "typescript": "~5.9.3",
-        "vitest": "^4.1.9"
+        "vitest": "^4.1.10"
     },
     "engines": {
         "node": ">=24.15.0"

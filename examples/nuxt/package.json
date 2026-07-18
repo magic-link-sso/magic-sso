@@ -17,13 +17,13 @@
         "@magic-link-sso/nuxt": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
         "nuxt": "^4.4.8",
-        "vue": "^3.5.38"
+        "vue": "^3.5.40"
     },
     "devDependencies": {
-        "@types/node": "^25.9.3",
+        "@types/node": "^25.9.5",
         "typescript": "^6.0.3",
-        "vite": "^8.0.16",
-        "vitest": "^4.1.9"
+        "vite": "^8.1.5",
+        "vitest": "^4.1.10"
     },
     "engines": {
         "node": ">=24.15.0"

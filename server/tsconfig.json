@@ -11,6 +11,9 @@
         "declaration": true,
         "sourceMap": true,
         "esModuleInterop": true,
+        "paths": {
+            "fastify": ["./node_modules/fastify"]
+        },
         "skipLibCheck": true,
         "types": ["node", "vitest/globals"]
     },

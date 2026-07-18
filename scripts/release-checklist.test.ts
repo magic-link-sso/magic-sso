@@ -8,6 +8,39 @@ async function readRepositoryFile(relativePath: string): Promise<string> {
     return readFile(join(repositoryRoot, relativePath), 'utf8');
 }
 
+function parseMinimumVersion(range: string | undefined): readonly [number, number, number] {
+    const match = range?.match(/^(?:\^|~|>=)?(\d+)\.(\d+)\.(\d+)$/);
+
+    if (match === null || match === undefined) {
+        throw new Error(
+            `Expected a simple semantic-version range, received ${range ?? 'undefined'}`,
+        );
+    }
+
+    const [, majorText, minorText, patchText] = match;
+
+    if (majorText === undefined || minorText === undefined || patchText === undefined) {
+        throw new Error(`Expected a complete semantic version, received ${range}`);
+    }
+
+    return [Number(majorText), Number(minorText), Number(patchText)];
+}
+
+function expectMinimumVersion(
+    range: string | undefined,
+    minimum: readonly [number, number, number],
+): void {
+    const [major, minor, patch] = parseMinimumVersion(range);
+    const [minimumMajor, minimumMinor, minimumPatch] = minimum;
+
+    expect(
+        major > minimumMajor ||
+            (major === minimumMajor &&
+                (minor > minimumMinor || (minor === minimumMinor && patch >= minimumPatch))),
+        `Expected ${range ?? 'undefined'} to meet the advisory-safe minimum ${minimum.join('.')}`,
+    ).toBe(true);
+}
+
 describe('release security checks', () => {
     it('documents dependency advisory audits in the release checklist', async () => {
         const checklist = await readRepositoryFile('docs/release-checklist.md');
@@ -49,8 +82,8 @@ describe('release security checks', () => {
         expect(workspace).toContain('- esbuild@0.28.1');
         expect(workspace).toContain('- nodemailer@9.0.1');
         expect(workspace).toContain('- vite@8.0.16');
-        expect(serverPackage.dependencies?.nodemailer).toBe('^9.0.1');
-        expect(nuxtExamplePackage.devDependencies?.vite).toBe('^8.0.16');
+        expectMinimumVersion(serverPackage.dependencies?.nodemailer, [9, 0, 1]);
+        expectMinimumVersion(nuxtExamplePackage.devDependencies?.vite, [8, 0, 16]);
     });
 
     it('documents the version bump helper in the release checklist', async () => {

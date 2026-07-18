@@ -62,10 +62,10 @@
         "nitropack": "^2.13.4"
     },
     "devDependencies": {
-        "@types/node": "^25.9.3",
+        "@types/node": "^25.9.5",
         "nuxt": "^4.4.8",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.9"
+        "vitest": "^4.1.10"
     },
     "peerDependencies": {
         "nuxt": "^4.2.0"

@@ -12,6 +12,9 @@
         "exactOptionalPropertyTypes": true,
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
+        "paths": {
+            "fastify": ["./node_modules/fastify"]
+        },
         "skipLibCheck": true,
         "types": ["node"]
     },
