@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases.
 
+## [1.3.0] - 2026-07-19
+
+### Added
+
+- Add email OTP security
+
+### Chore
+
+- Upgrade dependencies
+
 ## [1.2.0] - 2026-06-19
 
 ### Changed
