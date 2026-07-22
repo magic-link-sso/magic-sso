@@ -17,16 +17,16 @@
         "@magic-link-sso/config-core": "workspace:*",
         "@magic-link-sso/nextjs": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
-        "next": "^16.2.10",
-        "react": "^19.2.7",
-        "react-dom": "^19.2.7"
+        "next": "^16.2.11",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.3.3",
         "@types/node": "^25.9.5",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
-        "postcss": "^8.5.19",
+        "postcss": "^8.5.21",
         "tailwindcss": "^4.3.3",
         "typescript": "^6.0.3"
     },
