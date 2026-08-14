@@ -1,6 +1,6 @@
 {
     "name": "@magic-link-sso/core",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "description": "Framework-agnostic authentication primitives for Magic Link SSO",
     "keywords": [
         "auth",

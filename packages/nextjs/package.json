@@ -1,6 +1,6 @@
 {
     "name": "@magic-link-sso/nextjs",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "description": "Magic Link SSO for Next.js",
     "keywords": [
         "auth",

@@ -1,6 +1,6 @@
 {
     "name": "@magic-link-sso/angular",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "description": "Magic Link SSO helpers for Angular SSR apps",
     "keywords": [
         "angular",
