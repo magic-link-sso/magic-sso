@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases.
 
+## [1.4.0] - 2026-08-14
+
+### Added
+
+- (core) Extract shared auth primitives and migrate adapters
+- (core) Publish package to npm
+
+### Chore
+
+- Upgrade dependencies
+
 ## [1.3.0] - 2026-07-19
 
 ### Added

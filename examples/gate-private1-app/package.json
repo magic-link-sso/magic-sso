@@ -1,6 +1,6 @@
 {
     "name": "example-app-gate-private1",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "private": true,
     "type": "module",
     "scripts": {

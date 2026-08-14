@@ -1,6 +1,6 @@
 {
     "name": "magic-sso-server",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "private": true,
     "description": "SSO server with magic link authentication",
     "license": "GPL-3.0-or-later",
