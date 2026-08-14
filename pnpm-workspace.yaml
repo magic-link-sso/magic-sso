@@ -1,6 +1,7 @@
 packages:
     - manager
     - packages/config-core
+    - packages/core
     - packages/example-ui
     - server
     - gate
@@ -23,6 +24,7 @@ allowBuilds:
     lmdb: false
     msgpackr-extract: false
     sharp: false
+    workerd: true
 
 minimumReleaseAgeExclude:
     - esbuild@0.28.1

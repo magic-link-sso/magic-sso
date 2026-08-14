@@ -219,7 +219,8 @@ Repository layout:
 - `server/` SSO server
 - `examples/` example apps for Angular, Django, Fastify, Next.js, Nuxt, and the
   managed-mode Photos demo
-- `packages/` reusable framework integrations
+- `packages/` reusable framework integrations and `@magic-link-sso/core`
+  protocol primitives
 - `docs/` supporting documentation and diagrams
 
 1. Clone the repository:
@@ -505,6 +506,7 @@ Across frameworks, client integrations usually need:
 
 Framework-specific setup lives in the package and example READMEs:
 
+- Core: [package](./packages/core/README.md)
 - Angular: [package](./packages/angular/README.md),
   [example](./examples/angular/README.md)
 - Django: [package](./packages/django/README.md),

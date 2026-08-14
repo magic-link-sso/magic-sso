@@ -48,4 +48,12 @@ describe('workspace build scripts', () => {
             expect(packageJson.scripts?.clean).toBe('rm -rf dist tsconfig.tsbuildinfo');
         }
     });
+
+    it('builds core before config-core exports its runtime helpers', async () => {
+        const packageJson = await readPackageJson('packages/config-core/package.json');
+
+        expect(packageJson.scripts?.build).toBe(
+            'pnpm --filter @magic-link-sso/core build && tsc -p tsconfig.json',
+        );
+    });
 });

@@ -3,6 +3,7 @@
 
 import { SignJWT } from 'jose';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { registerVerifyAuthTokenContract } from '../../../core/test/adapter-contract.js';
 import {
     buildAuthCookieOptions,
     buildLoginPath,
@@ -17,6 +18,8 @@ import {
     verifyRequestAuth,
 } from './core';
 
+registerVerifyAuthTokenContract({ name: 'Angular', verify: verifyAuthToken });
+
 async function signToken(
     email: string,
     secret: string,
@@ -26,6 +29,8 @@ async function signToken(
     return new SignJWT({ email, scope: '*', siteId: 'site-a' })
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(audience)
+        .setJti('token-id')
+        .setIssuedAt()
         .setExpirationTime('1h')
         .setIssuer(issuer)
         .sign(new TextEncoder().encode(secret));

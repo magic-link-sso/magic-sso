@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import type { JWTPayload } from 'jose';
+import type { AuthPayload as CoreAuthPayload } from '@magic-link-sso/core';
 
-export interface AuthPayload extends JWTPayload {
-    email: string;
-    scope: string;
-    siteId: string;
-}
+export type AuthPayload = CoreAuthPayload;
 
 export interface MagicSsoModuleOptions {
     previewSecret?: string;

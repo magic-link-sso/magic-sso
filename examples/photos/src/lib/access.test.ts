@@ -9,18 +9,20 @@ import {
     hasAccess,
     type ViewerSession,
 } from './access';
+import type { AuthPayload } from '@magic-link-sso/nextjs';
 
 const friendsRequirement = {
     label: 'Friends',
     scope: 'friends',
 };
 
-const fullAccessViewer: ViewerSession = {
+const fullAccessViewer: AuthPayload = {
     aud: 'http://localhost:5001',
     email: 'owner@example.com',
     exp: 1,
     iat: 1,
     iss: 'http://localhost:3000',
+    jti: 'viewer-session-id',
     scope: '*',
     siteId: 'photos',
 };

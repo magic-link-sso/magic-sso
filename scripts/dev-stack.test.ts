@@ -52,7 +52,26 @@ describe('workspace stack scripts', () => {
         expect(dockerignore).toContain('!manager/');
         expect(dockerignore).toContain('!examples/photos/');
         expect(dockerignore).toContain('!packages/config-core/');
+        expect(dockerignore).toContain('!packages/core/');
         expect(dockerignore).toContain('!packages/nextjs/');
+    });
+
+    it('includes core beside config-core in every affected Docker workspace build', async () => {
+        const dockerfiles = await Promise.all(
+            [
+                'manager/Dockerfile',
+                'server/Dockerfile',
+                'gate/Dockerfile',
+                'examples/photos/Dockerfile',
+            ].map(readRepositoryFile),
+        );
+
+        for (const dockerfile of dockerfiles) {
+            expect(dockerfile).toContain(
+                'COPY packages/core/package.json packages/core/package.json',
+            );
+            expect(dockerfile).toContain('COPY packages/core packages/core');
+        }
     });
 
     it('uses a fast startup healthcheck without frequent steady-state polling', async () => {

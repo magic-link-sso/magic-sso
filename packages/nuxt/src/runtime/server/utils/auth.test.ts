@@ -3,6 +3,7 @@
 
 import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
+import { registerVerifyAuthTokenContract } from '../../../../../core/test/adapter-contract.js';
 import {
     DEFAULT_EXCLUDED_PATHS,
     buildLoginUrl,
@@ -18,6 +19,8 @@ import {
     verifyRequestAuth,
 } from './auth';
 
+registerVerifyAuthTokenContract({ name: 'Nuxt', verify: verifyAuthToken });
+
 async function signToken(
     email: string,
     secret: string,
@@ -27,6 +30,8 @@ async function signToken(
     return new SignJWT({ email, scope: '*', siteId: 'site-a' })
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(audience)
+        .setJti('token-id')
+        .setIssuedAt()
         .setExpirationTime('1h')
         .setIssuer(issuer)
         .sign(new TextEncoder().encode(secret));

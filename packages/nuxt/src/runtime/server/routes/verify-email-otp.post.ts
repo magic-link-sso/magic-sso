@@ -9,22 +9,18 @@ import {
     setCookie,
     type H3Event,
 } from 'h3';
+import { exchangeEmailOtp } from '@magic-link-sso/core';
 import {
     getCookieName,
     getJwtSecret,
     getMagicSsoConfig,
     hasSameOriginMutationSource,
     readFirstHeaderValue,
-    verifyAuthToken,
 } from '../utils/auth';
 
 interface OtpVerifyBody {
     challengeId?: string;
     code?: string;
-}
-
-interface AccessTokenResponse {
-    accessToken: string;
 }
 
 function readOtpVerifyBody(value: unknown): OtpVerifyBody | null {
@@ -36,12 +32,6 @@ function readOtpVerifyBody(value: unknown): OtpVerifyBody | null {
     return typeof challengeId === 'string' && typeof code === 'string'
         ? { challengeId, code }
         : null;
-}
-
-function isAccessTokenResponse(value: unknown): value is AccessTokenResponse {
-    const accessToken =
-        typeof value === 'object' && value !== null ? Reflect.get(value, 'accessToken') : undefined;
-    return typeof accessToken === 'string' && accessToken.length > 0;
 }
 
 function invalidOtpError(): ReturnType<typeof createError> {
@@ -66,29 +56,30 @@ export default defineEventHandler(async (event: H3Event): Promise<{ ok: true }> 
     const body = readOtpVerifyBody(await readBody(event));
     const config = getMagicSsoConfig(event);
     const jwtSecret = getJwtSecret(event);
-    if (body === null || config.serverUrl.length === 0 || jwtSecret === null) {
+    if (
+        body === null ||
+        typeof body.challengeId !== 'string' ||
+        typeof body.code !== 'string' ||
+        config.serverUrl.length === 0 ||
+        jwtSecret === null
+    ) {
         throw invalidOtpError();
     }
 
     try {
-        const response = await fetch(new URL('/verify-email/otp', config.serverUrl), {
-            method: 'POST',
-            headers: { accept: 'application/json', 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-            cache: 'no-store',
-        });
-        const payload: unknown = await response.json().catch(() => null);
-        if (!response.ok || !isAccessTokenResponse(payload)) {
-            throw invalidOtpError();
-        }
-        const verified = await verifyAuthToken(payload.accessToken, jwtSecret, {
+        const result = await exchangeEmailOtp({
+            challengeId: body.challengeId,
+            code: body.code,
             expectedAudience: getRequestURL(event).origin,
             expectedIssuer: new URL(config.serverUrl).origin,
+            fetcher: fetch,
+            secret: jwtSecret,
+            serverUrl: config.serverUrl,
         });
-        if (verified === null) {
+        if (result.kind !== 'success') {
             throw invalidOtpError();
         }
-        setCookie(event, getCookieName(event), payload.accessToken, {
+        setCookie(event, getCookieName(event), result.accessToken, {
             path: config.cookiePath,
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',

@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { getCookie, getRequestURL, type H3Event } from 'h3';
-import { jwtVerify } from 'jose';
+import {
+    buildLoginTarget as buildCoreLoginTarget,
+    normaliseReturnUrl as normaliseCoreReturnUrl,
+    verifyAuthToken as verifyCoreAuthToken,
+} from '@magic-link-sso/core';
 import { DEFAULT_EXCLUDED_PATHS } from '../../../constants';
 import type { AuthPayload, MagicSsoModuleOptions, MagicSsoResolvedConfig } from '../../../types';
 
@@ -149,20 +153,6 @@ function getMagicSsoConfigValue(event: H3Event): unknown {
     return runtimeConfig?.magicSso ?? getEnvMagicSsoConfigValue();
 }
 
-function isAuthPayload(payload: unknown): payload is AuthPayload {
-    const record = asRecord(payload);
-    return (
-        record !== null &&
-        typeof record.email === 'string' &&
-        typeof record.scope === 'string' &&
-        typeof record.siteId === 'string' &&
-        (typeof record.aud === 'string' ||
-            (Array.isArray(record.aud) &&
-                record.aud.every((entry) => typeof entry === 'string'))) &&
-        typeof record.iss === 'string'
-    );
-}
-
 export function resolveMagicSsoConfig(configValue?: unknown): MagicSsoResolvedConfig {
     const config = asRecord(configValue);
 
@@ -227,43 +217,22 @@ export function isPublicPath(
 export function buildLoginUrl(event: H3Event, pathname: string, scope?: string): string {
     const requestUrl = getRequestURL(event);
     const config = getMagicSsoConfig(event);
-    const returnUrl = new URL(pathname, requestUrl.origin).toString();
-    const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
-
-    if (config.directUse && config.serverUrl.length > 0) {
-        const loginUrl = new URL('/signin', config.serverUrl);
-        loginUrl.searchParams.set('returnUrl', returnUrl);
-        if (normalizedScope.length > 0) {
-            loginUrl.searchParams.set('scope', normalizedScope);
-        }
-        const verifyUrl = new URL('/verify-email', requestUrl.origin);
-        verifyUrl.searchParams.set('returnUrl', returnUrl);
-        loginUrl.searchParams.set('verifyUrl', verifyUrl.toString());
-        return loginUrl.toString();
-    }
-
-    const loginUrl = new URL('/login', requestUrl.origin);
-    loginUrl.searchParams.set('returnUrl', returnUrl);
-    if (normalizedScope.length > 0) {
-        loginUrl.searchParams.set('scope', normalizedScope);
-    }
-    return `${loginUrl.pathname}${loginUrl.search}`;
+    return buildCoreLoginTarget({
+        appOrigin: requestUrl.origin,
+        directUse: config.directUse,
+        returnUrl: pathname,
+        ...(typeof scope === 'string' ? { scope } : {}),
+        serverUrl: config.serverUrl,
+    });
 }
 
 export function normaliseReturnUrl(returnUrl: string | undefined, origin: string): string {
-    if (typeof returnUrl !== 'string' || returnUrl.length === 0) {
-        return '/';
+    const normalised = normaliseCoreReturnUrl({ appOrigin: origin, fallback: '/', returnUrl });
+    if (typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
+        const url = new URL(normalised);
+        return `${url.pathname}${url.search}${url.hash}`;
     }
-    if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-        return returnUrl;
-    }
-
-    try {
-        const parsedUrl = new URL(returnUrl);
-        return parsedUrl.origin === origin ? parsedUrl.toString() : '/';
-    } catch {
-        return '/';
-    }
+    return normalised === new URL('/', origin).toString() ? '/' : normalised;
 }
 
 export function readFirstHeaderValue(value: string | string[] | undefined): string | null {
@@ -337,17 +306,12 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    try {
-        const { payload } = await jwtVerify(token, secret, {
-            audience: options.expectedAudience,
-            ...(typeof options.expectedIssuer === 'string'
-                ? { issuer: options.expectedIssuer }
-                : {}),
-        });
-        return isAuthPayload(payload) ? payload : null;
-    } catch {
-        return null;
-    }
+    return typeof options.expectedIssuer === 'string'
+        ? verifyCoreAuthToken(token, secret, {
+              expectedAudience: options.expectedAudience,
+              expectedIssuer: options.expectedIssuer,
+          })
+        : null;
 }
 
 export async function verifyRequestAuth(event: H3Event): Promise<AuthPayload | null> {

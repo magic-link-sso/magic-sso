@@ -26,15 +26,15 @@
  * THE SOFTWARE.
  */
 
-import { jwtVerify, type JWTPayload } from 'jose';
+import {
+    buildAuthCookieOptions as buildCoreAuthCookieOptions,
+    verifyAuthToken as verifyCoreAuthToken,
+    type AuthPayload as CoreAuthPayload,
+} from '@magic-link-sso/core';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-export interface AuthPayload extends JWTPayload {
-    email: string;
-    scope: string;
-    siteId: string;
-}
+export type AuthPayload = CoreAuthPayload;
 
 export interface VerifyAuthTokenOptions {
     expectedAudience: string;
@@ -217,35 +217,17 @@ async function getRequestOrigin(): Promise<string | null> {
     return `${protocol}://${host}`;
 }
 
-function isAuthPayload(payload: JWTPayload): payload is AuthPayload {
-    return (
-        typeof payload.email === 'string' &&
-        typeof payload.scope === 'string' &&
-        typeof payload.siteId === 'string' &&
-        (typeof payload.aud === 'string' ||
-            (Array.isArray(payload.aud) &&
-                payload.aud.every((entry) => typeof entry === 'string'))) &&
-        typeof payload.iss === 'string'
-    );
-}
-
 export async function verifyAuthToken(
     token: string,
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    try {
-        const { payload } = await jwtVerify(token, secret, {
-            algorithms: ['HS256'],
-            audience: options.expectedAudience,
-            ...(typeof options.expectedIssuer === 'string'
-                ? { issuer: options.expectedIssuer }
-                : {}),
-        });
-        return isAuthPayload(payload) ? payload : null;
-    } catch {
-        return null;
-    }
+    return typeof options.expectedIssuer === 'string'
+        ? verifyCoreAuthToken(token, secret, {
+              expectedAudience: options.expectedAudience,
+              expectedIssuer: options.expectedIssuer,
+          })
+        : null;
 }
 
 export async function verifyToken(): Promise<AuthPayload | null> {
@@ -275,16 +257,13 @@ export async function verifyToken(): Promise<AuthPayload | null> {
 
 export function buildAuthCookieOptions(value: string): AuthCookieOptions {
     const maxAge = getCookieMaxAge();
-
-    return {
-        name: getCookieName(),
-        value,
-        path: getCookiePath(),
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+    return buildCoreAuthCookieOptions({
         ...(typeof maxAge === 'number' ? { maxAge } : {}),
-    };
+        name: getCookieName(),
+        path: getCookiePath(),
+        secure: process.env.NODE_ENV === 'production',
+        value,
+    });
 }
 
 export function redirectToLogin(returnUrl: string, scope?: string): never {

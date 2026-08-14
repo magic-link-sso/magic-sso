@@ -13,6 +13,7 @@ export const JS_PACKAGE_FILES = [
     'gate/package.json',
     'manager/package.json',
     'packages/config-core/package.json',
+    'packages/core/package.json',
     'packages/angular/package.json',
     'packages/example-ui/package.json',
     'packages/nextjs/package.json',
@@ -28,6 +29,7 @@ export const JS_PACKAGE_FILES = [
 ];
 
 const RELEASE_VERSION_SOURCE_JS_PACKAGE_FILES = [
+    'packages/core/package.json',
     'packages/angular/package.json',
     'packages/example-ui/package.json',
     'packages/nextjs/package.json',
