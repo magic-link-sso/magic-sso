@@ -98,6 +98,20 @@ jobs:
       - name: Normalize release version
         run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
+      - name: Check if @magic-link-sso/core is already on npm
+        id: core-published
+        run: |
+          if npm view "@magic-link-sso/core@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish @magic-link-sso/core
+        if: steps.core-published.outputs.published != 'true'
+        working-directory: packages/core
+        run: npm publish --access public
+
       - name: Check if @magic-link-sso/nextjs is already on npm
         id: nextjs-published
         run: |

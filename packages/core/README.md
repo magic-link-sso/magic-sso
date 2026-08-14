@@ -1,8 +1,6 @@
 # @magic-link-sso/core
 
-Framework-agnostic authentication primitives for Magic Link SSO. The package
-remains private until its public API and package contents have passed a release
-review.
+Framework-agnostic authentication primitives for Magic Link SSO.
 
 ## Trust model
 

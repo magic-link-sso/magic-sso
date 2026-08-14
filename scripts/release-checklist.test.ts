@@ -102,12 +102,14 @@ describe('release security checks', () => {
         expect(workflow).toContain('node scripts/verify-release-tag.mjs');
         expect(workflow).toContain('node scripts/extract-release-notes.mjs');
         expect(workflow).toContain('gh release create');
+        expect(workflow).toContain('npm view "@magic-link-sso/core@${RELEASE_VERSION}" version');
         expect(workflow).toContain('npm view "@magic-link-sso/nextjs@${RELEASE_VERSION}" version');
         expect(workflow).toContain('npm view "@magic-link-sso/nuxt@${RELEASE_VERSION}" version');
         expect(workflow).toContain('npm view "@magic-link-sso/angular@${RELEASE_VERSION}" version');
         expect(workflow).toContain(
             'https://pypi.org/pypi/magic-link-sso-django/${RELEASE_VERSION}/json',
         );
+        expect(workflow).toContain("if: steps.core-published.outputs.published != 'true'");
         expect(workflow).toContain("if: steps.nextjs-published.outputs.published != 'true'");
         expect(workflow).toContain("if: steps.django-pypi-published.outputs.published != 'true'");
     });
