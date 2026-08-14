@@ -56,8 +56,8 @@
     },
     "devDependencies": {
         "@types/node": "^25.9.5",
-        "@types/react": "^19.2.17",
-        "jose": "^6.2.3",
+        "@types/react": "^19.2.18",
+        "jose": "^6.2.8",
         "typescript": "^6.0.3",
         "vitest": "^4.1.10"
     },

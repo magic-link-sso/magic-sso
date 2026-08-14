@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 Wojciech Polak
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 from typing import TypedDict
 
 import pytest

@@ -57,14 +57,15 @@
     },
     "dependencies": {
         "@magic-link-sso/core": "workspace:*",
-        "@nuxt/kit": "^4.5.0",
+        "@nuxt/kit": "^4.5.2",
         "h3": "^1.15.11",
         "nitropack": "^2.13.4"
     },
     "devDependencies": {
+        "@nuxt/schema": "^4.5.2",
         "@types/node": "^25.9.5",
-        "jose": "^6.2.3",
-        "nuxt": "^4.5.0",
+        "jose": "^6.2.8",
+        "nuxt": "^4.5.2",
         "typescript": "^6.0.3",
         "vitest": "^4.1.10"
     },

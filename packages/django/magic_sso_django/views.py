@@ -23,11 +23,10 @@
 """
 
 import logging
-from urllib.parse import urlencode, urlsplit
 from typing import Literal, TypedDict
+from urllib.parse import urlencode, urlsplit
 
 import requests
-
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -36,6 +35,7 @@ from django.utils.html import format_html
 from django.utils.safestring import SafeString
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
+
 from .auth_utils import verify_access_token
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class MagicSsoCookieOptions(TypedDict):
 def get_magic_sso_cookie_samesite() -> Literal['Lax', 'Strict', 'None']:
     configured_value = getattr(settings, 'MAGICSSO_COOKIE_SAMESITE', 'Lax')
     if not isinstance(configured_value, str):
-        raise ValueError('MAGICSSO_COOKIE_SAMESITE must be a string.')
+        raise TypeError('MAGICSSO_COOKIE_SAMESITE must be a string.')
 
     normalised_value = configured_value.strip().lower()
     if normalised_value == 'lax':

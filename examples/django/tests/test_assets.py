@@ -3,9 +3,7 @@
 
 import importlib.util
 from pathlib import Path
-
 from types import ModuleType
-
 
 SETTINGS_PATH = Path(__file__).resolve().parents[1] / 'app' / 'settings.py'
 

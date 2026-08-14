@@ -25,6 +25,7 @@
 from django.apps import AppConfig
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+
 from .auth_utils import get_allowed_origins, get_configured_public_origin
 
 

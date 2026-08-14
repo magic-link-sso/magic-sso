@@ -85,7 +85,7 @@ def test_magic_sso_settings_load_values_from_dotenv_file(
 ) -> None:
     dotenv_path = tmp_path / '.env'
     dotenv_path.write_text(
-        '\n'.join(
+        '\n'.join(  # noqa: FLY002 - Static dotenv lines are clearer as a sequence.
             [
                 'MAGICSSO_DIRECT_USE=false',
                 'MAGICSSO_SERVER_URL=https://dotenv.example.com',

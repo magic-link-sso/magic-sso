@@ -27,7 +27,7 @@ from typing import Any, cast
 
 from django.http import HttpRequest, HttpResponse
 
-from .auth_utils import redirect_to_login, is_authenticated
+from .auth_utils import is_authenticated, redirect_to_login
 from .request_types import MagicSsoHttpRequest
 
 

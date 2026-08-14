@@ -39,7 +39,7 @@ def protected_by_decorator(request):
 
 
 def protected_manually(request):
-    is_auth, payload = is_authenticated(request)
+    is_auth, _payload = is_authenticated(request)
     if not is_auth:
         return redirect_to_login(request)
     email = request.magic_sso_user_email

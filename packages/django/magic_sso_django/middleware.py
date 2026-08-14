@@ -22,12 +22,14 @@
 # THE SOFTWARE.
 """
 
-from typing import Callable, cast
+from collections.abc import Callable
+from typing import cast
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.urls import resolve
-from .auth_utils import redirect_to_login, is_authenticated
+
+from .auth_utils import is_authenticated, redirect_to_login
 from .request_types import MagicSsoHttpRequest
 
 

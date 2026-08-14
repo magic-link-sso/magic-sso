@@ -22,14 +22,15 @@
 # THE SOFTWARE.
 """
 
-import jwt
-from urllib.parse import urlencode, urlsplit
 from typing import Any
+from urllib.parse import urlencode, urlsplit
+
+import jwt
 from django.conf import settings
 from django.core.exceptions import DisallowedHost
 from django.http import HttpRequest, HttpResponseRedirect
-from django.urls import reverse
 from django.shortcuts import redirect
+from django.urls import reverse
 
 
 def normalize_origin(origin: str, setting_name: str) -> str:
@@ -55,7 +56,7 @@ def get_allowed_origins() -> set[str]:
         return {public_origin} if isinstance(public_origin, str) else set()
 
     if not isinstance(configured_origins, (list, tuple, set)):
-        raise ValueError('MAGICSSO_ALLOWED_ORIGINS must be a list of absolute http(s) origins.')
+        raise TypeError('MAGICSSO_ALLOWED_ORIGINS must be a list of absolute http(s) origins.')
 
     return {
         normalize_origin(str(origin), 'MAGICSSO_ALLOWED_ORIGINS')
@@ -78,7 +79,7 @@ def get_request_origin(request: HttpRequest) -> str | None:
         request_origin = request.build_absolute_uri('/')
     except DisallowedHost:
         return None
-    normalized_origin = request_origin[:-1] if request_origin.endswith('/') else request_origin
+    normalized_origin = request_origin.removesuffix('/')
     allowed_origins = get_allowed_origins()
 
     if len(allowed_origins) > 0 and normalized_origin not in allowed_origins:

@@ -2,13 +2,13 @@
 # Copyright (C) 2026 Wojciech Polak
 
 import logging
-from urllib.parse import parse_qs, urlparse
-import requests
 from typing import Any
 from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlparse
 
 import jwt
 import pytest
+import requests
 from django.conf import settings
 from django.test import Client, override_settings
 
