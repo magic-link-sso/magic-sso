@@ -110,7 +110,7 @@ jobs:
       - name: Publish @magic-link-sso/core
         if: steps.core-published.outputs.published != 'true'
         working-directory: packages/core
-        run: npm publish --access public
+        run: pnpm publish --access public --no-git-checks
 
       - name: Check if @magic-link-sso/nextjs is already on npm
         id: nextjs-published
@@ -124,7 +124,7 @@ jobs:
       - name: Publish @magic-link-sso/nextjs
         if: steps.nextjs-published.outputs.published != 'true'
         working-directory: packages/nextjs
-        run: npm publish --access public
+        run: pnpm publish --access public --no-git-checks
 
       - name: Check if @magic-link-sso/nuxt is already on npm
         id: nuxt-published
@@ -138,7 +138,7 @@ jobs:
       - name: Publish @magic-link-sso/nuxt
         if: steps.nuxt-published.outputs.published != 'true'
         working-directory: packages/nuxt
-        run: npm publish --access public
+        run: pnpm publish --access public --no-git-checks
 
       - name: Check if @magic-link-sso/angular is already on npm
         id: angular-published
@@ -152,7 +152,7 @@ jobs:
       - name: Publish @magic-link-sso/angular
         if: steps.angular-published.outputs.published != 'true'
         working-directory: packages/angular
-        run: npm publish --access public
+        run: pnpm publish --access public --no-git-checks
 
   publish-pypi:
     name: Publish to PyPI

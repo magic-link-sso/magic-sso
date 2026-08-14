@@ -113,4 +113,13 @@ describe('release security checks', () => {
         expect(workflow).toContain("if: steps.nextjs-published.outputs.published != 'true'");
         expect(workflow).toContain("if: steps.django-pypi-published.outputs.published != 'true'");
     });
+
+    it('uses pnpm to publish workspace packages', async () => {
+        const workflow = await readRepositoryFile('.github/workflows/publish.yml');
+
+        expect(workflow).not.toContain('run: npm publish --access public');
+        expect(workflow.match(/run: pnpm publish --access public --no-git-checks/g)).toHaveLength(
+            4,
+        );
+    });
 });
