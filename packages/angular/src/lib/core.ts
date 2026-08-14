@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { jwtVerify, type JWTPayload } from 'jose';
+import {
+    buildAuthCookieOptions as buildCoreAuthCookieOptions,
+    buildLoginTarget as buildCoreLoginTarget,
+    buildVerifyUrl as buildCoreVerifyUrl,
+    exchangeEmailOtp as exchangeCoreEmailOtp,
+    normaliseReturnUrl as normaliseCoreReturnUrl,
+    readCookieValue,
+    verifyAuthToken as verifyCoreAuthToken,
+    type AuthPayload as CoreAuthPayload,
+} from '@magic-link-sso/core';
 
-export interface AuthPayload extends JWTPayload {
-    email: string;
-    scope: string;
-    siteId: string;
-}
+export type AuthPayload = CoreAuthPayload;
 
 export interface VerifyAuthTokenOptions {
     expectedAudience: string;
@@ -142,18 +147,6 @@ function readCookiePath(value: string | undefined): string {
     return normalisedValue;
 }
 
-function isAuthPayload(payload: JWTPayload): payload is AuthPayload {
-    return (
-        typeof payload.email === 'string' &&
-        typeof payload.scope === 'string' &&
-        typeof payload.siteId === 'string' &&
-        (typeof payload.aud === 'string' ||
-            (Array.isArray(payload.aud) &&
-                payload.aud.every((entry) => typeof entry === 'string'))) &&
-        typeof payload.iss === 'string'
-    );
-}
-
 export function resolveMagicSsoConfig(config: MagicSsoConfig = {}): MagicSsoResolvedConfig {
     return {
         cookieMaxAge: readPositiveInteger(
@@ -194,48 +187,19 @@ export function getJwtSecret(config?: MagicSsoConfig): Uint8Array | null {
     return new TextEncoder().encode(jwtSecret);
 }
 
-export function readCookieValue(
-    cookieHeader: string | null | undefined,
-    name: string,
-): string | undefined {
-    if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        return undefined;
-    }
-
-    const prefix = `${name}=`;
-    for (const cookie of cookieHeader.split(';')) {
-        const trimmedCookie = cookie.trim();
-        if (!trimmedCookie.startsWith(prefix)) {
-            continue;
-        }
-
-        const value = trimmedCookie.slice(prefix.length);
-        try {
-            return decodeURIComponent(value);
-        } catch {
-            return value;
-        }
-    }
-
-    return undefined;
-}
+export { readCookieValue };
 
 export async function verifyAuthToken(
     token: string,
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    try {
-        const { payload } = await jwtVerify(token, secret, {
-            audience: options.expectedAudience,
-            ...(typeof options.expectedIssuer === 'string'
-                ? { issuer: options.expectedIssuer }
-                : {}),
-        });
-        return isAuthPayload(payload) ? payload : null;
-    } catch {
-        return null;
-    }
+    return typeof options.expectedIssuer === 'string'
+        ? verifyCoreAuthToken(token, secret, {
+              expectedAudience: options.expectedAudience,
+              expectedIssuer: options.expectedIssuer,
+          })
+        : null;
 }
 
 export async function exchangeEmailOtp(
@@ -248,28 +212,18 @@ export async function exchangeEmailOtp(
         return null;
     }
     try {
-        const response = await (options.fetcher ?? fetch)(
-            new URL('/verify-email/otp', config.serverUrl),
-            {
-                method: 'POST',
-                headers: { accept: 'application/json', 'content-type': 'application/json' },
-                body: JSON.stringify({ challengeId: options.challengeId, code: options.code }),
-                cache: 'no-store',
-            },
-        );
-        const payload: unknown = await response.json().catch(() => null);
-        const accessToken =
-            typeof payload === 'object' && payload !== null
-                ? Reflect.get(payload, 'accessToken')
-                : undefined;
-        if (!response.ok || typeof accessToken !== 'string') {
-            return null;
-        }
-        const auth = await verifyAuthToken(accessToken, secret, {
+        const result = await exchangeCoreEmailOtp({
+            challengeId: options.challengeId,
+            code: options.code,
             expectedAudience: options.expectedAudience,
             expectedIssuer: issuer,
+            fetcher: options.fetcher ?? fetch,
+            secret,
+            serverUrl: config.serverUrl,
         });
-        return auth === null ? null : { accessToken, auth };
+        return result.kind === 'success'
+            ? { accessToken: result.accessToken, auth: result.auth }
+            : null;
     } catch {
         return null;
     }
@@ -303,17 +257,19 @@ export async function verifyRequestAuth(
 
 export function buildAuthCookieOptions(value: string, config?: MagicSsoConfig): AuthCookieOptions {
     const resolvedConfig = resolveMagicSsoConfig(config);
-
-    return {
-        httpOnly: true,
+    const cookie = buildCoreAuthCookieOptions({
         ...(typeof resolvedConfig.cookieMaxAge === 'number'
-            ? { maxAgeSeconds: resolvedConfig.cookieMaxAge }
+            ? { maxAge: resolvedConfig.cookieMaxAge }
             : {}),
         name: resolvedConfig.cookieName,
         path: resolvedConfig.cookiePath,
-        sameSite: 'lax',
         secure: readEnvString('NODE_ENV') === 'production',
         value,
+    });
+    const { maxAge: _maxAge, ...cookieWithoutMaxAge } = cookie;
+    return {
+        ...cookieWithoutMaxAge,
+        ...(typeof cookie.maxAge === 'number' ? { maxAgeSeconds: cookie.maxAge } : {}),
     };
 }
 
@@ -322,25 +278,14 @@ export function normaliseReturnUrl(
     appOrigin: string,
     fallback: string = '/',
 ): string {
-    if (typeof returnUrl !== 'string' || returnUrl.length === 0) {
-        return fallback;
-    }
-    if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-        return new URL(returnUrl, appOrigin).toString();
-    }
-
-    try {
-        const parsedUrl = new URL(returnUrl);
-        return parsedUrl.origin === appOrigin ? parsedUrl.toString() : fallback;
-    } catch {
-        return fallback;
-    }
+    const normalised = normaliseCoreReturnUrl({ appOrigin, fallback, returnUrl });
+    return normalised === new URL('/', appOrigin).toString() && fallback === appOrigin
+        ? fallback
+        : normalised;
 }
 
 export function buildVerifyUrl(appOrigin: string, returnUrl: string): string {
-    const verifyUrl = new URL('/verify-email', appOrigin);
-    verifyUrl.searchParams.set('returnUrl', returnUrl);
-    return verifyUrl.toString();
+    return buildCoreVerifyUrl(appOrigin, returnUrl);
 }
 
 export function buildLoginPath(
@@ -350,13 +295,12 @@ export function buildLoginPath(
     scope?: string,
 ): string {
     const resolvedConfig = resolveMagicSsoConfig(config);
-    const returnUrl = normaliseReturnUrl(returnTarget, appOrigin, appOrigin);
-    const loginUrl = new URL(resolvedConfig.loginPath, appOrigin);
-    loginUrl.searchParams.set('returnUrl', returnUrl);
-    if (typeof scope === 'string' && scope.trim().length > 0) {
-        loginUrl.searchParams.set('scope', scope.trim());
-    }
-    return `${loginUrl.pathname}${loginUrl.search}`;
+    return buildCoreLoginTarget({
+        appOrigin,
+        loginPath: resolvedConfig.loginPath,
+        returnUrl: returnTarget,
+        ...(typeof scope === 'string' ? { scope } : {}),
+    });
 }
 
 export function buildLoginTarget(
@@ -366,18 +310,12 @@ export function buildLoginTarget(
     scope?: string,
 ): string {
     const resolvedConfig = resolveMagicSsoConfig(config);
-    const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
-    if (resolvedConfig.directUse && resolvedConfig.serverUrl.length > 0) {
-        const returnUrl = normaliseReturnUrl(returnTarget, appOrigin, appOrigin);
-        const verifyUrl = buildVerifyUrl(appOrigin, returnUrl);
-        const loginUrl = new URL('/signin', resolvedConfig.serverUrl);
-        loginUrl.searchParams.set('returnUrl', returnUrl);
-        if (normalizedScope.length > 0) {
-            loginUrl.searchParams.set('scope', normalizedScope);
-        }
-        loginUrl.searchParams.set('verifyUrl', verifyUrl);
-        return loginUrl.toString();
-    }
-
-    return buildLoginPath(appOrigin, returnTarget, resolvedConfig, normalizedScope);
+    return buildCoreLoginTarget({
+        appOrigin,
+        directUse: resolvedConfig.directUse,
+        loginPath: resolvedConfig.loginPath,
+        returnUrl: returnTarget,
+        ...(typeof scope === 'string' ? { scope } : {}),
+        serverUrl: resolvedConfig.serverUrl,
+    });
 }

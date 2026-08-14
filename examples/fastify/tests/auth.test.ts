@@ -3,6 +3,7 @@
 
 import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
+import { registerVerifyAuthTokenContract } from '../../../packages/core/test/adapter-contract.js';
 import {
     buildAuthCookieOptions,
     buildLoginTarget,
@@ -11,6 +12,8 @@ import {
     normaliseReturnUrl,
     verifyAuthToken,
 } from '../src/auth.js';
+
+registerVerifyAuthTokenContract({ name: 'Fastify', verify: verifyAuthToken });
 
 const originalEnv = { ...process.env };
 
@@ -123,6 +126,9 @@ describe('fastify auth helpers', () => {
         })
             .setProtectedHeader({ alg: 'HS256' })
             .setAudience('http://localhost:3005')
+            .setJti('token-id')
+            .setIssuedAt()
+            .setExpirationTime('1h')
             .setIssuer('http://localhost:3000')
             .sign(secret);
 
@@ -154,6 +160,9 @@ describe('fastify auth helpers', () => {
         })
             .setProtectedHeader({ alg: 'HS256' })
             .setAudience('http://localhost:3005')
+            .setJti('token-id')
+            .setIssuedAt()
+            .setExpirationTime('1h')
             .setIssuer('http://localhost:3000')
             .sign(secret);
 

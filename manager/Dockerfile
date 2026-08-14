@@ -6,9 +6,11 @@ ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config-core/package.json packages/config-core/package.json
+COPY packages/core/package.json packages/core/package.json
 COPY manager/package.json manager/package.json
 RUN pnpm install --ignore-scripts --filter magic-sso-manager... --frozen-lockfile
 COPY packages/config-core packages/config-core
+COPY packages/core packages/core
 COPY manager manager
 RUN pnpm --filter magic-sso-manager build
 
@@ -18,6 +20,7 @@ ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config-core/package.json packages/config-core/package.json
+COPY packages/core/package.json packages/core/package.json
 COPY manager/package.json manager/package.json
 RUN pnpm install --ignore-scripts --filter magic-sso-manager... --prod --frozen-lockfile
 
@@ -28,6 +31,7 @@ WORKDIR /app
 COPY --from=prod-deps --chown=manager:nodejs /app/node_modules node_modules
 COPY --from=prod-deps --chown=manager:nodejs /app/manager/node_modules manager/node_modules
 COPY --from=build --chown=manager:nodejs /app/packages/config-core packages/config-core
+COPY --from=build --chown=manager:nodejs /app/packages/core packages/core
 COPY --chown=manager:nodejs manager/package.json manager/package.json
 COPY --from=build --chown=manager:nodejs /app/manager/dist manager/dist
 USER manager

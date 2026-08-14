@@ -3,6 +3,7 @@
 
 import { generateKeyPair, SignJWT } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerVerifyAuthTokenContract } from '../../../core/test/adapter-contract.js';
 
 const redirectMock = vi.fn();
 
@@ -35,6 +36,12 @@ async function importAuthModule() {
     return import('./auth');
 }
 
+registerVerifyAuthTokenContract({
+    name: 'Next.js',
+    verify: async (token, secret, options) =>
+        (await importAuthModule()).verifyAuthToken(token, secret, options),
+});
+
 async function signToken(
     email: string,
     secret: string,
@@ -47,6 +54,8 @@ async function signToken(
     return new SignJWT({ email, scope: '*', siteId: options.siteId ?? 'site-a' })
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(options.audience)
+        .setJti('token-id')
+        .setIssuedAt()
         .setExpirationTime('1h')
         .setIssuer(options.issuer)
         .sign(new TextEncoder().encode(secret));
@@ -253,6 +262,8 @@ describe('lib/auth', () => {
         const token = await new SignJWT({ email: 'user@example.com', scope: '*', siteId: 'site-a' })
             .setProtectedHeader({ alg: 'RS256' })
             .setAudience('http://app.example.com')
+            .setJti('token-id')
+            .setIssuedAt()
             .setExpirationTime('1h')
             .setIssuer('http://sso.example.com')
             .sign(privateKey);

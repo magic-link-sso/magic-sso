@@ -28,6 +28,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { buildLoginTarget as buildCoreLoginTarget } from '@magic-link-sso/core';
 import {
     getCookieName,
     getCookiePath,
@@ -129,28 +130,16 @@ function buildLoginUrlWithError(
     error?: string,
     scope?: string,
 ): URL {
-    const returnUrl = `${request.nextUrl.origin}${pathname}`;
-    const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
-    if (isDirectUseEnabled(process.env.MAGICSSO_DIRECT_USE)) {
-        const loginUrl = new URL('/signin', process.env.MAGICSSO_SERVER_URL);
-        loginUrl.searchParams.set('returnUrl', returnUrl);
-        if (normalizedScope.length > 0) {
-            loginUrl.searchParams.set('scope', normalizedScope);
-        }
-        const verifyUrl = new URL('/verify-email', request.nextUrl.origin);
-        verifyUrl.searchParams.set('returnUrl', returnUrl);
-        loginUrl.searchParams.set('verifyUrl', verifyUrl.toString());
-        if (typeof error === 'string') {
-            loginUrl.searchParams.set('error', error);
-        }
-        return loginUrl;
-    }
-
-    const loginUrl = new URL('/login', request.nextUrl.origin);
-    loginUrl.searchParams.set('returnUrl', returnUrl);
-    if (normalizedScope.length > 0) {
-        loginUrl.searchParams.set('scope', normalizedScope);
-    }
+    const target = buildCoreLoginTarget({
+        appOrigin: request.nextUrl.origin,
+        directUse: isDirectUseEnabled(process.env.MAGICSSO_DIRECT_USE),
+        returnUrl: pathname,
+        ...(typeof scope === 'string' ? { scope } : {}),
+        ...(typeof process.env.MAGICSSO_SERVER_URL === 'string'
+            ? { serverUrl: process.env.MAGICSSO_SERVER_URL }
+            : {}),
+    });
+    const loginUrl = new URL(target, request.nextUrl.origin);
     if (typeof error === 'string') {
         loginUrl.searchParams.set('error', error);
     }

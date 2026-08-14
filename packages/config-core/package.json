@@ -16,7 +16,7 @@
         }
     },
     "scripts": {
-        "build": "tsc -p tsconfig.json",
+        "build": "pnpm --filter @magic-link-sso/core build && tsc -p tsconfig.json",
         "build:watch": "tsc -p tsconfig.json --watch --preserveWatchOutput",
         "format": "oxfmt package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts src",
         "format:check": "oxfmt --check package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts src",
@@ -25,6 +25,7 @@
         "typecheck": "tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
+        "@magic-link-sso/core": "workspace:*",
         "smol-toml": "^1.7.0",
         "zod": "^4.4.3"
     },

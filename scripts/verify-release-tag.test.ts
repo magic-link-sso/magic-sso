@@ -12,6 +12,7 @@ const jsReleasePackages: Array<[string, string]> = [
     ['gate/package.json', 'magic-sso-gate'],
     ['manager/package.json', 'magic-sso-manager'],
     ['packages/config-core/package.json', '@magic-link-sso/config-core'],
+    ['packages/core/package.json', '@magic-link-sso/core'],
     ['packages/angular/package.json', '@magic-link-sso/angular'],
     ['packages/example-ui/package.json', 'magic-sso-example-ui'],
     ['packages/nextjs/package.json', '@magic-link-sso/nextjs'],
@@ -84,7 +85,7 @@ describe('release tag verification', () => {
                 tagName: 'v0.9.0',
             }),
         ).resolves.toEqual({
-            checkedFiles: 20,
+            checkedFiles: 21,
             tagVersion: '0.9.0',
         });
     });

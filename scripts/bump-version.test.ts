@@ -20,6 +20,7 @@ const jsReleasePackages: Array<[string, string]> = [
     ['gate/package.json', 'magic-sso-gate'],
     ['manager/package.json', 'magic-sso-manager'],
     ['packages/config-core/package.json', '@magic-link-sso/config-core'],
+    ['packages/core/package.json', '@magic-link-sso/core'],
     ['packages/angular/package.json', '@magic-link-sso/angular'],
     ['packages/example-ui/package.json', 'magic-sso-example-ui'],
     ['packages/nextjs/package.json', '@magic-link-sso/nextjs'],
@@ -35,6 +36,7 @@ const jsReleasePackages: Array<[string, string]> = [
 ];
 
 const currentReleaseVersionSourceFiles = new Set([
+    'packages/core/package.json',
     'packages/angular/package.json',
     'packages/example-ui/package.json',
     'packages/nextjs/package.json',
@@ -206,7 +208,7 @@ describe('version bump workflow', () => {
             rootDir,
         });
 
-        expect(changes).toHaveLength(20);
+        expect(changes).toHaveLength(21);
         expect(await readFile(packageJsonPath, 'utf8')).toContain('"version": "1.0.0"');
     });
 });

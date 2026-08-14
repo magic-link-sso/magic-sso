@@ -13,6 +13,7 @@ const jsReleasePackages: Array<[string, string]> = [
     ['gate/package.json', 'magic-sso-gate'],
     ['manager/package.json', 'magic-sso-manager'],
     ['packages/config-core/package.json', '@magic-link-sso/config-core'],
+    ['packages/core/package.json', '@magic-link-sso/core'],
     ['packages/angular/package.json', '@magic-link-sso/angular'],
     ['packages/example-ui/package.json', 'magic-sso-example-ui'],
     ['packages/nextjs/package.json', '@magic-link-sso/nextjs'],
@@ -101,7 +102,7 @@ describe('release preparation', () => {
         });
 
         expect(result.releaseHeading).toBe('## [0.9.0] - 2026-04-25');
-        expect(result.versionChanges).toHaveLength(20);
+        expect(result.versionChanges).toHaveLength(21);
         expect(await readFile(path.join(rootDir, 'CHANGELOG.md'), 'utf8')).toContain(
             '## [0.9.0] - 2026-04-25',
         );

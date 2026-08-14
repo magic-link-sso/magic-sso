@@ -197,6 +197,9 @@ describe('fastify example routes', () => {
         })
             .setProtectedHeader({ alg: 'HS256' })
             .setAudience('http://localhost:3005')
+            .setJti('token-id')
+            .setIssuedAt()
+            .setExpirationTime('1h')
             .setIssuer('http://localhost:3000')
             .sign(secret);
 
@@ -299,6 +302,9 @@ describe('fastify example routes', () => {
         })
             .setProtectedHeader({ alg: 'HS256' })
             .setAudience('http://localhost:3005')
+            .setJti('token-id')
+            .setIssuedAt()
+            .setExpirationTime('1h')
             .setIssuer('http://localhost:3000')
             .sign(secret);
         const fetchMock = vi
@@ -436,6 +442,9 @@ describe('fastify example routes', () => {
         })
             .setProtectedHeader({ alg: 'HS256' })
             .setAudience('http://admin.example.com')
+            .setJti('token-id')
+            .setIssuedAt()
+            .setExpirationTime('1h')
             .setIssuer('http://localhost:3000')
             .sign(secret);
 

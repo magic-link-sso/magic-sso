@@ -108,12 +108,10 @@ function createGrantSnapshot(siteConfig: MagicSsoTomlSite): {
     const renderedAccessRules = renderSiteAccessRules(buildSiteAccessRules(siteConfig));
     return {
         fullAccessEmails: renderedAccessRules.allowedEmails,
-        scopedGrants: renderedAccessRules.accessRules.map(
-            (grant): ManagerGrant => ({
-                email: grant.email,
-                scopes: grant.scopes,
-            }),
-        ),
+        scopedGrants: renderedAccessRules.accessRules.map((grant): ManagerGrant => ({
+            email: grant.email,
+            scopes: grant.scopes,
+        })),
     };
 }
 
@@ -126,12 +124,10 @@ function createManagedSiteStateFromSiteConfig(
 
     return {
         grants: [
-            ...grantSnapshot.fullAccessEmails.map(
-                (email): ManagerGrant => ({
-                    email,
-                    scopes: ['*'],
-                }),
-            ),
+            ...grantSnapshot.fullAccessEmails.map((email): ManagerGrant => ({
+                email,
+                scopes: ['*'],
+            })),
             ...grantSnapshot.scopedGrants,
         ],
         scopeCatalog: [...existingSiteState.scopeCatalog, ...discoveredScopes],

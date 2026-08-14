@@ -25,6 +25,8 @@ async function signToken(email: string, secret: string, audience: string): Promi
     return new SignJWT({ email, scope: '*', siteId: 'site-a' })
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(audience)
+        .setJti('token-id')
+        .setIssuedAt()
         .setExpirationTime('1h')
         .setIssuer('http://sso.example.com')
         .sign(new TextEncoder().encode(secret));

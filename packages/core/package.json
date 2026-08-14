@@ -1,9 +1,8 @@
 {
-    "name": "@magic-link-sso/angular",
+    "name": "@magic-link-sso/core",
     "version": "1.3.0",
-    "description": "Magic Link SSO helpers for Angular SSR apps",
+    "description": "Framework-agnostic authentication primitives for Magic Link SSO",
     "keywords": [
-        "angular",
         "auth",
         "jwt",
         "magic-link",
@@ -21,7 +20,7 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/magic-link-sso/magic-sso.git",
-        "directory": "packages/angular"
+        "directory": "packages/core"
     },
     "files": [
         "dist",
@@ -29,16 +28,12 @@
         "README.md"
     ],
     "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "default": "./dist/index.js"
-        },
-        "./core": {
-            "types": "./dist/lib/core.d.ts",
-            "default": "./dist/lib/core.js"
         }
     },
     "publishConfig": {
@@ -47,22 +42,20 @@
     },
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "build:watch": "tsc -p tsconfig.json --watch",
-        "clean": "rm -rf dist tsconfig.tsbuildinfo",
-        "format": "oxfmt .",
-        "format:check": "oxfmt --check .",
-        "lint": "oxlint .",
-        "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
-        "test": "vitest run",
+        "format": "oxfmt package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts src test",
+        "format:check": "oxfmt --check package.json tsconfig.json tsconfig.typecheck.json vitest.config.ts src test",
+        "lint": "oxlint src test",
+        "test": "pnpm run build && vitest run",
         "typecheck": "tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
-        "@magic-link-sso/core": "workspace:*"
+        "jose": "^6.2.3"
     },
     "devDependencies": {
         "@types/node": "^25.9.5",
-        "jose": "^6.2.3",
-        "typescript": "~5.9.3",
+        "esbuild": "0.28.1",
+        "miniflare": "4.20260730.0",
+        "typescript": "^6.0.3",
         "vitest": "^4.1.10"
     },
     "engines": {

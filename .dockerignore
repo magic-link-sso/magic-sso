@@ -8,6 +8,7 @@
 !examples/gate-private1-app/
 !examples/gate-private2-static/
 !packages/config-core/
+!packages/core/
 !packages/example-ui/
 !packages/nextjs/
 !server/

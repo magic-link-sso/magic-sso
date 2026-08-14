@@ -10,7 +10,11 @@ const getCookieNameMock = vi.fn();
 const getJwtSecretMock = vi.fn();
 const getMagicSsoConfigMock = vi.fn();
 const hasSameOriginMutationSourceMock = vi.fn();
-const verifyAuthTokenMock = vi.fn();
+const exchangeEmailOtpMock = vi.fn();
+
+vi.mock('@magic-link-sso/core', () => ({
+    exchangeEmailOtp: exchangeEmailOtpMock,
+}));
 
 vi.mock('h3', () => ({
     createError: (value: unknown) => value,
@@ -33,7 +37,6 @@ vi.mock('../utils/auth', () => ({
             : typeof value === 'string' && value.length > 0
               ? value
               : null,
-    verifyAuthToken: verifyAuthTokenMock,
 }));
 
 describe('verify-email OTP POST route', () => {
@@ -47,7 +50,7 @@ describe('verify-email OTP POST route', () => {
         getJwtSecretMock.mockReset();
         getMagicSsoConfigMock.mockReset();
         hasSameOriginMutationSourceMock.mockReset();
-        verifyAuthTokenMock.mockReset();
+        exchangeEmailOtpMock.mockReset();
     });
 
     it('verifies the returned token before setting the auth cookie', async () => {
@@ -71,28 +74,23 @@ describe('verify-email OTP POST route', () => {
             cookiePath: '/auth',
             serverUrl: 'http://sso.example.com',
         });
-        verifyAuthTokenMock.mockResolvedValue({ email: 'nuxt@example.com' });
-        const fetchMock = vi.fn().mockResolvedValue({
-            json: async () => ({ accessToken: 'access-token' }),
-            ok: true,
+        exchangeEmailOtpMock.mockResolvedValue({
+            accessToken: 'access-token',
+            auth: { email: 'nuxt@example.com' },
+            kind: 'success',
         });
-        vi.stubGlobal('fetch', fetchMock);
 
         const { default: route } = await import('./verify-email-otp.post');
         await expect(route(event)).resolves.toEqual({ ok: true });
 
-        expect(fetchMock).toHaveBeenCalledWith(new URL('http://sso.example.com/verify-email/otp'), {
-            method: 'POST',
-            headers: { accept: 'application/json', 'content-type': 'application/json' },
-            body: JSON.stringify({
-                challengeId: 'c4bc2a37-0190-4bd6-8dc6-bcf3186b0e74',
-                code: '012345',
-            }),
-            cache: 'no-store',
-        });
-        expect(verifyAuthTokenMock).toHaveBeenCalledWith('access-token', expect.any(Uint8Array), {
+        expect(exchangeEmailOtpMock).toHaveBeenCalledWith({
+            challengeId: 'c4bc2a37-0190-4bd6-8dc6-bcf3186b0e74',
+            code: '012345',
             expectedAudience: 'http://app.example.com',
             expectedIssuer: 'http://sso.example.com',
+            fetcher: expect.any(Function),
+            secret: expect.any(Uint8Array),
+            serverUrl: 'http://sso.example.com',
         });
         expect(setCookieMock).toHaveBeenCalledWith(event, 'magic-sso', 'access-token', {
             path: '/auth',

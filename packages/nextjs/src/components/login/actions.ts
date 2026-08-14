@@ -29,12 +29,12 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { exchangeEmailOtp } from '@magic-link-sso/core';
 import {
     buildAuthCookieOptions,
     getJwtSecret,
     getPublicOrigin,
     getServerIssuer,
-    verifyAuthToken,
 } from '../../lib/auth';
 
 export type SendMagicLinkResult =
@@ -138,29 +138,20 @@ export async function verifyEmailOtp(
         return { success: false, message: 'Magic Link SSO server configuration is incomplete.' };
     }
     try {
-        const response = await fetch(new URL('/verify-email/otp', serverUrl), {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ challengeId, code }),
-            cache: 'no-store',
-        });
-        const payload: unknown = await response.json().catch(() => null);
-        const token =
-            typeof payload === 'object' && payload !== null
-                ? Reflect.get(payload, 'accessToken')
-                : undefined;
-        if (!response.ok || typeof token !== 'string') {
-            return { success: false, message: 'Invalid or expired code.' };
-        }
-        const verified = await verifyAuthToken(token, jwtSecret, {
+        const result = await exchangeEmailOtp({
+            challengeId,
+            code,
             expectedAudience: audience,
             expectedIssuer: issuer,
+            fetcher: fetch,
+            secret: jwtSecret,
+            serverUrl,
         });
-        if (verified === null) {
+        if (result.kind !== 'success') {
             return { success: false, message: 'Invalid or expired code.' };
         }
         const cookieStore = await cookies();
-        cookieStore.set(buildAuthCookieOptions(token));
+        cookieStore.set(buildAuthCookieOptions(result.accessToken));
         return { success: true };
     } catch {
         return { success: false, message: 'Invalid or expired code.' };

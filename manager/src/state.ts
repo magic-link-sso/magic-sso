@@ -147,15 +147,13 @@ function normalizeManagedSiteState(siteId: string, siteState: ManagedSiteState):
     }
 
     const normalizedGrants = [...grantsByEmail.entries()]
-        .map(
-            ([email, scopes]): ManagerGrant => ({
-                email,
-                scopes: normaliseScopes(
-                    [...scopes],
-                    `managedSites.${siteId}.grants for ${email}.scopes`,
-                ),
-            }),
-        )
+        .map(([email, scopes]): ManagerGrant => ({
+            email,
+            scopes: normaliseScopes(
+                [...scopes],
+                `managedSites.${siteId}.grants for ${email}.scopes`,
+            ),
+        }))
         .sort((left, right) => left.email.localeCompare(right.email));
 
     return {
