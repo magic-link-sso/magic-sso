@@ -1,10 +1,10 @@
-# Manager Operations for Magic Link SSO
+# Manager operations for Magic Link SSO
 
 This guide covers the practical recovery paths for managed mode. It assumes the
 server is reading `magic-sso.runtime.toml`, the manager owns
 `manager-state.json`, and operators still own `magic-sso.base.toml`.
 
-## File Roles During Recovery
+## File roles during recovery
 
 Keep these responsibilities in mind during any incident:
 
@@ -19,14 +19,14 @@ Keep these responsibilities in mind during any incident:
   outcomes, with bounded archive rotation.
 - `manager.lock`: single-writer lock file used during apply.
 
-## Portable State Transfer
+## Portable state transfer
 
-The manager supports a portable snapshot format for manager-owned access state:
+The manager can move manager-owned access state around as a portable snapshot:
 
 - `manager export` or `GET /api/state/export` returns
   `{ version, managedSites }` only.
-- exported snapshots intentionally exclude `lastAppliedAt` plus all
-  `lastApplied*Hash` values.
+- exported snapshots leave out `lastAppliedAt` and every `lastApplied*Hash`
+  value.
 - `manager import <file>`, `POST /api/state/import`, or the `/reconcile` page
   fully replace manager-owned state and reset that apply metadata so the next
   `validate` or `apply` establishes a fresh baseline.
@@ -40,7 +40,7 @@ Use portable export/import when you need to:
 Import does not regenerate `magic-sso.runtime.toml` on its own. Always review
 `manager diff` and run `manager validate` before the next apply.
 
-## Apply Failure Triage
+## Apply failure triage
 
 When `manager apply` fails, sort the failure into one of these buckets first:
 
@@ -66,7 +66,7 @@ Useful first checks:
   `magic-sso.runtime.toml`, `magic-sso.runtime.last-good.toml`,
   `manager-audit.ndjson`, and `manager.lock`.
 
-## Reload Failure and Rollback
+## Reload failure and rollback
 
 The manager protects reload-based applies like this:
 
@@ -94,10 +94,10 @@ Operator response:
 If you do not need hot reload, remove `[reload]` from the manager settings and
 fall back to restart-based applies.
 
-## Base Config Drift Recovery
+## Base config drift recovery
 
 Base drift means the operator changed `magic-sso.base.toml` out of band after
-the manager last applied state. The manager blocks apply in this case on
+the manager last applied state. The manager blocks apply in that case on
 purpose.
 
 Recovery flow:
@@ -114,11 +114,11 @@ Recovery flow:
 6. Run `manager diff` to inspect the new managed-site output.
 7. Apply again only after the base file reflects the intended source of truth.
 
-Do not copy managed access data back into the base file just to bypass drift
-protection. If access should remain manager-owned, keep it in
-`manager-state.json` and let the manager regenerate the runtime file.
+Do not copy managed access data back into the base file to get around drift
+protection. If access should stay manager-owned, keep it in `manager-state.json`
+and let the manager regenerate the runtime file.
 
-## Runtime Drift Recovery
+## Runtime drift recovery
 
 Runtime drift means the current `magic-sso.runtime.toml` no longer matches what
 the manager expects from the base file plus manager state.
@@ -146,7 +146,7 @@ Recovery flow:
 If runtime drift keeps recurring, stop editing `magic-sso.runtime.toml` by hand
 and tighten file ownership on the runtime directory.
 
-## Lock File Recovery
+## Lock file recovery
 
 `manager.lock` should disappear when apply exits cleanly. If apply fails because
 the lock already exists:
@@ -159,7 +159,7 @@ the lock already exists:
 
 Treat lock removal as an operator recovery step, not part of normal workflow.
 
-## When to Revert to Classic Mode
+## When to revert to classic mode
 
 Managed mode is optional. Revert to classic mode when:
 

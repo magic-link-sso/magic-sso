@@ -23,7 +23,7 @@ For agent-agnostic setup and integration skills that can be installed into tools
 such as Codex, Claude, and Gemini, see the separate
 [magic-link-sso/skills](https://github.com/magic-link-sso/skills) repository.
 
-## At a Glance
+## At a glance
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./docs/MagicLinkSSO_Overview_dark.png">
@@ -31,29 +31,29 @@ such as Codex, Claude, and Gemini, see the separate
   <img alt="Magic Link SSO overview diagram" src="./docs/MagicLinkSSO_Overview_light.png">
 </picture>
 
-Magic Link SSO can protect private resources in two high-level ways:
+Magic Link SSO can protect private resources two ways:
 
-- framework integration: the app owns the callback and session handling
-- Gate reverse proxy: Gate owns the callback and protects a private upstream
+- framework integration, where the app owns the callback and session handling
+- Gate reverse proxy, where Gate owns the callback and fronts a private upstream
 
-In both cases, access is granted through an email verification grant rather than
-passwords or HTTP Basic Auth. The email always contains a magic link and, when
-optional OTP is enabled, also contains a short code that can be entered in the
-app or hosted page that started sign-in.
+Either way the server checks an emailed grant instead of a password or HTTP
+Basic Auth. Every email carries a magic link. With optional OTP enabled it also
+carries a short code you can type into the app or hosted page that started
+sign-in.
 
 If you are deciding between Magic Link SSO, Better Auth, Keycloak, or a broader
 identity platform, see
-[Choosing an Auth Option](./docs/auth-options-comparison.md).
+[Choosing an auth option](./docs/auth-options-comparison.md).
 
 ## Contents
 
 - [How it works](#how-it-works)
-- [Getting Started](#getting-started)
-- [Deployment Modes](#deployment-modes)
-- [Configuration Reference](#configuration-reference)
-- [Framework Integrations](#framework-integrations)
+- [Getting started](#getting-started)
+- [Deployment modes](#deployment-modes)
+- [Configuration reference](#configuration-reference)
+- [Framework integrations](#framework-integrations)
 - [Magic Link SSO Gate](#magic-link-sso-gate)
-- [Security Considerations](#security-considerations)
+- [Security considerations](#security-considerations)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -62,7 +62,7 @@ identity platform, see
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./docs/MagicLinkSSO_Flow_dark.png">
   <source media="(prefers-color-scheme: light)" srcset="./docs/MagicLinkSSO_Flow_light.png">
-  <img alt="Diagram" src="./docs/MagicLinkSSO_Flow_light.png">
+  <img alt="Magic Link SSO sign-in flow diagram" src="./docs/MagicLinkSSO_Flow_light.png">
 </picture>
 
 Participants:
@@ -92,13 +92,13 @@ Flows:
    Alternatively, the already-open hosted `/signin` page can submit the email
    code to `POST /verify-email/otp`.
 
-OTP is disabled by default and is an alternative way to consume the emailed
-grant, not a second authentication factor. The supported `rotate` resend policy
-keeps one active challenge for the same normalized email, site, scope, return
-URL, and verify URL. Resending that login context immediately invalidates its
-previous code without disrupting independently bound login contexts.
+OTP is disabled by default. It is another way to spend the emailed grant, not a
+second authentication factor. The `rotate` resend policy keeps one active
+challenge per login context, where a context is the combination of normalized
+email, site, scope, return URL, and verify URL. A resend invalidates the
+previous code for that context only. Other contexts keep their own challenges.
 
-## Getting Started
+## Getting started
 
 ### Try the server with Docker
 
@@ -219,8 +219,8 @@ Repository layout:
 - `server/` SSO server
 - `examples/` example apps for Angular, Django, Fastify, Next.js, Nuxt, and the
   managed-mode Photos demo
-- `packages/` reusable framework integrations and `@magic-link-sso/core`
-  protocol primitives
+- `packages/` reusable framework integrations and the shared protocol helpers in
+  `@magic-link-sso/core`
 - `docs/` supporting documentation and diagrams
 
 1. Clone the repository:
@@ -265,7 +265,7 @@ Repository layout:
     docker compose -f server/docker-compose.yml up
     ```
 
-### Development Shortcuts
+### Development shortcuts
 
 From the repository root:
 
@@ -296,10 +296,10 @@ pnpm dev:direct
 ```
 
 `pnpm test:e2e` runs the Playwright suite against the bundled apps in both
-app-owned and hosted direct modes. It covers the existing magic-link flow plus
-OTP success and invalid-code behavior for Angular, Django, Fastify, Next.js,
-Nuxt, and both Gate upstreams. The command starts an isolated SMTP sink and SSO
-server for the run.
+app-owned and hosted direct modes. It covers the magic-link flow plus OTP
+success and invalid-code behavior for Angular, Django, Fastify, Next.js, Nuxt,
+and both Gate upstreams. The command starts an isolated SMTP sink and SSO server
+for the run.
 
 For manual OTP checks without changing your local server TOML, use:
 
@@ -312,7 +312,7 @@ Each command uses a temporary copy of the active `MAGICSSO_CONFIG_FILE` (or the
 path in `server/.env`), enables the v1 OTP policy, and leaves the source file
 unchanged. Set `MAGICSSO_DEV_OTP_SECRET` only if you need a local override. The
 explicit manager and Gate `:otp` shortcuts shown above enable OTP only for their
-respective local run; their existing non-OTP commands stay unchanged.
+respective local run.
 
 To watch the flow interactively, run `pnpm test:e2e:ui`. You can slow it down
 with `PW_SLOWMO_MS`, for example:
@@ -321,15 +321,15 @@ with `PW_SLOWMO_MS`, for example:
 PW_SLOWMO_MS=1200 pnpm test:e2e:ui
 ```
 
-## Deployment Modes
+## Deployment modes
 
 Magic Link SSO supports two deployment modes:
 
-- Classic mode keeps the original workflow: the server reads a single
+- Classic mode is the single-file workflow: the server reads one
   `magic-sso.toml`, and operators edit that file directly.
-- Managed mode is optional and additive: operators keep a static
-  `magic-sso.base.toml`, the manager stores mutable access data separately, and
-  the server reads a generated `magic-sso.runtime.toml`.
+- Managed mode is optional. Operators keep a static `magic-sso.base.toml`, the
+  manager stores mutable access data separately, and the server reads a
+  generated `magic-sso.runtime.toml`.
 - The optional manager can export/import portable state snapshots and reconcile
   manager-owned access from either the base or runtime file before the next
   apply.
@@ -337,10 +337,10 @@ Magic Link SSO supports two deployment modes:
 Classic mode remains the default and requires no manager package, database, or
 state migration.
 
-### Choose a Mode
+### Choose a mode
 
-- Choose classic mode if you want the original workflow: one operator-maintained
-  `magic-sso.toml`, manual edits, and your normal restart-or-reload process.
+- Choose classic mode if you want one operator-maintained `magic-sso.toml`,
+  manual edits, and your normal restart-or-reload process.
 - Choose managed mode only if you want the optional manager package to own
   access administration for selected sites. The server does not depend on
   manager state unless you deliberately point `MAGICSSO_CONFIG_FILE` at the
@@ -356,18 +356,18 @@ Manager-specific docs:
 - [Manager operations and drift recovery](./docs/manager-operations.md)
 - [Manager package README and CLI/API/UI workflows](./manager/README.md)
 
-For a production-style managed-mode admin surface that uses published images,
+For a production-style managed-mode admin setup built on the published images,
 see `manager/docker-compose.prod.yml` together with
 [`manager/README.md`](./manager/README.md) and
 [`docs/managed-mode.md`](./docs/managed-mode.md).
 
-## Configuration Reference
+## Configuration reference
 
 The server reads its runtime config from the TOML file referenced by
 `MAGICSSO_CONFIG_FILE`. Client integrations keep their own env-based settings.
 
-Jump to: [Server TOML](#server-toml) | [Hosted Auth Pages](#hosted-auth-pages) |
-[Framework Integrations](#framework-integrations)
+Jump to: [Server TOML](#server-toml) | [Hosted auth pages](#hosted-auth-pages) |
+[Framework integrations](#framework-integrations)
 
 ### Server TOML
 
@@ -421,8 +421,8 @@ Each `[[sites]]` entry must define:
 - `allowedRedirectUris`
 - `allowedEmails`, `[[sites.accessRules]]`, or both
 
-`allowedEmails` remains a shorthand for full-access users and grants the special
-`*` scope. `[[sites.accessRules]]` can grant narrower per-email scopes:
+`allowedEmails` is a shorthand for full-access users and grants the special `*`
+scope. `[[sites.accessRules]]` can grant narrower per-email scopes:
 
 ```toml
 [[sites]]
@@ -461,13 +461,10 @@ Site routing rules:
   site origins in `aud`, and the Magic Link SSO server origin in `iss`, so
   client integrations can reject tokens minted for another site
 
-Upgrading to the site-bound access-token format invalidates older session
-cookies. Existing users need to complete sign-in again after deployment.
-
 See [`server/magic-sso.example.toml`](./server/magic-sso.example.toml) for the
 canonical config shape.
 
-### Hosted Auth Pages
+### Hosted auth pages
 
 The server can render hosted sign-in and verification pages, plus an optional
 root landing page. Customize the hosted auth pages with:
@@ -486,15 +483,15 @@ Hosted HTML security defaults:
 - browser form posts to `/signin` and `/verify-email` are protected with
   stateless CSRF tokens; JSON API clients do not need to send them
 - the default server path uses the file-backed verification replay store; the
-  in-memory helper is only intended for tests and embedded use and now emits a
+  in-memory helper is only intended for tests and embedded use and emits a
   warning because it does not survive process restarts
 - HSTS is added only for HTTPS requests, so configure `trustProxy` correctly
   when TLS is terminated by a reverse proxy
 
 For the full field reference, examples, and validation rules, see
-[Hosted Auth Pages](docs/hosted-auth-pages.md).
+[Hosted auth pages](docs/hosted-auth-pages.md).
 
-## Framework Integrations
+## Framework integrations
 
 Across frameworks, client integrations usually need:
 
@@ -578,9 +575,9 @@ Published Docker images are split by component under the repository namespace:
 
 See the full guide in [docs/gate.md](./docs/gate.md).
 
-## Security Considerations
+## Security considerations
 
-- Ensure all communications between the client and SSO server are over HTTPS.
+- Serve all traffic between the client and the SSO server over HTTPS.
 - Keep `auth.jwtSecret`, `auth.emailSecret`, `auth.csrfSecret`,
   `auth.previewSecret`, and `auth.otp.secret` secret and private. OTP is useful
   when a mobile/PWA session cannot receive a tapped email link; it does not add
@@ -592,8 +589,8 @@ See the full guide in [docs/gate.md](./docs/gate.md).
   origin instead of depending on third-party cookie behavior.
 - Treat the built-in hosted `/verify-email` flow as best suited to same-site or
   shared-cookie-domain deployments. If the SSO server and application live on
-  disparate domains, do not rely on `SameSite=None` as your only compatibility
-  story.
+  unrelated domains, `SameSite=None` alone will not keep the cookie working
+  across browsers.
 - CHIPS and the Storage Access API are not the primary recommendation for Magic
   Link SSO's email-link handoff. See
   [docs/cross-origin-cookie-audit.md](./docs/cross-origin-cookie-audit.md) for
@@ -607,20 +604,15 @@ release checks and required publishing secrets are listed in
 
 ## License
 
-This repository contains multiple components under different licenses.
+Components in this repository carry different licenses. A component license
+always wins over the repository default.
 
-- **Repository default:** [MIT License](./LICENSE) unless a more specific
-  component license applies
-- **Server code:** [GNU General Public License v3.0 (GPLv3)](./server/LICENSE)
-- **Manager code:** [GNU General Public License v3.0 (GPLv3)](./manager/LICENSE)
-- **Gate service, examples, and top-level docs/tooling:** MIT under the
-  repository default unless a more specific component license applies
-- **Published framework packages:** MIT under their component license files
-- **@magic-link-sso/angular:** Licensed under
-  [MIT License](./packages/angular/LICENSE)
-- **@magic-link-sso/nextjs:** Licensed under
-  [MIT License](./packages/nextjs/LICENSE)
-- **@magic-link-sso/nuxt:** Licensed under
-  [MIT License](./packages/nuxt/LICENSE)
-- **magic-link-sso-django:** Licensed under
-  [MIT License](./packages/django/LICENSE)
+- Server code: [GPLv3](./server/LICENSE)
+- Manager code: [GPLv3](./manager/LICENSE)
+- Published framework packages, each with its own MIT license file:
+  [@magic-link-sso/angular](./packages/angular/LICENSE),
+  [@magic-link-sso/nextjs](./packages/nextjs/LICENSE),
+  [@magic-link-sso/nuxt](./packages/nuxt/LICENSE),
+  [magic-link-sso-django](./packages/django/LICENSE)
+- Everything else, the Gate service, examples, docs, and tooling included:
+  [MIT](./LICENSE) as the repository default

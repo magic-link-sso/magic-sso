@@ -1,8 +1,8 @@
-# Magic Link SSO Security Controls
+# Magic Link SSO security controls
 
-This document inventories security and counter-threat measures currently
-implemented in `server/`, `gate/`, and `packages/`. It is based on the current
-source code.
+This document lists the security and counter-threat measures implemented in
+`server/`, `gate/`, and `packages/`. Every entry was read off the source, not
+off a design intent.
 
 ## General
 
@@ -79,16 +79,16 @@ source code.
   limited to tmpfs mounts or explicitly mounted configuration.
 
 - Production compose examples drop Linux capabilities and set
-  `no-new-privileges`. This reduces the blast radius of a container escape or
-  compromised Node process.
+  `no-new-privileges`. This limits how far a container escape or a compromised
+  Node process can reach.
 
 - Runtime dependencies are installed with `--ignore-scripts` and frozen
   lockfiles in Docker builds. This reduces install-time script risk and keeps
   dependency resolution reproducible.
 
-- Workspace dependency advisories are tracked with audit scripts.
-  `pnpm audit -P`, the Python audit helper, and root `pnpm` overrides are part
-  of the repository's current dependency-security posture.
+- Audit scripts track workspace dependency advisories. `pnpm audit -P`, the
+  Python audit helper, and root `pnpm` overrides carry the repository's
+  dependency-security work.
 
 - Known vulnerable dependency ranges are overridden at the workspace root.
   Recent fixes include forcing patched versions for packages such as PostCSS,
@@ -346,8 +346,8 @@ source code.
   paths, search params, or fragments.
 
 - Gate warns on private, loopback, link-local, and metadata-adjacent targets.
-  This catches SSRF-adjacent or accidental exposure foot-guns while still
-  allowing intentional internal upstreams.
+  This catches SSRF-adjacent targets and accidental exposure while still
+  allowing deliberate internal upstreams.
 
 - Gate detects the common misconfiguration where `auth.serverUrl` points back to
   the gate. That flow is rejected as temporarily unavailable rather than

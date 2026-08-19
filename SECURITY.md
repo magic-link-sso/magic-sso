@@ -1,23 +1,23 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
 | Version | Supported |
 | ------- | --------- |
-| 1.x     | ✅        |
+| 1.x     | Yes       |
 
 Only the latest release in the 1.x line receives security fixes.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Magic Link SSO is an authentication system. Security issues are taken seriously.
+Magic Link SSO issues the session tokens every app behind it trusts, so a bug
+here is a bug in all of them.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Use the **[Report a vulnerability](../../security/advisories/new)** button on
-the GitHub Security tab in the public `magic-link-sso/magic-sso` repository to
-open a private advisory. This keeps the disclosure confidential until a fix is
-ready.
+Use the [Report a vulnerability](../../security/advisories/new) button on the
+GitHub Security tab in the public `magic-link-sso/magic-sso` repository to open
+a private advisory. That keeps the disclosure confidential until a fix is ready.
 
 ## What to include
 
@@ -39,40 +39,39 @@ SLAs, but the goal is:
 | Acknowledgement   | Best effort, typically ≤ 7 days  |
 | Fix or workaround | Best effort, typically ≤ 90 days |
 
-Response may be slower during holidays or periods of reduced availability. You
-will be kept informed of progress once the report is picked up.
+Holidays and busy stretches push those numbers out. You will hear back once
+someone picks the report up.
 
-## Scope — in scope
+## In scope
 
-The following are considered valid security issues:
+These count as valid security issues:
 
 - JWT forgery, bypass, or secret-handling mistakes in the server or client
   packages
 - Token replay vulnerabilities (the one-time token store)
 - CSRF protection bypass on the sign-in or verify-email endpoints
 - SMTP injection or header injection in the email delivery path
-- Auth cookie mishandling: incorrect flags, over-broad scope, or insecure
-  transmission
+- Auth cookie mishandling, such as incorrect flags, over-broad scope, or
+  insecure transmission
 - Open redirects introduced by the server or a client package
 - Dependency CVEs that affect the published packages at runtime
 
-## Scope — out of scope
+## Out of scope
 
-The following are not considered reportable:
+These are not reportable:
 
 - Vulnerabilities that require social engineering of the end user
 - Issues in example apps that do not affect the reusable packages or server
-- Self-inflicted misconfiguration (e.g. a weak `jwtSecret` chosen by the
-  operator)
+- Self-inflicted misconfiguration, such as a weak `jwtSecret` chosen by the
+  operator
 - Rate-limiting bypass that requires the operator to have disabled or
   misconfigured the built-in limits
 - Missing security headers in a consumer application that does not use the
   hosted auth pages
 
-## Sensitive secrets — operator responsibilities
+## Operator responsibilities for secrets
 
-Operators are responsible for protecting the following values in
-`magic-sso.toml`:
+Operators must protect these values in `magic-sso.toml`:
 
 | Secret           | Purpose                                  |
 | ---------------- | ---------------------------------------- |
@@ -86,14 +85,14 @@ sessions derived from the old value.
 
 ## Disclosure policy
 
-We follow **coordinated disclosure**:
+This project follows coordinated disclosure:
 
 1. Reporter submits a private advisory.
 2. Maintainer acknowledges and investigates.
-3. A fix is prepared in a private branch.
-4. A patched release is published.
-5. The advisory is made public after users have had reasonable time to upgrade
+3. Maintainer prepares a fix in a private branch.
+4. Maintainer publishes a patched release.
+5. The advisory goes public after users have had reasonable time to upgrade
    (typically 7 days after the release).
 
-Credit is offered in the release notes for confirmed, responsibly disclosed
-vulnerabilities. Please let us know whether you would like to be named.
+Confirmed, responsibly disclosed vulnerabilities get credit in the release
+notes. Say in the advisory whether you want to be named.

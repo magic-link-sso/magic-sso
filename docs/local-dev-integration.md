@@ -1,14 +1,14 @@
-# Local Dev Integration with External Projects
+# Local dev integration with external projects
 
-Before publishing Magic SSO packages publicly, it is useful to test them from a
-separate app exactly like a real consumer would. The recommended setup depends
-on whether the external app is Python/Django or JavaScript.
+Before publishing Magic Link SSO packages, it is worth consuming them from a
+separate app exactly like a real user would. The setup depends on whether the
+external app is Python/Django or JavaScript.
 
 ## Shared local setup
 
 No matter which client package you are testing:
 
-1. Run the local Magic SSO server from this repo.
+1. Run the local Magic Link SSO server from this repo.
 2. Add the external app's localhost origin to `server/magic-sso.toml`.
 3. Point the external app at the local server with its normal `MAGICSSO_*`
    settings.
@@ -50,8 +50,8 @@ that the package still installs cleanly when treated like a normal dependency.
 
 ## B. JavaScript projects
 
-For the JS packages (`@magic-link-sso/nextjs`, `@magic-link-sso/angular`,
-`@magic-link-sso/nuxt`), there are three useful local-testing options.
+The JS packages (`@magic-link-sso/nextjs`, `@magic-link-sso/angular`,
+`@magic-link-sso/nuxt`) have three useful local-testing options.
 
 ### 1. Fastest local iteration: local path dependency
 
@@ -115,8 +115,8 @@ tarball into the external project:
 npm install ../magic-sso/packages/nextjs/@magic-link-sso/nextjs-x.y.z.tgz
 ```
 
-This is the best final smoke test before publishing because it validates the
-actual packaged contents, not just your local source tree.
+This is the best final smoke test before publishing because it exercises the
+packaged contents rather than your local source tree.
 
 ## Recommended workflow
 
@@ -125,5 +125,3 @@ actual packaged contents, not just your local source tree.
   keep the package build watcher running.
 - JS before publishing: run `npm pack` and install the tarball into the other
   project.
-
-That gives you both fast iteration and a realistic final package test.

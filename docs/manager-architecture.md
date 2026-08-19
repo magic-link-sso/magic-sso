@@ -1,9 +1,9 @@
-# Magic Link SSO Manager Architecture
+# Magic Link SSO manager architecture
 
 The Magic Link SSO manager is an optional, file-backed administration layer for
-site access data. It is designed for operators who want a safer workflow than
-editing live access rules by hand over SSH, while keeping the original Magic
-Link SSO deployment model fully intact.
+site access data. It exists for operators who want something safer than editing
+live access rules by hand over SSH, without giving up the original Magic Link
+SSO deployment model.
 
 ## Goals
 
@@ -14,8 +14,7 @@ Link SSO deployment model fully intact.
 - Limit the manager scope to access administration for already defined sites.
 - Reuse the server's config validation rules so managed mode and classic mode
   behave identically.
-- Stay self-hostable with local files only. No database, queue, or object store
-  is required.
+- Stay self-hostable with local files only. No database, queue, or object store.
 
 ## Non-goals
 
@@ -25,7 +24,7 @@ Link SSO deployment model fully intact.
 - Editing the bootstrap admin access path for the manager itself.
 - Replacing Gate, hosted auth, or the existing TOML-driven server workflow.
 
-## Deployment Modes
+## Deployment modes
 
 Magic Link SSO supports two operator-facing modes:
 
@@ -45,10 +44,10 @@ Magic Link SSO supports two operator-facing modes:
 - The manager renders `magic-sso.runtime.toml`, validates it with the same rules
   as classic mode, and then asks the server to reload it when configured to do
   so.
-- Rollback is just an operator decision to stop the manager and point the server
-  back to the original manually maintained TOML file.
+- To roll back, stop the manager and point the server back at the original
+  manually maintained TOML file.
 
-## Ownership Boundaries
+## Ownership boundaries
 
 Managed mode uses separate files with explicit responsibilities:
 
@@ -69,11 +68,10 @@ Managed mode uses separate files with explicit responsibilities:
 The manager never rewrites `magic-sso.base.toml` in place. Operators keep
 editing the base config through their normal deployment workflow, and the
 manager answers those changes by regenerating a runtime TOML instead of patching
-the base file directly. In particular, `[auth.otp]` is preserved as
-operator-owned configuration and is not editable through manager grants, scopes,
-APIs, or UI.
+the base file. `[auth.otp]` in particular stays operator-owned; no manager
+grant, scope, API call, or UI action can change it.
 
-The managed-mode file lifecycle is intentionally simple:
+The managed-mode file lifecycle has three steps:
 
 1. The operator updates `magic-sso.base.toml` when global settings or unmanaged
    site definitions change.
@@ -82,7 +80,7 @@ The managed-mode file lifecycle is intentionally simple:
 3. The manager renders `magic-sso.runtime.toml` from those two inputs and keeps
    `magic-sso.runtime.last-good.toml` as the local rollback target.
 
-## Access Data Model
+## Access data model
 
 The manager owns only access-related dynamic data:
 
@@ -90,7 +88,7 @@ The manager owns only access-related dynamic data:
 - Access grants per managed site as `{ email, scopes[] }`.
 - Apply metadata such as hashes and timestamps.
 
-Normalization rules are shared across surfaces:
+The CLI, API, and UI share these normalization rules:
 
 - Emails are trimmed and lowercased before comparison and storage.
 - Scopes are trimmed and empty scopes are rejected.
@@ -102,9 +100,9 @@ These rules map to current server semantics:
 - `["*"]` renders to `allowedEmails`.
 - Named scopes render to `[[sites.accessRules]]`.
 
-## Manager Surfaces
+## What the manager exposes
 
-The manager provides these operator-facing surfaces:
+Operators reach the manager through:
 
 - Shared domain modules handle loading, normalization, validation, diffing,
   rendering, atomic apply, and audit logging.
@@ -114,9 +112,9 @@ The manager provides these operator-facing surfaces:
 - Server-rendered admin pages.
 - Gate-protected admin access using a dedicated manager site in static config.
 
-## Reload Model
+## Reload model
 
-The core server change is intentionally narrow:
+The core server change is deliberately small:
 
 - The server can expose an optional authenticated
   `POST /internal/access-config/reload` endpoint.
@@ -128,9 +126,9 @@ The core server change is intentionally narrow:
 This keeps the server manager-agnostic. The server does not need to understand
 manager state files or managed-mode-specific file formats.
 
-## Security Assumptions
+## Security assumptions
 
-- The manager and reload endpoint are operator/admin surfaces, not public
+- The manager and reload endpoint are operator/admin tools, not public
   multi-tenant APIs.
 - The reload endpoint should only be exposed on private networking and must be
   protected by a dedicated static secret that is not manager-managed.
@@ -139,9 +137,9 @@ manager state files or managed-mode-specific file formats.
 - Bootstrap access must remain outside manager-managed state so the UI cannot
   lock operators out of the system.
 
-## Rollback Story
+## Rollback
 
-Managed mode is intentionally reversible:
+Managed mode is reversible by design:
 
 1. Stop using the manager for apply operations.
 2. Point `MAGICSSO_CONFIG_FILE` back to the original operator-maintained TOML.

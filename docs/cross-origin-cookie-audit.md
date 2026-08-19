@@ -1,4 +1,4 @@
-# Cross-Origin Cookies
+# Cross-origin cookies
 
 Magic Link SSO works best when the final authentication cookie is set on the
 application's own origin.
@@ -6,16 +6,15 @@ application's own origin.
 For deployments that span different origins or unrelated domains, the
 recommended pattern is an app-owned `/verify-email` callback. In that flow, the
 application receives the email link, exchanges the token with Magic Link SSO,
-and sets the session cookie itself. This keeps the resulting session first-party
-and avoids relying on cross-site cookie behavior that browsers are increasingly
-restricting.
+and sets the session cookie itself. The resulting session stays first-party, so
+it never depends on cross-site cookie behavior that browsers keep tightening.
 
 The built-in hosted `/verify-email` flow is still appropriate when the
 application and Magic Link SSO can share cookie scope, such as same-site or
 shared-cookie-domain deployments. It should not be the default recommendation
 for unrelated domains.
 
-## Recommended Approach
+## Recommended approach
 
 - For cross-origin deployments, prefer an app-owned `/verify-email` callback
   that exchanges the token with Magic Link SSO and sets the final auth cookie on
@@ -28,11 +27,11 @@ for unrelated domains.
 - Do not treat CHIPS or the Storage Access API as the primary solution for Magic
   Link SSO's email-link handoff.
 
-## Why This Is The Recommended Pattern
+## Why this is the recommended pattern
 
-Modern browsers increasingly restrict third-party cookies and partition cookie
-storage by top-level site. That makes cross-site authentication cookies less
-portable and less predictable than they once were.
+Modern browsers restrict third-party cookies and partition cookie storage by
+top-level site. Cross-site authentication cookies are therefore less portable
+and less predictable than they once were.
 
 An app-owned `/verify-email` callback avoids that problem by using a narrow
 token exchange at the application boundary:
@@ -42,18 +41,18 @@ token exchange at the application boundary:
 3. The application exchanges the token with Magic Link SSO.
 4. The application sets the final auth cookie on its own origin.
 
-Because the session is established by the application itself, the resulting
-cookie behaves like normal first-party session state instead of a third-party
-cookie that may be blocked, partitioned, or inaccessible.
+Because the application establishes the session itself, the cookie behaves like
+normal first-party session state instead of a third-party cookie that a browser
+may block, partition, or hide.
 
 Optional email OTP does not change this browser model. In an app-owned flow, the
 app exchanges the code server-side and sets its own first-party cookie. In a
 hosted direct flow, the same same-site or shared-cookie-domain constraints still
 apply after the hosted page accepts the code.
 
-## When To Use Each Flow
+## When to use each flow
 
-### App-Owned `/verify-email`
+### App-owned `/verify-email`
 
 Use this flow when:
 
@@ -62,8 +61,8 @@ Use this flow when:
 - you want the most durable browser-compatible setup
 - you want the final session cookie to be owned by the application
 
-This is the default pattern used by the framework packages and examples because
-it aligns with how browsers want authentication handoffs to work.
+The framework packages and examples default to this pattern because it does not
+depend on cross-site cookies at all.
 
 ### Hosted `/verify-email`
 
@@ -73,13 +72,13 @@ Use this flow when:
 - both can share an appropriate cookie domain
 - the cookie set by the server is readable by the destination application
 
-This flow is still valid, but it is best described as a same-site or
-shared-cookie-domain option rather than a general cross-domain SSO strategy.
+This flow is still valid. Treat it as a same-site or shared-cookie-domain
+option, not a general cross-domain SSO strategy.
 
-## Browser Compatibility Notes
+## Browser compatibility notes
 
-Browser platform guidance increasingly points developers away from shared
-cross-site cookies as the foundation of authentication flows:
+Browser platform guidance points developers away from shared cross-site cookies
+as the base of authentication flows:
 
 - Chrome's Privacy Sandbox guidance recommends preparing for third-party cookie
   restrictions and moving to alternatives that do not depend on unrestricted
@@ -96,7 +95,7 @@ cross-site cookies as the foundation of authentication flows:
   content, not as the default pattern for top-level email-link authentication
   handoffs.
 
-## Why CHIPS And Storage Access API Are Not The Default
+## Why CHIPS and the Storage Access API are not the default
 
 CHIPS and the Storage Access API both solve narrower problems than the one Magic
 Link SSO needs to solve for email-link authentication.
@@ -111,7 +110,7 @@ access to unpartitioned cookies. It typically involves browser-specific
 permission behavior and prompting, and it is not the natural fit for a top-level
 email-link verification handoff.
 
-## Documentation Guidance
+## Documentation guidance
 
 When documenting Magic Link SSO integrations:
 

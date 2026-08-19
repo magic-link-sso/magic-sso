@@ -1,23 +1,23 @@
-# Managed Mode for Magic Link SSO
+# Managed mode for Magic Link SSO
 
 Managed mode is an optional deployment shape for operators who want a CLI-driven
 workflow for site access administration without giving up the original TOML
 deployment model.
 
-Classic mode remains fully supported. If you do nothing, Magic Link SSO keeps
-working with a single manually edited `magic-sso.toml`.
+Classic mode still works. If you do nothing, Magic Link SSO keeps running on a
+single manually edited `magic-sso.toml`.
 
-## Manager-Owned Compose Example
+## Manager-owned compose example
 
-The repository now ships a manager-focused managed-mode stack at
+The repository ships a manager-focused managed-mode stack at
 [`manager/docker-compose.yml`](../manager/docker-compose.yml). It is narrower
-than the broader Gate demo stack and exists to demonstrate how to run:
+than the Gate demo stack and shows how to run:
 
 - Magic Link SSO server on the generated runtime TOML
 - the SSR Photos demo
 - the Fastify-based manager service
 - Magic Link SSO Gate in front of the manager
-- a Caddy public proxy that gives each surface its own localhost hostname
+- a Caddy public proxy that gives each service its own localhost hostname
 - Mailpit for local email visibility
 
 Bootstrap it like this:
@@ -41,13 +41,13 @@ inspect the generated files directly under `manager/runtime/`.
 For failure handling and drift recovery playbooks, see
 [Manager operations](./manager-operations.md).
 
-## Standalone Production Compose
+## Standalone production compose
 
 For a production-style manager deployment that uses published GHCR images, the
 repository also ships
 [`manager/docker-compose.prod.yml`](../manager/docker-compose.prod.yml).
 
-That example intentionally starts only:
+That example starts only:
 
 - the private manager service
 - Magic Link SSO Gate as the public admin entrypoint
@@ -79,7 +79,7 @@ The production example uses these published images:
 Keep the reload hook optional in `manager/runtime/manager.toml`. If you leave it
 disabled, applies stay restart-based instead of hot-reloaded.
 
-### Same-Host Wiring Checklist
+### Same-host wiring checklist
 
 When the server and manager are separate deployments on the same machine, wire
 them together like this:
@@ -108,7 +108,7 @@ dedicated secret, in `magic-sso.base.toml`; the manager preserves that table
 when it renders the runtime TOML and does not expose OTP settings as managed
 access data.
 
-## Files and Permissions
+## Files and permissions
 
 Managed mode uses these files with explicit ownership boundaries:
 
@@ -136,7 +136,7 @@ Recommended ownership model:
   config edits stay operator-managed, and the manager responds by generating a
   fresh runtime file.
 
-## Volume Layout
+## Volume layout
 
 The `manager/docker-compose.yml` example uses these mounts:
 
@@ -177,7 +177,7 @@ For stricter production isolation, you can split the bind mount into separate
 read-only and read-write file mounts. The bundled compose example keeps one
 shared runtime directory to make the generated files easy to inspect locally.
 
-## Classic vs Managed
+## Classic vs managed
 
 ### Classic mode
 
@@ -200,7 +200,7 @@ The server never requires `manager-state.json` for startup on its own. It only
 needs whichever TOML file `MAGICSSO_CONFIG_FILE` references in the deployment
 you choose.
 
-## Step-by-Step Setup
+## Step-by-step setup
 
 1. Create `magic-sso.base.toml` from your current working server config.
 2. Remove any access rules for sites you want the manager to own from your
@@ -257,7 +257,7 @@ requiredSiteId = "manager-admin"
 requiredScope = "*"
 ```
 
-## Scope Semantics
+## Scope semantics
 
 The manager intentionally reuses the server's current access semantics:
 
@@ -270,7 +270,7 @@ Render mapping:
 - Full access grants render into `allowedEmails`.
 - Named scopes render into `[[sites.accessRules]]`.
 
-## Drift and Safety
+## Drift and safety
 
 The manager checks for operational drift:
 
@@ -291,7 +291,7 @@ The manager also protects against:
 - Losing actor traceability for admin writes by recording access mutations and
   apply actions in the signed audit log and its rotated archives.
 
-## Reload Hook
+## Reload hook
 
 The optional server reload endpoint exists to avoid a full process restart after
 writing a new runtime TOML:
@@ -300,7 +300,7 @@ writing a new runtime TOML:
 - Auth: dedicated reload secret
 - Exposure: private networking only
 
-Reload is intentionally narrow:
+Reload does very little on purpose:
 
 - The server re-reads the TOML file already configured in
   `MAGICSSO_CONFIG_FILE`.
@@ -317,9 +317,9 @@ secret = "replace-me-with-a-dedicated-long-random-reload-secret"
 
 Leave `[server.reload]` out entirely if you prefer restart-based applies.
 
-## Rollback to Classic Mode
+## Rollback to classic mode
 
-Rollback is operationally simple:
+Rolling back takes five steps:
 
 1. Stop running `manager apply`.
 2. Stop the manager service if you no longer need managed-mode UI, API, or CLI
@@ -335,7 +335,7 @@ Managed mode does not require a database, so there is no data migration to undo.
 For deeper apply-failure, rollback, and drift-recovery procedures, see
 [Manager operations](./manager-operations.md).
 
-## Security Assumptions
+## Security assumptions
 
 - The manager is an internal admin tool.
 - The reload endpoint is an internal admin endpoint.

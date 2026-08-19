@@ -1,10 +1,10 @@
 # Magic Link SSO Gate
 
-Magic Link SSO Gate is the repository's answer for protecting arbitrary private
-resources when the protected app cannot integrate directly with Magic Link SSO
-or should stay completely unaware of the auth flow.
+Magic Link SSO Gate is a reverse proxy that protects a private resource when the
+app behind it cannot integrate with Magic Link SSO directly, or should stay
+unaware of the auth flow entirely.
 
-## What It Solves
+## What it solves
 
 Use Gate when:
 
@@ -17,7 +17,7 @@ Use Gate when:
 Do not expose the upstream directly to the public internet. The protection only
 holds if every request goes through Gate first.
 
-## Request Flow
+## Request flow
 
 Production shape:
 
@@ -45,7 +45,7 @@ Flow:
 7. Gate validates the returned JWT locally with `auth.jwtSecret`,
    `expectedAudience`, and `expectedIssuer`.
 8. Gate stores its own auth cookie and redirects to the original `returnUrl`.
-9. Authenticated traffic is proxied to the private upstream.
+9. Gate proxies authenticated traffic to the private upstream.
 
 When the SSO server enables email OTP, local-login Gate keeps the challenge
 identifier in a signed HTTP-only cookie and replaces the email form with one
@@ -55,10 +55,10 @@ An invalid entry returns to the code form; the user can choose "Use a different
 email" to clear an expired or exhausted challenge and start again. This works
 for both static and dynamic upstreams without exposing upstream content first.
 
-The dedicated Gate flow source diagram lives in
-[`docs/MagicLinkSSO-Gate-Flow.puml`](./MagicLinkSSO-Gate-Flow.puml). It stays
-separate from the main authentication flow diagram so the reverse-proxy model
-remains readable on its own.
+The Gate flow has its own source diagram in
+[`docs/MagicLinkSSO-Gate-Flow.puml`](./MagicLinkSSO-Gate-Flow.puml), kept apart
+from the main authentication diagram so the reverse-proxy model stays readable
+on its own.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./MagicLinkSSO_Gate_Flow_dark.png">
@@ -66,7 +66,7 @@ remains readable on its own.
   <img alt="Diagram" src="./MagicLinkSSO_Gate_Flow_light.png">
 </picture>
 
-## Gate Namespace
+## Gate namespace
 
 Gate reserves `/_magicgate/*` by default so it does not collide with routes
 owned by the upstream application.
@@ -84,7 +84,7 @@ Canonical endpoints:
 
 Everything outside that namespace is a protected upstream route candidate.
 
-## Production Example
+## Production example
 
 For `private.example.com` plus `sso.example.com`, configure the SSO server like
 this:
@@ -139,7 +139,7 @@ Recommended public routing:
 - `private.example.com -> magic-gate`
 - `private-upstream.internal` reachable only from Gate or private networking
 
-### Standalone Production Compose
+### Standalone production compose
 
 When your Magic Link SSO server is already deployed, the repository ships a
 standalone production compose example for Gate itself:
@@ -150,7 +150,7 @@ cp gate/.env.prod.example gate/.env.prod
 docker compose --env-file gate/.env.prod -f gate/docker-compose.prod.yml up -d
 ```
 
-That example intentionally starts only Gate. It assumes:
+That example starts Gate and nothing else. It assumes:
 
 - a `gate/magic-gate.toml` file is mounted into the container
 - `MAGIC_GATE_CONFIG_FILE` points to that mounted file
@@ -166,7 +166,7 @@ This keeps the production Gate example standalone. You do not need to run the
 SSO server inside the same compose project, and Gate reads every runtime value
 from the TOML file instead of from env vars.
 
-## Path Prefix Mode
+## Path prefix mode
 
 Gate also supports path-prefix deployments such as
 `https://example.com/private/...`.
@@ -188,7 +188,7 @@ That makes the canonical namespace:
 - `https://example.com/private/_magicgate/login`
 - `https://example.com/private/_magicgate/verify-email`
 
-Path-prefix mode is intentionally documented with caveats:
+Path-prefix mode comes with caveats:
 
 - the upstream must support a base path
 - asset URLs must not assume `/`
@@ -197,9 +197,9 @@ Path-prefix mode is intentionally documented with caveats:
 
 If the upstream cannot run under a prefix, prefer a subdomain.
 
-## Running Everything Locally
+## Running everything locally
 
-### Separate Processes
+### Separate processes
 
 Run for `private1`:
 
@@ -215,7 +215,7 @@ Suggested local setup:
 - set `MAGIC_GATE_CONFIG_FILE="$PWD/gate/magic-gate.toml"`
 - update the SSO server URL, JWT secret, and upstream origin in the TOML file
 
-### Full Docker Stack
+### Full Docker stack
 
 Run:
 
@@ -245,33 +245,36 @@ Open:
 - `http://localhost:8025`
 
 Mailpit lets you click the magic link without setting up a real SMTP service.
-The bundled Docker stack renders dedicated TOML files for the SSO server and
-each Gate instance before launch, with matching non-placeholder secrets for the
-local stack. For `private2`, the dev compose stack bind-mounts the static
-`public/` directory, so HTML/CSS/JS asset changes are reflected on refresh
-without an image rebuild. The compose stack reads `gate/.env` only as bootstrap
-input for the render step, so you can change public hosts, allowed emails, and
-shared dev secrets in one place without touching `docker-compose.yml`. The Gate
-renderer inputs are grouped under the `MAGIC_GATE_RENDER_*` prefix, including
-`MAGIC_GATE_RENDER_SERVER_URL`, `MAGIC_GATE_RENDER_JWT_SECRET`,
-`MAGIC_GATE_RENDER_COOKIE_NAME`, and `MAGIC_GATE_RENDER_COOKIE_MAX_AGE`. If you
-use `pnpm dev:gate:stack`, Compose will still use defaults or exported shell env
-vars. Use `docker compose --env-file gate/.env ...` when you want the stack to
-read the env file explicitly. The same stack also brings up a Gate-protected
-manager at `manager.localhost`, seeds `private1` and `private2` access through
-manager-owned state, and keeps the bootstrap `manager-admin` allowlist in the
-static server template via `MANAGER_ALLOWED_EMAIL`.
+Before launch, the stack renders dedicated TOML files for the SSO server and for
+each Gate instance, with matching non-placeholder secrets for local use. For
+`private2` it bind-mounts the static `public/` directory, so an HTML, CSS, or JS
+change shows up on refresh without an image rebuild.
 
-The `private2` example is intentionally a static site behind Gate. It shows that
+The stack reads `gate/.env` only as bootstrap input for that render step. Change
+public hosts, allowed emails, and shared dev secrets there and leave
+`docker-compose.yml` alone. Renderer inputs share the `MAGIC_GATE_RENDER_*`
+prefix: `MAGIC_GATE_RENDER_SERVER_URL`, `MAGIC_GATE_RENDER_JWT_SECRET`,
+`MAGIC_GATE_RENDER_COOKIE_NAME`, and `MAGIC_GATE_RENDER_COOKIE_MAX_AGE`. Note
+that `pnpm dev:gate:stack` does not pass the env file, so Compose falls back to
+defaults or exported shell variables. Run
+`docker compose --env-file gate/.env ...` when you want the file read
+explicitly.
+
+The same stack brings up a Gate-protected manager at `manager.localhost`, seeds
+`private1` and `private2` access through manager-owned state, and keeps the
+bootstrap `manager-admin` allowlist in the static server template via
+`MANAGER_ALLOWED_EMAIL`.
+
+The `private2` example is a static site behind Gate on purpose. It shows that
 the protected upstream can be a plain file server for HTML, SPA bundles, and
-assets with zero auth integration, SSR, or framework-specific code.
+assets, with no auth integration, SSR, or framework-specific code of its own.
 
 Treat [`gate/docker-compose.yml`](../gate/docker-compose.yml) as the local
 development topology and
 [`gate/docker-compose.prod.yml`](../gate/docker-compose.prod.yml) as the
 standalone production deployment example for Gate.
 
-## Forwarded Identity Headers
+## Forwarded identity headers
 
 Gate forwards the authenticated identity to the private upstream with:
 

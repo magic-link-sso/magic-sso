@@ -1,4 +1,4 @@
-# Choosing an Auth Option
+# Choosing an auth option
 
 This guide compares Magic Link SSO with two common self-hostable alternatives:
 [Better Auth](https://better-auth.com/) and
@@ -10,15 +10,15 @@ application should own a broad set of authentication features in code. Choose
 Keycloak when you need a full identity provider with standard protocols,
 federation, and centralized identity administration.
 
-## Quick Recommendation
+## Quick recommendation
 
-| Need                                                                                          | Best fit       | Why                                                                                                                                                            |
-| --------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protect a few private apps with email links or optional short codes and little infrastructure | Magic Link SSO | It is purpose-built for small self-hosted deployments, can run without a database, and includes Magic Link SSO Gate for static, CSR, or unknown upstream apps. |
-| Add auth directly inside a TypeScript app                                                     | Better Auth    | It is a framework-agnostic TypeScript auth framework with built-in methods, database adapters, and a large plugin ecosystem.                                   |
-| Run a central identity provider for many apps, teams, protocols, or directories               | Keycloak       | It provides OpenID Connect, OAuth 2.0, SAML, user federation, identity brokering, admin consoles, and authorization services.                                  |
+| Need                                                                                          | Best fit       | Why                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Protect a few private apps with email links or optional short codes and little infrastructure | Magic Link SSO | It is built for small self-hosted deployments, can run without a database, and includes Magic Link SSO Gate for static, CSR, or unknown upstream apps. |
+| Add auth directly inside a TypeScript app                                                     | Better Auth    | It is a framework-agnostic TypeScript auth framework with built-in methods, database adapters, and a large plugin ecosystem.                           |
+| Run a central identity provider for many apps, teams, protocols, or directories               | Keycloak       | It provides OpenID Connect, OAuth 2.0, SAML, user federation, identity brokering, admin consoles, and authorization services.                          |
 
-## Choose Magic Link SSO When
+## Choose Magic Link SSO when
 
 - You want passwordless email sign-in with magic links and an optional short
   code for already-open mobile or PWA sessions.
@@ -35,7 +35,7 @@ Magic Link SSO is not the right fit when you need a general-purpose user
 database, social login, passkeys, organization membership, SAML, SCIM, or OIDC
 provider behavior. It is intentionally narrower than a full IAM platform.
 
-## Choose Better Auth When
+## Choose Better Auth when
 
 - Your application is TypeScript-first and should own auth routes, sessions, and
   user data.
@@ -53,7 +53,7 @@ Better Auth is not the right fit when the main goal is to put a small auth-gate
 in front of private apps without making each app own user/session state. It is
 broader and more application-centered than Magic Link SSO.
 
-## Choose Keycloak When
+## Choose Keycloak when
 
 - You need a central identity provider for multiple applications or teams.
 - You need standard protocols such as OpenID Connect, OAuth 2.0, or SAML.
@@ -66,10 +66,10 @@ broader and more application-centered than Magic Link SSO.
   flow.
 
 Keycloak is not the right fit when you mainly want a tiny email-link service for
-a handful of private apps. It is much more capable, but that capability comes
-with a larger operational surface.
+a handful of private apps. It is far more capable, and there is far more of it
+to run.
 
-## Comparison Matrix
+## Comparison matrix
 
 | Area                        | Magic Link SSO                                                                                                        | Better Auth                                                                                                      | Keycloak                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -79,7 +79,7 @@ with a larger operational surface.
 | Database needs              | Classic mode can run without a database; file or Redis state can back replay protection and throttling.               | A database is required for normal user data; stateless session mode exists, but most plugins require a database. | Production deployments should plan for a database-backed identity service.                                        |
 | Protocols                   | Site-bound JWT sessions for integrated apps and Gate.                                                                 | App/session APIs plus plugins for JWT, SSO, SCIM, OAuth/OIDC provider, and related features.                     | OpenID Connect, OAuth 2.0, SAML, and federation/brokering features.                                               |
 | App integration             | Framework packages for supported stacks, or Magic Link SSO Gate in front of upstreams.                                | Route handlers and clients for many TypeScript/web frameworks.                                                   | Client adapters, standard protocols, and app configuration against a central IdP.                                 |
-| Reverse-proxy protection    | First-class through Magic Link SSO Gate.                                                                              | Not the core product shape; use app handlers or build a gateway around it.                                       | Usually protects apps through protocol integration; reverse-proxy patterns need separate infrastructure.          |
+| Reverse-proxy protection    | Built in through Magic Link SSO Gate.                                                                                 | Not the core product shape; use app handlers or build a gateway around it.                                       | Usually protects apps through protocol integration; reverse-proxy patterns need separate infrastructure.          |
 | User and admin management   | TOML access rules in classic mode; optional manager for selected access administration.                               | App-owned user management, sessions, organizations, and admin features through core APIs and plugins.            | Central admin console, account console, users, sessions, realms, clients, federation, and authorization services. |
 | Extensibility               | Keep the server small; extend through framework packages, Gate, managed mode, and deployment config.                  | Plugin ecosystem and code-level customization.                                                                   | Themes, providers, admin APIs, protocol configuration, and server extensions.                                     |
 | Operational complexity      | Low for classic mode; moderate with Gate or managed mode.                                                             | Moderate, tied to the hosting app, database, migrations, and selected plugins.                                   | Highest of the three; operate an IAM service and its lifecycle.                                                   |

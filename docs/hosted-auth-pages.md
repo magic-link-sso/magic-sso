@@ -1,4 +1,4 @@
-# Hosted Auth Pages
+# Hosted auth pages
 
 Magic Link SSO ships these built-in HTML pages:
 
@@ -23,9 +23,9 @@ For multi-site setups, you can override the shared defaults per site with:
 - `[sites.hostedAuth.copy]`
 - `[sites.hostedAuth.branding]`
 
-## Built-In Security Behavior
+## Built-in security behavior
 
-The hosted HTML flow now ships with security protections enabled by default:
+The hosted HTML flow ships with these protections on by default:
 
 - all hosted HTML responses send `Cache-Control: no-store`,
   `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
@@ -59,7 +59,7 @@ If you fork the EJS templates, keep passing the generated nonce into any inline
 `<style>` or `<script>` tags, or move that code into external assets served from
 the same origin.
 
-## Cross-Origin Deployment Guidance
+## Cross-origin deployment guidance
 
 The built-in hosted `/verify-email` flow is strongest when the SSO server can
 set a cookie that the target application can actually use, such as same-origin,
@@ -71,19 +71,20 @@ auth cookie on the application origin. That is the pattern used by the framework
 packages and example apps in this repository.
 
 Avoid treating `SameSite=None` as a durable cross-browser compatibility plan for
-unrelated domains. Modern browser privacy features increasingly block or
-partition third-party cookie state. For the supporting browser guidance and the
-reason CHIPS / Storage Access API are not the primary recommendation here, see
-[Cross-Origin Cookie Audit](./cross-origin-cookie-audit.md).
+unrelated domains. Browser privacy features block or partition third-party
+cookie state. For the supporting browser guidance and the reason CHIPS and the
+Storage Access API are not the primary recommendation here, see
+[Cross-origin cookies](./cross-origin-cookie-audit.md).
 
-In this guide, `[hostedAuth.copy]` means "UI text shown on the hosted pages":
+Throughout this guide, `[hostedAuth.copy]` means the UI text shown on the hosted
+pages:
 
 - page titles
 - labels
 - help text
 - confirmation and error messages
 
-## Quick Start
+## Quick start
 
 Use `[hostedAuth.copy]` for text and browser-only feedback:
 
@@ -136,7 +137,7 @@ supportLinkUrl = "mailto:support@example.com"
 
 You can use either variable on its own, or both together.
 
-## What `[hostedAuth.copy]` Controls
+## What `[hostedAuth.copy]` controls
 
 Top-level fields:
 
@@ -172,8 +173,8 @@ Top-level fields:
 
 ### `feedback`
 
-These are used for server-rendered HTML error states. JSON API responses keep
-their existing default-English messages.
+These cover the server-rendered HTML error states. JSON API responses keep their
+existing default-English messages.
 
 - `invalidRequest`
 - `invalidOrUntrustedReturnUrl`
@@ -186,16 +187,16 @@ their existing default-English messages.
 
 Any missing field falls back to the built-in default text.
 
-`verificationEmailSent` is retained for compatibility with older configurations,
-but the hosted sign-in success screen now uses the dedicated
-`signin.confirmation*` fields instead.
+`verificationEmailSent` stays for compatibility with older configurations. The
+hosted sign-in success screen uses the dedicated `signin.confirmation*` fields
+instead.
 
-## What `[hostedAuth.branding]` Controls
+## What `[hostedAuth.branding]` controls
 
 Supported fields:
 
-- `title` Used as the brand eyebrow on both hosted pages.
-- `logoText` Short text badge shown when `logoImageUrl` is not set.
+- `title` The brand eyebrow on both hosted pages.
+- `logoText` A short text badge, used when `logoImageUrl` is not set.
 - `logoImageUrl` Replaces `logoText` with an image.
 - `logoAlt` Alt text for `logoImageUrl`.
 - `supportText` Optional help/support sentence shown near the bottom of the
@@ -206,7 +207,7 @@ Supported fields:
 - `verifyEmailCssVariables` Optional CSS variable overrides for
   `GET /verify-email`.
 
-### URL Rules
+### URL rules
 
 - `logoImageUrl` must be either:
     - an absolute `http://` or `https://` URL
@@ -219,7 +220,7 @@ Supported fields:
 
 If the TOML shape is invalid, the server fails fast during startup.
 
-## Supported CSS Variables
+## Supported CSS variables
 
 ### `signinCssVariables`
 
@@ -252,7 +253,7 @@ If the TOML shape is invalid, the server fails fast during startup.
 - `--color-button-background`
 - `--color-button-text`
 
-## Recommended Approach
+## Recommended approach
 
 1. Start with `[hostedAuth.copy]` only.
 2. Add `[hostedAuth.branding]` title, logo text, and support details next.
@@ -261,7 +262,7 @@ If the TOML shape is invalid, the server fails fast during startup.
 4. Prefer site-relative asset paths such as `/brand/logo.svg` when the logo is
    served by the same deployment.
 
-## Example: Small White-Label Setup
+## Example: a small white-label setup
 
 ```toml
 [hostedAuth.copy.signin]
@@ -288,7 +289,7 @@ supportLinkUrl = "/support"
 "--color-focus" = "#c2410c"
 ```
 
-## Where This Applies
+## Where this applies
 
 These settings affect only the server-hosted HTML pages:
 
