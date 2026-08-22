@@ -69,6 +69,24 @@ function collectManagerConfigFilesByServer(config: ReturnType<typeof createManag
 }
 
 describe('playwright base config', () => {
+    it('gracefully stops every web server before a later E2E run reuses its ports', () => {
+        const configs = [
+            createE2eConfig({
+                directUse: false,
+                testMatch: /example-apps-magic-link\.indirect\.spec\.ts/u,
+            }),
+            createManagerE2eConfig(),
+        ];
+
+        for (const config of configs) {
+            const webServers = Array.isArray(config.webServer) ? config.webServer : [];
+            expect(webServers.length).toBeGreaterThan(0);
+            for (const server of webServers) {
+                expect(server.gracefulShutdown).toEqual({ signal: 'SIGTERM', timeout: 5_000 });
+            }
+        }
+    });
+
     it('writes directUse into the gate TOML as a boolean', () => {
         const config = createE2eConfig({
             directUse: false,

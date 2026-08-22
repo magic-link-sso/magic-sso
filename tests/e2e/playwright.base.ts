@@ -26,6 +26,7 @@ const serverFixtureConfigPath = resolve(packageDir, 'fixtures/server.config.toml
 const managerReloadSecret = 'test-manager-reload-secret-1234567890';
 const sharedJwtSecret = 'test-jwt-secret-for-e2e-suite-123456';
 const sharedPreviewSecret = 'test-preview-secret-for-e2e-suite-123';
+const gracefulWebServerShutdown = { signal: 'SIGTERM', timeout: 5_000 } as const;
 
 function createEphemeralServerConfigPath(): string {
     const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-server-'));
@@ -403,6 +404,7 @@ export function createE2eConfig(
                 command: `node ${quietWebServerScript}`,
                 cwd: packageDir,
                 env: mailSinkEnv,
+                gracefulShutdown: gracefulWebServerShutdown,
                 port: Number.parseInt(mailSinkHttpPort, 10),
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -417,6 +419,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-server build && pnpm --filter magic-sso-server start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${serverPort}/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -430,6 +433,7 @@ export function createE2eConfig(
                     ...nextEnv,
                     WEB_SERVER_COMMAND: `pnpm --filter example-app-nextjs build && pnpm --filter example-app-nextjs exec next start -p ${nextPort}`,
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${nextPort}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -443,6 +447,7 @@ export function createE2eConfig(
                     ...nuxtEnv,
                     WEB_SERVER_COMMAND: `pnpm --filter example-app-nuxt build && pnpm --filter example-app-nuxt exec nuxt start --port ${nuxtPort}`,
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${nuxtPort}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -457,6 +462,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter example-app-angular build && pnpm --filter example-app-angular start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${angularPort}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -471,6 +477,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter example-app-fastify build && pnpm --filter example-app-fastify start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${fastifyPort}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -485,6 +492,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter example-app-gate-private1 build && pnpm --filter example-app-gate-private1 start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${private1UpstreamPort}/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -499,6 +507,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${private1GatePort}/_magicgate/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -513,6 +522,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter example-app-gate-private2-static build && pnpm --filter example-app-gate-private2-static start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${private2UpstreamPort}/`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -527,6 +537,7 @@ export function createE2eConfig(
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${private2GatePort}/_magicgate/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -540,6 +551,7 @@ export function createE2eConfig(
                     ...djangoEnv,
                     WEB_SERVER_COMMAND: `UV_CACHE_DIR=/tmp/uv-cache uv run python manage.py runserver ${djangoPort} --noreload`,
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${djangoPort}/`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -617,6 +629,7 @@ export function createManagerE2eConfig() {
                 command: `node ${quietWebServerScript}`,
                 cwd: packageDir,
                 env: mailSinkEnv,
+                gracefulShutdown: gracefulWebServerShutdown,
                 port: Number.parseInt(mailSinkHttpPort, 10),
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -631,6 +644,7 @@ export function createManagerE2eConfig() {
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-manager build && node manager/dist/cli.js apply --yes && pnpm --filter magic-sso-server build && pnpm --filter magic-sso-server start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${serverPort}/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -645,6 +659,7 @@ export function createManagerE2eConfig() {
                     WEB_SERVER_COMMAND:
                         'pnpm --filter example-app-photos build && pnpm --filter example-app-photos start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${photosPort}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -659,6 +674,7 @@ export function createManagerE2eConfig() {
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-manager build && pnpm --filter magic-sso-manager start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://127.0.0.1:${managerServicePort}/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
@@ -673,6 +689,7 @@ export function createManagerE2eConfig() {
                     WEB_SERVER_COMMAND:
                         'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
                 },
+                gracefulShutdown: gracefulWebServerShutdown,
                 url: `http://localhost:${managerGatePort}/_magicgate/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',

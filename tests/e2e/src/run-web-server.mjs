@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
-import { createWebServerSpawnOptions } from './web-server-process.mjs';
+import {
+    createWebServerSpawnOptions,
+    getWebServerProcessSignalTarget,
+} from './web-server-process.mjs';
 
 const maxBufferedChars = 120_000;
 const ansiPattern = new RegExp(String.raw`\u001B\[[0-9;]*m`, 'gu');
@@ -105,7 +108,21 @@ child.on('error', (error) => {
 
 function forwardSignal(signal) {
     isShuttingDown = true;
-    child.kill(signal);
+
+    if (typeof child.pid !== 'number') {
+        child.kill(signal);
+        return;
+    }
+
+    try {
+        process.kill(getWebServerProcessSignalTarget(child.pid), signal);
+    } catch (error) {
+        if (error && typeof error === 'object' && error.code === 'ESRCH') {
+            return;
+        }
+
+        throw error;
+    }
 }
 
 process.on('SIGINT', () => {
