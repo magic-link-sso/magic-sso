@@ -3,14 +3,14 @@
 
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { type ApplicationConfig } from '@angular/core';
-import { provideClientHydration } from '@angular/platform-browser';
+import { provideClientHydration, withNoIncrementalHydration } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { provideMagicSso } from './magic-sso';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
     providers: [
-        provideClientHydration(),
+        provideClientHydration(withNoIncrementalHydration()),
         provideHttpClient(withFetch()),
         provideRouter(routes),
         provideMagicSso({

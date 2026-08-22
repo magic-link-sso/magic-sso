@@ -31,7 +31,7 @@ describe('Angular example app', () => {
         ]);
 
         expect(homePage).toMatch(/sharedSigninBadgeUrl/u);
-        expect(homePage).toMatch(/Angular 21 SSR demo app/u);
+        expect(homePage).toMatch(/Angular SSR demo app/u);
         expect(homePage).toMatch(/<form action="\/logout" method="post">/u);
         expect(loginPage).toMatch(/button-spinner-visible/u);
         expect(loginPage).toMatch(/We'll email you a sign-in link\./u);

@@ -1,8 +1,8 @@
-# Integrating Angular 21 SSR with Magic Link SSO
+# Integrating Angular 21+ SSR with Magic Link SSO
 
 [Magic Link SSO](../../README.md)
 
-This is an Angular 21 SSR example app that uses the reusable
+This is an Angular SSR example app that uses the reusable
 [`@magic-link-sso/angular`](../../packages/angular) helpers.
 
 ## Getting Started

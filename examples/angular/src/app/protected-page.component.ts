@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { MagicSsoSessionService, type AuthPayload } from './magic-sso';
 
 const sharedProtectedBadgeUrl = '/assets/protected-page-badge.svg';
 
 @Component({
     standalone: true,
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
         <main class="shell">
             <div class="card hero">

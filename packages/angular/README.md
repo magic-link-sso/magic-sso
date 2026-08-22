@@ -1,6 +1,6 @@
 # @magic-link-sso/angular
 
-Reusable helpers for integrating Angular 21 SSR apps with the Magic Link SSO
+Reusable helpers for integrating Angular 21+ SSR apps with the Magic Link SSO
 server.
 
 ## Install

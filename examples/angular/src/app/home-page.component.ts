@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { REQUEST } from '@angular/core';
 import { buildLoginTarget as buildMagicSsoLoginTarget } from '@magic-link-sso/angular';
 import { getAppOrigin } from './login-utils';
@@ -11,6 +11,7 @@ const sharedSigninBadgeUrl = '/assets/signin-page-badge.svg';
 
 @Component({
     standalone: true,
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
         <main class="shell">
             <div class="card hero">
@@ -24,7 +25,7 @@ const sharedSigninBadgeUrl = '/assets/signin-page-badge.svg';
                     />
                     <div>
                         <p class="eyebrow">Magic Link SSO</p>
-                        <h1 class="title">Angular 21 SSR demo app for Magic Link sign-in.</h1>
+                        <h1 class="title">Angular SSR demo app for Magic Link sign-in.</h1>
                         <p class="copy">
                             Start the sign-in flow here, then open a protected route once your
                             session cookie is active.

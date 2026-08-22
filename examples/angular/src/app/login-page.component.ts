@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { Component, REQUEST, computed, inject, signal } from '@angular/core';
+import {
+    Component,
+    REQUEST,
+    computed,
+    inject,
+    signal,
+    ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { buildLoginTarget as buildMagicSsoLoginTarget } from '@magic-link-sso/angular';
 import { ActivatedRoute } from '@angular/router';
@@ -19,6 +26,7 @@ const sharedSigninBadgeUrl = '/assets/signin-page-badge.svg';
 @Component({
     imports: [FormsModule],
     standalone: true,
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
         <main class="login-shell">
             <a class="skip-link" href="#login-panel">Skip to sign-in form</a>
