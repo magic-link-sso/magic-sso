@@ -2,41 +2,25 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { NextRequest, NextResponse } from 'next/server';
+import { normaliseReturnUrl } from '@magic-link-sso/nextjs';
 import { getDemoScopeForEmail } from '../../login/demo-emails';
 import { sendMagicLink } from '../../login/signin';
-import { resolveAppOrigin } from '../../login/url';
+import { resolveRequestAppOrigin } from '../../login/url';
 
 function acceptsJson(request: NextRequest): boolean {
     const accept = request.headers.get('accept');
     return typeof accept === 'string' && accept.includes('application/json');
 }
 
+const signInErrorMessages: Record<string, string> = {
+    'invalid-signin-request': 'The sign-in form was incomplete. Please try again.',
+    'verify-email-misconfigured': 'This app is missing required SSO verify-email configuration.',
+};
+
 function getErrorMessage(errorCode: string): string {
-    switch (errorCode) {
-        case 'invalid-signin-request':
-            return 'The sign-in form was incomplete. Please try again.';
-        case 'verify-email-misconfigured':
-            return 'This app is missing required SSO verify-email configuration.';
-        case 'signin-request-failed':
-        default:
-            return 'We could not send the sign-in email. Please try again.';
-    }
-}
-
-function normaliseReturnUrl(returnUrl: string | null, origin: string): string {
-    if (typeof returnUrl !== 'string' || returnUrl.length === 0) {
-        return origin;
-    }
-    if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-        return new URL(returnUrl, origin).toString();
-    }
-
-    try {
-        const parsedUrl = new URL(returnUrl);
-        return parsedUrl.origin === origin ? parsedUrl.toString() : origin;
-    } catch {
-        return origin;
-    }
+    return (
+        signInErrorMessages[errorCode] ?? 'We could not send the sign-in email. Please try again.'
+    );
 }
 
 function buildLoginRedirect(
@@ -61,13 +45,7 @@ function buildLoginRedirect(
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     const formData = await request.formData();
-    const appOrigin = resolveAppOrigin({
-        explicitPublicOrigin: process.env.MAGICSSO_PUBLIC_ORIGIN,
-        fallbackOrigin: request.nextUrl.origin,
-        forwardedHost: request.headers.get('x-forwarded-host'),
-        forwardedProtocol: request.headers.get('x-forwarded-proto'),
-        host: request.headers.get('host'),
-    });
+    const appOrigin = resolveRequestAppOrigin(request);
     const email = formData.get('email');
     const verifyUrl = formData.get('verifyUrl');
     const scopeValue = formData.get('scope');
@@ -77,7 +55,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             ? scopeValue.trim()
             : undefined;
     const returnUrl = normaliseReturnUrl(
-        typeof returnUrlValue === 'string' ? returnUrlValue : null,
+        typeof returnUrlValue === 'string' ? returnUrlValue : undefined,
+        appOrigin,
         appOrigin,
     );
 

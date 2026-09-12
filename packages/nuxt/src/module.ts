@@ -14,6 +14,46 @@ import type { MagicSsoModuleOptions } from './types';
 
 export type { MagicSsoModuleOptions } from './types';
 
+/** Read a nested runtime-config table, treating anything else as absent. */
+function readConfigTable(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/** Apply the module defaults once, so the server and public tables stay in step. */
+function resolveModuleOptions(options: MagicSsoModuleOptions) {
+    return {
+        authEverywhere: options.authEverywhere ?? false,
+        cookieMaxAge: options.cookieMaxAge,
+        cookieName: options.cookieName ?? 'token',
+        cookiePath: options.cookiePath ?? '/',
+        directUse: options.directUse ?? false,
+        excludedPaths: options.excludedPaths ?? DEFAULT_EXCLUDED_PATHS,
+        jwtSecret: options.jwtSecret ?? '',
+        publicOrigin: options.publicOrigin ?? '',
+        serverUrl: options.serverUrl ?? '',
+        trustProxy: options.trustProxy ?? false,
+    };
+}
+
+const serverHandlers: ReadonlyArray<{
+    handler: string;
+    method: 'get' | 'post';
+    route: string;
+}> = [
+    { handler: './runtime/server/routes/logout.post', method: 'post', route: '/logout' },
+    { handler: './runtime/server/routes/verify-email.get', method: 'get', route: '/verify-email' },
+    {
+        handler: './runtime/server/routes/verify-email.post',
+        method: 'post',
+        route: '/verify-email',
+    },
+    {
+        handler: './runtime/server/routes/verify-email-otp.post',
+        method: 'post',
+        route: '/verify-email/otp',
+    },
+];
+
 const magicSsoModule: NuxtModule<MagicSsoModuleOptions, MagicSsoModuleOptions> =
     defineNuxtModule<MagicSsoModuleOptions>({
         meta: {
@@ -35,47 +75,17 @@ const magicSsoModule: NuxtModule<MagicSsoModuleOptions, MagicSsoModuleOptions> =
         setup(options, nuxt) {
             const resolver = createResolver(import.meta.url);
             const runtimeConfig = nuxt.options.runtimeConfig;
-            const configuredPublicRuntimeConfig =
-                typeof runtimeConfig.public === 'object' && runtimeConfig.public !== null
-                    ? runtimeConfig.public
-                    : {};
-            const configuredMagicSso =
-                typeof runtimeConfig.magicSso === 'object' && runtimeConfig.magicSso !== null
-                    ? runtimeConfig.magicSso
-                    : {};
-            const configuredPublicMagicSso =
-                typeof configuredPublicRuntimeConfig.magicSso === 'object' &&
-                configuredPublicRuntimeConfig.magicSso !== null
-                    ? configuredPublicRuntimeConfig.magicSso
-                    : {};
+            const configuredPublicRuntimeConfig = readConfigTable(runtimeConfig.public);
+            const configuredMagicSso = readConfigTable(runtimeConfig.magicSso);
+            const configuredPublicMagicSso = readConfigTable(
+                configuredPublicRuntimeConfig['magicSso'],
+            );
+            const { jwtSecret, ...publicOptions } = resolveModuleOptions(options);
 
-            runtimeConfig.magicSso = {
-                serverUrl: options.serverUrl ?? '',
-                jwtSecret: options.jwtSecret ?? '',
-                cookieName: options.cookieName ?? 'token',
-                cookiePath: options.cookiePath ?? '/',
-                cookieMaxAge: options.cookieMaxAge,
-                directUse: options.directUse ?? false,
-                publicOrigin: options.publicOrigin ?? '',
-                trustProxy: options.trustProxy ?? false,
-                excludedPaths: options.excludedPaths ?? DEFAULT_EXCLUDED_PATHS,
-                authEverywhere: options.authEverywhere ?? false,
-                ...configuredMagicSso,
-            };
+            runtimeConfig.magicSso = { ...publicOptions, jwtSecret, ...configuredMagicSso };
             runtimeConfig.public = {
                 ...configuredPublicRuntimeConfig,
-                magicSso: {
-                    serverUrl: options.serverUrl ?? '',
-                    cookieName: options.cookieName ?? 'token',
-                    cookiePath: options.cookiePath ?? '/',
-                    cookieMaxAge: options.cookieMaxAge,
-                    directUse: options.directUse ?? false,
-                    publicOrigin: options.publicOrigin ?? '',
-                    trustProxy: options.trustProxy ?? false,
-                    excludedPaths: options.excludedPaths ?? DEFAULT_EXCLUDED_PATHS,
-                    authEverywhere: options.authEverywhere ?? false,
-                    ...configuredPublicMagicSso,
-                },
+                magicSso: { ...publicOptions, ...configuredPublicMagicSso },
             };
 
             addImportsDir(resolver.resolve('./runtime/app/composables'));
@@ -84,26 +94,9 @@ const magicSsoModule: NuxtModule<MagicSsoModuleOptions, MagicSsoModuleOptions> =
                 path: resolver.resolve('./runtime/app/middleware/auth'),
                 global: options.authEverywhere === true,
             });
-            addServerHandler({
-                route: '/logout',
-                handler: resolver.resolve('./runtime/server/routes/logout.post'),
-                method: 'post',
-            });
-            addServerHandler({
-                route: '/verify-email',
-                handler: resolver.resolve('./runtime/server/routes/verify-email.get'),
-                method: 'get',
-            });
-            addServerHandler({
-                route: '/verify-email',
-                handler: resolver.resolve('./runtime/server/routes/verify-email.post'),
-                method: 'post',
-            });
-            addServerHandler({
-                route: '/verify-email/otp',
-                handler: resolver.resolve('./runtime/server/routes/verify-email-otp.post'),
-                method: 'post',
-            });
+            for (const { handler, method, route } of serverHandlers) {
+                addServerHandler({ handler: resolver.resolve(handler), method, route });
+            }
         },
     });
 

@@ -1,30 +1,25 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import {
+    buildLoginTarget as buildCoreLoginTarget,
+    buildVerifyUrl as buildCoreVerifyUrl,
+    normaliseReturnUrl as normaliseCoreReturnUrl,
+} from '@magic-link-sso/core';
+
 export function normaliseReturnUrl(
     value: string | string[] | undefined,
     appOrigin: string,
 ): string {
     const returnUrl = Array.isArray(value) ? value[0] : value;
-    if (typeof returnUrl !== 'string' || returnUrl.length === 0) {
-        return appOrigin;
-    }
-    if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-        return new URL(returnUrl, appOrigin).toString();
-    }
-
-    try {
-        const parsedUrl = new URL(returnUrl);
-        return parsedUrl.origin === appOrigin ? parsedUrl.toString() : appOrigin;
-    } catch {
-        return appOrigin;
-    }
+    const normalised = normaliseCoreReturnUrl({ appOrigin, fallback: appOrigin, returnUrl });
+    // `normaliseCoreReturnUrl` canonicalises a bare-origin fallback to a trailing
+    // slash; this app links back to the bare origin instead.
+    return normalised === `${appOrigin}/` && returnUrl !== '/' ? appOrigin : normalised;
 }
 
 export function buildVerifyUrl(appOrigin: string, returnUrl: string): string {
-    const verifyUrl = new URL('/verify-email', appOrigin);
-    verifyUrl.searchParams.set('returnUrl', returnUrl);
-    return verifyUrl.toString();
+    return buildCoreVerifyUrl(appOrigin, returnUrl);
 }
 
 export function buildLoginTarget(
@@ -34,23 +29,11 @@ export function buildLoginTarget(
     serverUrl: string,
     scope?: string,
 ): string {
-    const returnUrl = new URL(returnPath, appOrigin).toString();
-    const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
-
-    if (directUse && serverUrl.length > 0) {
-        const loginUrl = new URL('/signin', serverUrl);
-        loginUrl.searchParams.set('returnUrl', returnUrl);
-        if (normalizedScope.length > 0) {
-            loginUrl.searchParams.set('scope', normalizedScope);
-        }
-        loginUrl.searchParams.set('verifyUrl', buildVerifyUrl(appOrigin, returnUrl));
-        return loginUrl.toString();
-    }
-
-    const loginUrl = new URL('/login', appOrigin);
-    loginUrl.searchParams.set('returnUrl', returnUrl);
-    if (normalizedScope.length > 0) {
-        loginUrl.searchParams.set('scope', normalizedScope);
-    }
-    return `${loginUrl.pathname}${loginUrl.search}`;
+    return buildCoreLoginTarget({
+        appOrigin,
+        directUse,
+        returnUrl: returnPath,
+        ...(typeof scope === 'string' ? { scope } : {}),
+        serverUrl,
+    });
 }

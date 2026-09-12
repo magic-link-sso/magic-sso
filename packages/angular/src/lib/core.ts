@@ -2,14 +2,15 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import {
+    parseBooleanFlag,
+    type AuthPayload as CoreAuthPayload,
     buildAuthCookieOptions as buildCoreAuthCookieOptions,
     buildLoginTarget as buildCoreLoginTarget,
     buildVerifyUrl as buildCoreVerifyUrl,
-    exchangeEmailOtp as exchangeCoreEmailOtp,
     normaliseReturnUrl as normaliseCoreReturnUrl,
     readCookieValue,
-    verifyAuthToken as verifyCoreAuthToken,
-    type AuthPayload as CoreAuthPayload,
+    verifyAuthTokenWithOptionalIssuer as verifyCoreAuthTokenWithOptionalIssuer,
+    exchangeEmailOtp as exchangeCoreEmailOtp,
 } from '@magic-link-sso/core';
 
 export type AuthPayload = CoreAuthPayload;
@@ -92,27 +93,7 @@ function readEnvString(name: string): string | undefined {
 }
 
 function readBoolean(value: boolean | string | undefined, fallback: boolean): boolean {
-    if (typeof value === 'boolean') {
-        return value;
-    }
-    if (typeof value === 'string') {
-        switch (value.trim().toLowerCase()) {
-            case '1':
-            case 'true':
-            case 'yes':
-            case 'on':
-                return true;
-            case '0':
-            case 'false':
-            case 'no':
-            case 'off':
-                return false;
-            default:
-                return fallback;
-        }
-    }
-
-    return fallback;
+    return parseBooleanFlag(value, fallback);
 }
 
 function readPositiveInteger(value: number | string | undefined): number | undefined {
@@ -194,12 +175,7 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    return typeof options.expectedIssuer === 'string'
-        ? verifyCoreAuthToken(token, secret, {
-              expectedAudience: options.expectedAudience,
-              expectedIssuer: options.expectedIssuer,
-          })
-        : null;
+    return verifyCoreAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
 export async function exchangeEmailOtp(

@@ -46,7 +46,7 @@ describe('gate dev bootstrap template', () => {
     it('uses a dedicated manager template and managed-site seed state', () => {
         const managerTemplate = readGateFile('dev/manager.toml.template');
         const managerStateTemplate = readGateFile('dev/manager-state.json.template');
-        const bootstrapScript = readGateFile('dev/bootstrap-manager-stack.mjs');
+        const compose = readGateFile('docker-compose.yml');
 
         expect(managerTemplate).toContain('managedSiteIds = ["private1", "private2"]');
         expect(managerTemplate).toContain('integrityKey = "${MANAGER_AUDIT_INTEGRITY_KEY}"');
@@ -58,9 +58,13 @@ describe('gate dev bootstrap template', () => {
         expect(managerTemplate).toContain('trustProxy = true');
         expect(managerStateTemplate).toContain('PRIVATE1_ALLOWED_EMAIL');
         expect(managerStateTemplate).toContain('PRIVATE2_ALLOWED_EMAIL');
-        expect(bootstrapScript).toContain('applyManagerState');
-        expect(bootstrapScript).toContain('reload: undefined');
-        expect(bootstrapScript).toContain('resetManagerStateApplyMetadata');
+        expect(compose).toContain(
+            '../manager/dev/bootstrap-managed-stack.mjs:/app/manager/dev/bootstrap-managed-stack.mjs:ro',
+        );
+        expect(compose).toContain(
+            '../manager/dev/managed-stack.mjs:/app/manager/dev/managed-stack.mjs:ro',
+        );
+        expect(compose).toContain('node /app/manager/dev/bootstrap-managed-stack.mjs');
     });
 
     it('passes the gate auth render values through compose', () => {

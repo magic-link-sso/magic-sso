@@ -28,7 +28,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { buildLoginTarget as buildCoreLoginTarget } from '@magic-link-sso/core';
+import { buildLoginTarget as buildCoreLoginTarget, parseBooleanFlag } from '@magic-link-sso/core';
 import {
     getCookieName,
     getCookiePath,
@@ -36,6 +36,7 @@ import {
     getPublicOrigin,
     getServerIssuer,
     isTrustProxyEnabled,
+    readFirstHeaderValue,
     verifyAuthToken,
 } from './lib/auth';
 
@@ -51,36 +52,6 @@ const DEFAULT_EXCLUDED_PATHS = [
 
 export interface AuthMiddlewareOptions {
     excludedPaths?: readonly string[];
-}
-
-function isDirectUseEnabled(value: string | undefined): boolean {
-    if (typeof value !== 'string') {
-        return false;
-    }
-
-    switch (value.trim().toLowerCase()) {
-        case '1':
-        case 'true':
-        case 'yes':
-        case 'on':
-            return true;
-        case '0':
-        case 'false':
-        case 'no':
-        case 'off':
-            return false;
-        default:
-            return false;
-    }
-}
-
-function readFirstHeaderValue(value: string | null): string | null {
-    if (typeof value !== 'string' || value.length === 0) {
-        return null;
-    }
-
-    const [firstValue] = value.split(',', 1);
-    return typeof firstValue === 'string' && firstValue.length > 0 ? firstValue.trim() : null;
 }
 
 export function getExcludedPaths(options?: AuthMiddlewareOptions): readonly string[] {
@@ -132,7 +103,7 @@ function buildLoginUrlWithError(
 ): URL {
     const target = buildCoreLoginTarget({
         appOrigin: request.nextUrl.origin,
-        directUse: isDirectUseEnabled(process.env.MAGICSSO_DIRECT_USE),
+        directUse: parseBooleanFlag(process.env.MAGICSSO_DIRECT_USE),
         returnUrl: pathname,
         ...(typeof scope === 'string' ? { scope } : {}),
         ...(typeof process.env.MAGICSSO_SERVER_URL === 'string'

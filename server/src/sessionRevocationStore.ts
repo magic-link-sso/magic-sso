@@ -17,44 +17,13 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { buildTimestampFilePath, pruneExpiredTimestampFiles } from './timestampFileStore.js';
 
 export interface SessionRevocationStore {
     isRevoked(jti: string): Promise<boolean>;
     revoke(jti: string, expiresAt: number): Promise<void>;
-}
-
-function buildSessionFilePath(directory: string, jti: string): string {
-    return join(directory, `${encodeURIComponent(jti)}.txt`);
-}
-
-async function pruneExpiredSessions(directory: string, nowMs: number): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true });
-
-    for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.txt')) {
-            continue;
-        }
-
-        const filePath = join(directory, entry.name);
-
-        let contents: string;
-        try {
-            contents = await readFile(filePath, 'utf8');
-        } catch (error) {
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-                continue;
-            }
-
-            throw error;
-        }
-
-        const expiresAt = Number.parseInt(contents.trim(), 10);
-        if (Number.isFinite(expiresAt) && expiresAt <= nowMs) {
-            await rm(filePath, { force: true });
-        }
-    }
 }
 
 export async function createFileSessionRevocationStore(options: {
@@ -71,11 +40,11 @@ export async function createFileSessionRevocationStore(options: {
         async isRevoked(jti: string): Promise<boolean> {
             const nowMs = Date.now();
             if (nowMs >= nextPruneAt) {
-                await pruneExpiredSessions(directory, nowMs);
+                await pruneExpiredTimestampFiles(directory, nowMs);
                 nextPruneAt = nowMs + pruneIntervalMs;
             }
 
-            const filePath = buildSessionFilePath(directory, jti);
+            const filePath = buildTimestampFilePath(directory, jti);
             try {
                 const contents = await readFile(filePath, 'utf8');
                 const expiresAt = Number.parseInt(contents.trim(), 10);
@@ -94,7 +63,7 @@ export async function createFileSessionRevocationStore(options: {
             }
         },
         async revoke(jti: string, expiresAt: number): Promise<void> {
-            await writeFile(buildSessionFilePath(directory, jti), `${expiresAt}\n`, {
+            await writeFile(buildTimestampFilePath(directory, jti), `${expiresAt}\n`, {
                 flag: 'w',
                 mode: 0o600,
             });

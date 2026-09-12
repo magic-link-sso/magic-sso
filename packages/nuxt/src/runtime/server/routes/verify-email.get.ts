@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { randomBytes } from 'node:crypto';
+import { escapeHtml } from '@magic-link-sso/core';
 import {
     defineEventHandler,
     getQuery,
@@ -40,15 +41,6 @@ function getPreviewSecret(event: H3Event): string | null {
 
 function createVerifyCsrfToken(): string {
     return randomBytes(32).toString('base64url');
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function renderConfirmationPage(

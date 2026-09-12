@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { describe, expect, it } from 'vitest';
-import { buildFailureResult, readMessage, readServerUrlConfigError } from '../server/api/signin';
+import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
+import { readServerUrlConfigError } from '../server/api/signin';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 

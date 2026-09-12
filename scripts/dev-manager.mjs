@@ -152,6 +152,18 @@ export function resolveManagerDevPaths(root = repositoryRoot) {
 }
 
 /**
+ * Read one env var, falling back to `fallback` when it is not set.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} key
+ * @param {string} fallback
+ * @returns {string}
+ */
+function readEnvValue(env, key, fallback) {
+    return env[key] ?? fallback;
+}
+
+/**
  * @param {NodeJS.ProcessEnv} env
  * @param {string} root
  * @returns {NodeJS.ProcessEnv}
@@ -168,24 +180,42 @@ export function buildManagerDevEnvironment(env, root = repositoryRoot) {
         ...envFileValues,
         ...env,
     };
-    const managerPublicPort = mergedEnv.MANAGER_PUBLIC_PORT ?? '4306';
-    const managerUpstreamPort = mergedEnv.MANAGER_UPSTREAM_PORT ?? '4311';
-    const serverOrigin = mergedEnv.MANAGER_DEV_SERVER_ORIGIN ?? 'http://127.0.0.1:3000';
-    const publicOrigin =
-        mergedEnv.MANAGER_DEV_PUBLIC_ORIGIN ?? `http://manager.localhost:${managerPublicPort}`;
-    const gateUpstreamOrigin =
-        mergedEnv.MANAGER_DEV_GATE_UPSTREAM_ORIGIN ?? `http://127.0.0.1:${managerUpstreamPort}`;
-    const mailpitSmtpPort = mergedEnv.MAILPIT_SMTP_PORT ?? '1025';
-    const photosOrigin = mergedEnv.MANAGER_DEV_PHOTOS_ORIGIN ?? 'http://photos.localhost:5001';
-    const photosOwnerEmail = mergedEnv.PHOTOS_OWNER_EMAIL ?? 'owner@example.com';
-    const photosFriendEmail = mergedEnv.PHOTOS_FRIEND_EMAIL ?? 'friend@example.com';
-    const photosFamilyEmail = mergedEnv.PHOTOS_FAMILY_EMAIL ?? 'family@example.com';
+    const managerPublicPort = readEnvValue(mergedEnv, 'MANAGER_PUBLIC_PORT', '4306');
+    const managerUpstreamPort = readEnvValue(mergedEnv, 'MANAGER_UPSTREAM_PORT', '4311');
+    const serverOrigin = readEnvValue(
+        mergedEnv,
+        'MANAGER_DEV_SERVER_ORIGIN',
+        'http://127.0.0.1:3000',
+    );
+    const publicOrigin = readEnvValue(
+        mergedEnv,
+        'MANAGER_DEV_PUBLIC_ORIGIN',
+        `http://manager.localhost:${managerPublicPort}`,
+    );
+    const gateUpstreamOrigin = readEnvValue(
+        mergedEnv,
+        'MANAGER_DEV_GATE_UPSTREAM_ORIGIN',
+        `http://127.0.0.1:${managerUpstreamPort}`,
+    );
+    const mailpitSmtpPort = readEnvValue(mergedEnv, 'MAILPIT_SMTP_PORT', '1025');
+    const photosOrigin = readEnvValue(
+        mergedEnv,
+        'MANAGER_DEV_PHOTOS_ORIGIN',
+        'http://photos.localhost:5001',
+    );
+    const photosOwnerEmail = readEnvValue(mergedEnv, 'PHOTOS_OWNER_EMAIL', 'owner@example.com');
+    const photosFriendEmail = readEnvValue(mergedEnv, 'PHOTOS_FRIEND_EMAIL', 'friend@example.com');
+    const photosFamilyEmail = readEnvValue(mergedEnv, 'PHOTOS_FAMILY_EMAIL', 'family@example.com');
     const otpEnabled = mergedEnv.MAGICSSO_OTP_ENABLED === 'true';
 
     return {
         ...mergedEnv,
-        MAGIC_GATE_RENDER_COOKIE_MAX_AGE: mergedEnv.MAGICSSO_COOKIE_MAX_AGE ?? '3600',
-        MAGIC_GATE_RENDER_COOKIE_NAME: mergedEnv.MAGICSSO_COOKIE_NAME ?? 'magic-sso',
+        MAGIC_GATE_RENDER_COOKIE_MAX_AGE: readEnvValue(
+            mergedEnv,
+            'MAGICSSO_COOKIE_MAX_AGE',
+            '3600',
+        ),
+        MAGIC_GATE_RENDER_COOKIE_NAME: readEnvValue(mergedEnv, 'MAGICSSO_COOKIE_NAME', 'magic-sso'),
         MAGIC_GATE_RENDER_DIRECT_USE: 'false',
         MAGIC_GATE_RENDER_JWT_SECRET: mergedEnv.MAGICSSO_JWT_SECRET,
         MAGIC_GATE_RENDER_MODE: 'subdomain',
@@ -202,14 +232,21 @@ export function buildManagerDevEnvironment(env, root = repositoryRoot) {
         MAGICSSO_CONFIG_FILE: join(paths.managerRuntimeDirectory, 'magic-sso.runtime.toml'),
         MAGICSSO_MANAGER_CONFIG_FILE: paths.managerConfigFilePath,
         MAGICSSO_OTP_ENABLED: otpEnabled ? 'true' : 'false',
-        MAGICSSO_OTP_SECRET: mergedEnv.MAGICSSO_OTP_SECRET ?? DEFAULT_MANAGER_DEV_OTP_SECRET,
+        MAGICSSO_OTP_SECRET: readEnvValue(
+            mergedEnv,
+            'MAGICSSO_OTP_SECRET',
+            DEFAULT_MANAGER_DEV_OTP_SECRET,
+        ),
         MAILPIT_SMTP_PORT: mailpitSmtpPort,
         MANAGER_DEV_PUBLIC_ORIGIN: publicOrigin,
         MANAGER_DEV_PHOTOS_ORIGIN: photosOrigin,
         MANAGER_DEV_SERVER_ORIGIN: serverOrigin,
-        MANAGER_DEV_SMTP_HOST: mergedEnv.MANAGER_DEV_SMTP_HOST ?? '127.0.0.1',
-        MANAGER_AUDIT_INTEGRITY_KEY:
-            mergedEnv.MANAGER_AUDIT_INTEGRITY_KEY ?? DEFAULT_MANAGER_AUDIT_INTEGRITY_KEY,
+        MANAGER_DEV_SMTP_HOST: readEnvValue(mergedEnv, 'MANAGER_DEV_SMTP_HOST', '127.0.0.1'),
+        MANAGER_AUDIT_INTEGRITY_KEY: readEnvValue(
+            mergedEnv,
+            'MANAGER_AUDIT_INTEGRITY_KEY',
+            DEFAULT_MANAGER_AUDIT_INTEGRITY_KEY,
+        ),
         MANAGER_DEV_GATE_UPSTREAM_ORIGIN: gateUpstreamOrigin,
         MANAGER_PUBLIC_PORT: managerPublicPort,
         MANAGER_UPSTREAM_PORT: managerUpstreamPort,

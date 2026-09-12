@@ -17,43 +17,12 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { buildTimestampFilePath, pruneExpiredTimestampFiles } from './timestampFileStore.js';
 
 export interface VerificationTokenReplayStore {
     consume(jti: string, expiresAt: number): Promise<boolean>;
-}
-
-function buildTokenFilePath(directory: string, jti: string): string {
-    return join(directory, `${encodeURIComponent(jti)}.txt`);
-}
-
-async function pruneExpiredTokens(directory: string, nowMs: number): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true });
-
-    for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.txt')) {
-            continue;
-        }
-
-        const filePath = join(directory, entry.name);
-
-        let contents: string;
-        try {
-            contents = await readFile(filePath, 'utf8');
-        } catch (error) {
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-                continue;
-            }
-
-            throw error;
-        }
-
-        const expiresAt = Number.parseInt(contents.trim(), 10);
-        if (Number.isFinite(expiresAt) && expiresAt <= nowMs) {
-            await rm(filePath, { force: true });
-        }
-    }
 }
 
 export function createInMemoryVerificationTokenReplayStore(): VerificationTokenReplayStore {
@@ -92,12 +61,12 @@ export async function createFileVerificationTokenReplayStore(options: {
         async consume(jti: string, expiresAt: number): Promise<boolean> {
             const nowMs = Date.now();
             if (nowMs >= nextPruneAt) {
-                await pruneExpiredTokens(directory, nowMs);
+                await pruneExpiredTimestampFiles(directory, nowMs);
                 nextPruneAt = nowMs + pruneIntervalMs;
             }
 
             try {
-                await writeFile(buildTokenFilePath(directory, jti), `${expiresAt}\n`, {
+                await writeFile(buildTimestampFilePath(directory, jti), `${expiresAt}\n`, {
                     flag: 'wx',
                     mode: 0o600,
                 });

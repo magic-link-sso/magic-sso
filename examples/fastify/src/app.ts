@@ -4,6 +4,7 @@
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import { readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
+import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -26,7 +27,8 @@ import {
     renderProtectedPage,
     renderVerifyEmailConfirmationPage,
 } from './html.js';
-import { buildFailureResult, readMessage, readServerUrlConfigError } from './signin-utils.js';
+import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
+import { readServerUrlConfigError } from './signin-utils.js';
 
 interface SignInBody {
     email?: string;
@@ -58,14 +60,6 @@ interface VerifyOtpBody {
     returnUrl?: string;
 }
 
-interface VerifyEmailResponse {
-    accessToken: string;
-}
-
-interface VerifyEmailPreviewResponse {
-    email: string;
-}
-
 interface SignInSuccessResponse {
     message: string;
     otpChallengeId?: string;
@@ -93,26 +87,6 @@ const otpChallengeCookieName = 'magic-sso-otp-challenge';
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function isVerifyEmailResponse(value: unknown): value is VerifyEmailResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'accessToken' in value &&
-        typeof value.accessToken === 'string' &&
-        value.accessToken.length > 0
-    );
-}
-
-function isVerifyEmailPreviewResponse(value: unknown): value is VerifyEmailPreviewResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'email' in value &&
-        typeof value.email === 'string' &&
-        value.email.length > 0
-    );
 }
 
 function isSignInSuccessResponse(value: unknown): value is SignInSuccessResponse {

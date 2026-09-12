@@ -15,9 +15,10 @@
     },
     "dependencies": {
         "@magic-link-sso/config-core": "workspace:*",
+        "@magic-link-sso/core": "workspace:*",
         "@magic-link-sso/nextjs": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
-        "next": "^16.3.0",
+        "next": "^16.3.5",
         "react": "^19.2.8",
         "react-dom": "^19.2.8"
     },

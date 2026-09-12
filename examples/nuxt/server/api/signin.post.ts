@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { createError, getRequestURL, readBody } from 'h3';
-import { buildFailureResult, readMessage, readServerUrlConfigError } from './signin';
+import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
+import { readServerUrlConfigError } from './signin';
 
 interface SignInRequestBody {
     email?: string;

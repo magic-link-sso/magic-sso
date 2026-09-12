@@ -19,6 +19,12 @@ export interface VerifyAuthTokenOptions {
     expectedIssuer: string;
 }
 
+export interface VerifyOptionalIssuerOptions {
+    expectedAudience: string;
+    /** Omitted or `undefined` when the framework adapter could not resolve one. */
+    expectedIssuer?: string | undefined;
+}
+
 export interface AuthCookieOptions {
     httpOnly: true;
     maxAge?: number;
@@ -102,4 +108,14 @@ export interface BuildLoginTargetOptions {
     returnUrl: string | undefined;
     scope?: string;
     serverUrl?: string;
+}
+
+/** Body of a successful `POST /verify-email` exchange. */
+export interface VerifyEmailResponse {
+    accessToken: string;
+}
+
+/** Body of a successful `GET /verify-email` preview request. */
+export interface VerifyEmailPreviewResponse {
+    email: string;
 }

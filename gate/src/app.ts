@@ -4,6 +4,7 @@
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import { safeCompare } from '@magic-link-sso/config-core/runtime';
+import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import Fastify, {
     type FastifyInstance,
     type FastifyReply,
@@ -80,14 +81,6 @@ interface VerifyEmailBody {
 
 interface VerifyEmailOtpBody {
     code?: string;
-}
-
-interface VerifyEmailResponse {
-    accessToken: string;
-}
-
-interface VerifyEmailPreviewResponse {
-    email: string;
 }
 
 interface SignInSuccessResponse {
@@ -626,26 +619,6 @@ function applyProxiedResponseSecurityHeaders(
     }
 }
 
-function isVerifyEmailResponse(value: unknown): value is VerifyEmailResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'accessToken' in value &&
-        typeof value.accessToken === 'string' &&
-        value.accessToken.length > 0
-    );
-}
-
-function isVerifyEmailPreviewResponse(value: unknown): value is VerifyEmailPreviewResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'email' in value &&
-        typeof value.email === 'string' &&
-        value.email.length > 0
-    );
-}
-
 function isSignInSuccessResponse(value: unknown): value is SignInSuccessResponse {
     return (
         typeof value === 'object' &&
@@ -832,47 +805,50 @@ function createOtpChallengeCookie(value: OtpChallengeCookie, config: GateConfig)
     return `${payload}.${signature}`;
 }
 
-function readOtpChallengeCookie(
-    value: string | undefined,
-    config: GateConfig,
-): OtpChallengeCookie | null {
+/** Verify the HMAC on a signed cookie payload and return its decoded body. */
+function readSignedCookiePayload(value: string | undefined, config: GateConfig): unknown {
     if (typeof value !== 'string') {
-        return null;
+        return undefined;
     }
+
     const [payload, signature, ...rest] = value.split('.');
     if (typeof payload !== 'string' || typeof signature !== 'string' || rest.length > 0) {
-        return null;
+        return undefined;
     }
+
     const expectedSignature = createHmac('sha256', config.jwtSecret)
         .update(payload)
         .digest('base64url');
     if (!safeCompare(signature, expectedSignature)) {
-        return null;
+        return undefined;
     }
+
     try {
-        const parsed: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-        const challengeId =
-            typeof parsed === 'object' && parsed !== null
-                ? Reflect.get(parsed, 'challengeId')
-                : undefined;
-        const returnUrl =
-            typeof parsed === 'object' && parsed !== null
-                ? Reflect.get(parsed, 'returnUrl')
-                : undefined;
-        const otpLength =
-            typeof parsed === 'object' && parsed !== null
-                ? Reflect.get(parsed, 'otpLength')
-                : undefined;
-        return typeof challengeId === 'string' &&
-            typeof returnUrl === 'string' &&
-            typeof otpLength === 'number' &&
-            Number.isInteger(otpLength) &&
-            otpLength > 0
-            ? { challengeId, otpLength, returnUrl: normaliseReturnUrl(returnUrl, config) }
-            : null;
+        return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as unknown;
     } catch {
+        return undefined;
+    }
+}
+
+function readOtpChallengeCookie(
+    value: string | undefined,
+    config: GateConfig,
+): OtpChallengeCookie | null {
+    const parsed = readSignedCookiePayload(value, config);
+    if (typeof parsed !== 'object' || parsed === null) {
         return null;
     }
+
+    const challengeId = Reflect.get(parsed, 'challengeId');
+    const returnUrl = Reflect.get(parsed, 'returnUrl');
+    const otpLength = Reflect.get(parsed, 'otpLength');
+    return typeof challengeId === 'string' &&
+        typeof returnUrl === 'string' &&
+        typeof otpLength === 'number' &&
+        Number.isInteger(otpLength) &&
+        otpLength > 0
+        ? { challengeId, otpLength, returnUrl: normaliseReturnUrl(returnUrl, config) }
+        : null;
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {

@@ -1,25 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-function readBooleanEnv(value: string | undefined): boolean {
-    if (typeof value !== 'string') {
-        return false;
-    }
+import { parseBooleanFlag } from '@magic-link-sso/core';
 
-    switch (value.trim().toLowerCase()) {
-        case '1':
-        case 'true':
-        case 'yes':
-        case 'on':
-            return true;
-        case '0':
-        case 'false':
-        case 'no':
-        case 'off':
-            return false;
-        default:
-            return false;
-    }
+function readBooleanEnv(value: string | undefined): boolean {
+    return parseBooleanFlag(value);
 }
 
 export default defineNuxtConfig({
