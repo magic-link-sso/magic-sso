@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-export { readCookieValue, type ReadCookieValueOptions } from '@magic-link-sso/core';
+export { escapeHtml, readCookieValue, type ReadCookieValueOptions } from '@magic-link-sso/core';
 
 export function safeCompare(left: string, right: string): boolean {
     const leftBuffer = Buffer.from(left);
@@ -9,13 +9,4 @@ export function safeCompare(left: string, right: string): boolean {
     }
 
     return timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-export function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }

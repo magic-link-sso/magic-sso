@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import type { NextRequest } from 'next/server';
+
 export function getAppOrigin(host: string, forwardedProtocol?: string | null): string {
     const protocol = forwardedProtocol ?? (host.startsWith('localhost') ? 'http' : 'https');
     return `${protocol}://${host}`;
@@ -52,4 +54,15 @@ export function resolveAppOrigin(options: {
     }
 
     return 'http://localhost:5001';
+}
+
+/** Resolve the public origin this app should use when answering `request`. */
+export function resolveRequestAppOrigin(request: NextRequest): string {
+    return resolveAppOrigin({
+        explicitPublicOrigin: process.env.MAGICSSO_PUBLIC_ORIGIN,
+        fallbackOrigin: request.nextUrl.origin,
+        forwardedHost: request.headers.get('x-forwarded-host'),
+        forwardedProtocol: request.headers.get('x-forwarded-proto'),
+        host: request.headers.get('host'),
+    });
 }

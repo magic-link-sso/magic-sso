@@ -3,9 +3,10 @@
 
 import { getCookie, getRequestURL, type H3Event } from 'h3';
 import {
+    parseBooleanFlag,
     buildLoginTarget as buildCoreLoginTarget,
     normaliseReturnUrl as normaliseCoreReturnUrl,
-    verifyAuthToken as verifyCoreAuthToken,
+    verifyAuthTokenWithOptionalIssuer as verifyCoreAuthTokenWithOptionalIssuer,
 } from '@magic-link-sso/core';
 import { DEFAULT_EXCLUDED_PATHS } from '../../../constants';
 import type { AuthPayload, MagicSsoModuleOptions, MagicSsoResolvedConfig } from '../../../types';
@@ -44,27 +45,7 @@ function readAbsoluteOrigin(value: unknown, fallback: string): string {
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
-    if (typeof value === 'boolean') {
-        return value;
-    }
-    if (typeof value === 'string') {
-        switch (value.trim().toLowerCase()) {
-            case '1':
-            case 'true':
-            case 'yes':
-            case 'on':
-                return true;
-            case '0':
-            case 'false':
-            case 'no':
-            case 'off':
-                return false;
-            default:
-                return fallback;
-        }
-    }
-
-    return fallback;
+    return parseBooleanFlag(value, fallback);
 }
 
 function readPositiveInteger(value: unknown): number | undefined {
@@ -306,12 +287,7 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    return typeof options.expectedIssuer === 'string'
-        ? verifyCoreAuthToken(token, secret, {
-              expectedAudience: options.expectedAudience,
-              expectedIssuer: options.expectedIssuer,
-          })
-        : null;
+    return verifyCoreAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
 export async function verifyRequestAuth(event: H3Event): Promise<AuthPayload | null> {

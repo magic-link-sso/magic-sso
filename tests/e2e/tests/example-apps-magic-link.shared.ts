@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { exampleApps, type ExampleAppDefinition } from './helpers/apps.js';
 import { clearMailbox, expectNoMessagesForRecipient } from './helpers/mail-sink.js';
 import {
@@ -21,17 +21,7 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
         test.describe(`${app.displayName} example app (${flowMode})`, () => {
             for (const protectedPath of app.protectedPaths) {
                 test(`signs in through ${protectedPath}`, async ({ page, request }) => {
-                    const magicLink = await requestMagicLink(
-                        page,
-                        request,
-                        app,
-                        app.allowedEmail,
-                        protectedPath,
-                        flowMode,
-                    );
-
-                    await page.goto(magicLink);
-                    await completeMagicLinkSignIn(page, app.allowedEmail);
+                    await signInThroughMagicLink(page, request, app, protectedPath, flowMode);
 
                     const authCookie = await expectAuthCookie(page, app);
                     await app.expectAuthenticated(page, app.allowedEmail, protectedPath);
@@ -47,9 +37,8 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
                         protectedPath,
                         flowMode,
                     );
-                    const tamperedLink = buildTamperedMagicLink(magicLink);
 
-                    await page.goto(tamperedLink);
+                    await page.goto(buildTamperedMagicLink(magicLink));
 
                     await expectTamperedTokenResult(page, app, `${app.appUrl}${protectedPath}`);
                     await expectNoAuthCookie(page, app);
@@ -61,17 +50,7 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
 
                 if (app.name === 'nextjs') {
                     test(`logs out cleanly from ${protectedPath}`, async ({ page, request }) => {
-                        const magicLink = await requestMagicLink(
-                            page,
-                            request,
-                            app,
-                            app.allowedEmail,
-                            protectedPath,
-                            flowMode,
-                        );
-
-                        await page.goto(magicLink);
-                        await completeMagicLinkSignIn(page, app.allowedEmail);
+                        await signInThroughMagicLink(page, request, app, protectedPath, flowMode);
                         await app.expectAuthenticated(page, app.allowedEmail, protectedPath);
 
                         await page.getByRole('button', { name: 'Logout' }).click();
@@ -88,17 +67,7 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
                         page,
                         request,
                     }) => {
-                        const magicLink = await requestMagicLink(
-                            page,
-                            request,
-                            app,
-                            app.allowedEmail,
-                            protectedPath,
-                            flowMode,
-                        );
-
-                        await page.goto(magicLink);
-                        await completeMagicLinkSignIn(page, app.allowedEmail);
+                        await signInThroughMagicLink(page, request, app, protectedPath, flowMode);
 
                         const authCookie = await expectAuthCookie(page, app);
                         await app.expectAuthenticated(page, app.allowedEmail, protectedPath);
@@ -164,6 +133,27 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
             });
         });
     }
+}
+
+/** Request a magic link for the app's allowed email and follow it to a signed-in page. */
+async function signInThroughMagicLink(
+    page: Page,
+    request: APIRequestContext,
+    app: ExampleAppDefinition,
+    protectedPath: string,
+    flowMode: FlowMode,
+): Promise<void> {
+    const magicLink = await requestMagicLink(
+        page,
+        request,
+        app,
+        app.allowedEmail,
+        protectedPath,
+        flowMode,
+    );
+
+    await page.goto(magicLink);
+    await completeMagicLinkSignIn(page, app.allowedEmail);
 }
 
 function buildTamperedMagicLink(magicLink: string): string {

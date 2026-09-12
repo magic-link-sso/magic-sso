@@ -617,18 +617,34 @@ const placeholderSecretsByField = new Map<string, Set<string>>([
     ['auth.otp.secret', new Set(['replace-me-with-a-dedicated-long-random-otp-secret'])],
 ]);
 
-function parseConfiguredSecret(value: string, fieldName: string): string {
+/** Shortest secret any Magic Link SSO component accepts. */
+export const MIN_CONFIGURED_SECRET_LENGTH = MIN_SECRET_LENGTH;
+
+/**
+ * Validate a configured secret: long enough, and not one of the placeholder
+ * values the shipped example configs use for `fieldName`.
+ */
+export function validateConfiguredSecret(
+    value: string,
+    fieldName: string,
+    placeholderValues?: ReadonlySet<string>,
+): string {
     const trimmedValue = value.trim();
-    if (trimmedValue.length < MIN_SECRET_LENGTH) {
-        throw new Error(`${fieldName} must be at least ${MIN_SECRET_LENGTH} characters long.`);
+    if (trimmedValue.length < MIN_CONFIGURED_SECRET_LENGTH) {
+        throw new Error(
+            `${fieldName} must be at least ${MIN_CONFIGURED_SECRET_LENGTH} characters long.`,
+        );
     }
 
-    const placeholderValues = placeholderSecretsByField.get(fieldName);
-    if (placeholderValues?.has(trimmedValue)) {
+    if (placeholderValues?.has(trimmedValue) === true) {
         throw new Error(`${fieldName} must be replaced with a real secret value.`);
     }
 
     return value;
+}
+
+function parseConfiguredSecret(value: string, fieldName: string): string {
+    return validateConfiguredSecret(value, fieldName, placeholderSecretsByField.get(fieldName));
 }
 
 function validateDistinctSecrets(
@@ -964,6 +980,33 @@ function parseHostedAuthPathOrUrl(
     );
 }
 
+/**
+ * Overlay a copy section's string overrides on top of its defaults. Only keys the
+ * defaults declare are considered, so an unknown override key cannot leak into
+ * the resolved copy.
+ */
+function mergeCopySection<TSection extends object>(
+    defaults: TSection,
+    overrides: Partial<Record<keyof TSection, string>> | undefined,
+): TSection {
+    if (typeof overrides === 'undefined') {
+        return defaults;
+    }
+
+    const merged: TSection = { ...defaults };
+    // Every copy section is a flat record of strings, so a present override is
+    // always the right type for its key; TypeScript cannot narrow that through
+    // the generic key.
+    for (const key of Object.keys(defaults) as (keyof TSection)[]) {
+        const override = overrides[key];
+        if (typeof override === 'string') {
+            merged[key] = override as TSection[keyof TSection];
+        }
+    }
+
+    return merged;
+}
+
 function resolveHostedAuthPageCopy(
     value: unknown,
     defaults: HostedAuthPageCopy,
@@ -980,65 +1023,9 @@ function resolveHostedAuthPageCopy(
 
     return {
         lang: parsedCopy.data.lang ?? defaults.lang,
-        signin: {
-            confirmationHelpText:
-                parsedCopy.data.signin?.confirmationHelpText ??
-                defaults.signin.confirmationHelpText,
-            confirmationPageTitle:
-                parsedCopy.data.signin?.confirmationPageTitle ??
-                defaults.signin.confirmationPageTitle,
-            confirmationTitle:
-                parsedCopy.data.signin?.confirmationTitle ?? defaults.signin.confirmationTitle,
-            emailLabel: parsedCopy.data.signin?.emailLabel ?? defaults.signin.emailLabel,
-            emailPlaceholder:
-                parsedCopy.data.signin?.emailPlaceholder ?? defaults.signin.emailPlaceholder,
-            helpText: parsedCopy.data.signin?.helpText ?? defaults.signin.helpText,
-            otpHelpText: parsedCopy.data.signin?.otpHelpText ?? defaults.signin.otpHelpText,
-            otpLabel: parsedCopy.data.signin?.otpLabel ?? defaults.signin.otpLabel,
-            otpPlaceholder:
-                parsedCopy.data.signin?.otpPlaceholder ?? defaults.signin.otpPlaceholder,
-            otpSubmitButton:
-                parsedCopy.data.signin?.otpSubmitButton ?? defaults.signin.otpSubmitButton,
-            pageTitle: parsedCopy.data.signin?.pageTitle ?? defaults.signin.pageTitle,
-            skipLink: parsedCopy.data.signin?.skipLink ?? defaults.signin.skipLink,
-            submitButton: parsedCopy.data.signin?.submitButton ?? defaults.signin.submitButton,
-            title: parsedCopy.data.signin?.title ?? defaults.signin.title,
-            useDifferentEmailButton:
-                parsedCopy.data.signin?.useDifferentEmailButton ??
-                defaults.signin.useDifferentEmailButton,
-        },
-        verifyEmail: {
-            continueButton:
-                parsedCopy.data.verifyEmail?.continueButton ?? defaults.verifyEmail.continueButton,
-            emailLabel: parsedCopy.data.verifyEmail?.emailLabel ?? defaults.verifyEmail.emailLabel,
-            helpText: parsedCopy.data.verifyEmail?.helpText ?? defaults.verifyEmail.helpText,
-            pageTitle: parsedCopy.data.verifyEmail?.pageTitle ?? defaults.verifyEmail.pageTitle,
-            title: parsedCopy.data.verifyEmail?.title ?? defaults.verifyEmail.title,
-        },
-        feedback: {
-            failedToSendEmail:
-                parsedCopy.data.feedback?.failedToSendEmail ?? defaults.feedback.failedToSendEmail,
-            forbidden: parsedCopy.data.feedback?.forbidden ?? defaults.feedback.forbidden,
-            invalidOrExpiredToken:
-                parsedCopy.data.feedback?.invalidOrExpiredToken ??
-                defaults.feedback.invalidOrExpiredToken,
-            invalidOrExpiredOtp:
-                parsedCopy.data.feedback?.invalidOrExpiredOtp ??
-                defaults.feedback.invalidOrExpiredOtp,
-            invalidOrUntrustedReturnUrl:
-                parsedCopy.data.feedback?.invalidOrUntrustedReturnUrl ??
-                defaults.feedback.invalidOrUntrustedReturnUrl,
-            invalidOrUntrustedVerifyUrl:
-                parsedCopy.data.feedback?.invalidOrUntrustedVerifyUrl ??
-                defaults.feedback.invalidOrUntrustedVerifyUrl,
-            invalidRequest:
-                parsedCopy.data.feedback?.invalidRequest ?? defaults.feedback.invalidRequest,
-            tooManyRequests:
-                parsedCopy.data.feedback?.tooManyRequests ?? defaults.feedback.tooManyRequests,
-            verificationEmailSent:
-                parsedCopy.data.feedback?.verificationEmailSent ??
-                defaults.feedback.verificationEmailSent,
-        },
+        signin: mergeCopySection(defaults.signin, parsedCopy.data.signin),
+        verifyEmail: mergeCopySection(defaults.verifyEmail, parsedCopy.data.verifyEmail),
+        feedback: mergeCopySection(defaults.feedback, parsedCopy.data.feedback),
     };
 }
 
@@ -1123,6 +1110,92 @@ export function stringifyMagicSsoTomlConfig(config: MagicSsoTomlConfig): string 
     return stringifyToml(config);
 }
 
+type ConfiguredSite = AppConfig['sites'][number];
+
+type RawSecurityStateConfig = NonNullable<
+    NonNullable<MagicSsoTomlConfig['server']>['securityState']
+>;
+
+/** Resolve the security-state adapter, validating the Redis URL when required. */
+function resolveSecurityStateConfig(
+    securityStateConfig: Partial<RawSecurityStateConfig>,
+): AppConfig['securityState'] {
+    const adapter = securityStateConfig.adapter ?? 'file';
+    if (adapter === 'redis' && typeof securityStateConfig.redisUrl !== 'string') {
+        throw new Error(
+            'server.securityState.redisUrl must be configured when server.securityState.adapter = "redis".',
+        );
+    }
+
+    return {
+        adapter,
+        keyPrefix: securityStateConfig.keyPrefix ?? 'magic-sso',
+        redisUrl:
+            adapter === 'redis'
+                ? parseRedisUrl(securityStateConfig.redisUrl ?? '', 'server.securityState.redisUrl')
+                : undefined,
+    };
+}
+
+/** Resolve one `[[sites]]` entry against the server-wide hosted-auth defaults. */
+function buildConfiguredSite(
+    site: MagicSsoTomlConfig['sites'][number],
+    hostedAuthCopy: HostedAuthPageCopy,
+    hostedAuthBranding: HostedAuthBranding,
+): ConfiguredSite {
+    return {
+        id: site.id,
+        origins: parseOrigins(site.origins, `sites[${site.id}].origins`),
+        allowedRedirectUris: parseAllowedRedirectUris(
+            site.allowedRedirectUris,
+            `sites[${site.id}].allowedRedirectUris`,
+        ),
+        accessRules: buildSiteAccessRules(site),
+        hostedAuthPageCopy: resolveHostedAuthPageCopy(
+            site.hostedAuth?.copy,
+            hostedAuthCopy,
+            `sites[${site.id}].hostedAuth.copy`,
+        ),
+        hostedAuthBranding: resolveHostedAuthBranding(
+            site.hostedAuth?.branding,
+            hostedAuthBranding,
+            `sites[${site.id}].hostedAuth.branding`,
+        ),
+    };
+}
+
+/** Reject duplicate site ids, shared origins, and off-origin redirect URIs. */
+function assertSitesAreConsistent(sites: readonly ConfiguredSite[]): void {
+    const siteIds = new Set<string>();
+    const siteOriginOwners = new Map<string, string>();
+
+    for (const site of sites) {
+        if (siteIds.has(site.id)) {
+            throw new Error(`sites contains a duplicate id: ${site.id}`);
+        }
+        siteIds.add(site.id);
+
+        for (const origin of site.origins) {
+            const existingOwner = siteOriginOwners.get(origin);
+            if (typeof existingOwner === 'string') {
+                throw new Error(
+                    `Site origins must be unique. ${origin} is configured for both ${existingOwner} and ${site.id}.`,
+                );
+            }
+
+            siteOriginOwners.set(origin, site.id);
+        }
+
+        for (const redirectUri of site.allowedRedirectUris) {
+            if (!site.origins.has(redirectUri.origin)) {
+                throw new Error(
+                    `sites[${site.id}].allowedRedirectUris must stay within the configured site origins.`,
+                );
+            }
+        }
+    }
+}
+
 export function parseMagicSsoConfigToml(fileContents: string, filePath: string): AppConfig {
     const parsedConfig = parseMagicSsoTomlConfig(fileContents, filePath);
 
@@ -1158,68 +1231,13 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
     if (parsedConfig.auth.otp.enabled && otpExpirationSeconds > emailExpirationSeconds) {
         throw new Error('auth.otp.expiration must not exceed auth.emailExpiration.');
     }
-    const securityStateAdapter = securityStateConfig.adapter ?? 'file';
-    const securityStateRedisUrl =
-        securityStateAdapter === 'redis'
-            ? parseRedisUrl(
-                  securityStateConfig.redisUrl ??
-                      (() => {
-                          throw new Error(
-                              'server.securityState.redisUrl must be configured when server.securityState.adapter = "redis".',
-                          );
-                      })(),
-                  'server.securityState.redisUrl',
-              )
-            : undefined;
+    const securityState = resolveSecurityStateConfig(securityStateConfig);
     validateDistinctSecrets(jwtSecret, emailSecret, csrfSecret, previewSecret, otpSecret);
 
-    const sites = parsedConfig.sites.map((site) => ({
-        id: site.id,
-        origins: parseOrigins(site.origins, `sites[${site.id}].origins`),
-        allowedRedirectUris: parseAllowedRedirectUris(
-            site.allowedRedirectUris,
-            `sites[${site.id}].allowedRedirectUris`,
-        ),
-        accessRules: buildSiteAccessRules(site),
-        hostedAuthPageCopy: resolveHostedAuthPageCopy(
-            site.hostedAuth?.copy,
-            hostedAuthCopy,
-            `sites[${site.id}].hostedAuth.copy`,
-        ),
-        hostedAuthBranding: resolveHostedAuthBranding(
-            site.hostedAuth?.branding,
-            hostedAuthBranding,
-            `sites[${site.id}].hostedAuth.branding`,
-        ),
-    }));
-
-    const siteIds = new Set<string>();
-    const siteOriginOwners = new Map<string, string>();
-    for (const site of sites) {
-        if (siteIds.has(site.id)) {
-            throw new Error(`sites contains a duplicate id: ${site.id}`);
-        }
-        siteIds.add(site.id);
-
-        for (const origin of site.origins) {
-            const existingOwner = siteOriginOwners.get(origin);
-            if (typeof existingOwner === 'string') {
-                throw new Error(
-                    `Site origins must be unique. ${origin} is configured for both ${existingOwner} and ${site.id}.`,
-                );
-            }
-
-            siteOriginOwners.set(origin, site.id);
-        }
-
-        for (const redirectUri of site.allowedRedirectUris) {
-            if (!site.origins.has(redirectUri.origin)) {
-                throw new Error(
-                    `sites[${site.id}].allowedRedirectUris must stay within the configured site origins.`,
-                );
-            }
-        }
-    }
+    const sites = parsedConfig.sites.map((site) =>
+        buildConfiguredSite(site, hostedAuthCopy, hostedAuthBranding),
+    );
+    assertSitesAreConsistent(sites);
 
     return {
         appPort: serverConfig.appPort ?? 3000,
@@ -1264,11 +1282,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
                 : {
                       secret: parseConfiguredSecret(reloadConfig.secret, 'server.reload.secret'),
                   },
-        securityState: {
-            adapter: securityStateAdapter,
-            keyPrefix: securityStateConfig.keyPrefix ?? 'magic-sso',
-            redisUrl: securityStateRedisUrl,
-        },
+        securityState,
         serveRootLandingPage: serverConfig.serveRootLandingPage ?? true,
         signInEmailRateLimitMax: rateLimitConfig.signInEmailMax ?? 5,
         signInEmailRateLimitStoreDir:

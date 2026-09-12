@@ -80,7 +80,8 @@ test('login flow sends sign-in requests with a client verify callback', async ()
     assert.match(loginForm, /accept:\s*'application\/json'/u);
     assert.match(loginForm, /data-submit-spinner/u);
     assert.match(loginForm, /button-spinner-visible/u);
-    assert.match(loginSignin, /new URL\('\/signin', serverUrl\)/u);
+    assert.match(loginSignin, /from '@magic-link-sso\/nextjs'/u);
+    assert.match(loginSignin, /requestMagicLink\(email, returnUrl, scope, \{ verifyUrl \}\)/u);
     assert.match(signInRoute, /buildLoginRedirect/u);
     assert.match(signInRoute, /success: 'verification-email-sent'/u);
     assert.match(signInRoute, /otpChallengeId/u);
@@ -94,20 +95,11 @@ test('login flow sends sign-in requests with a client verify callback', async ()
     assert.match(loginForm, /otpCode\.maxLength = otpLength/u);
     assert.match(loginForm, /otpCode\.placeholder = otpLength === 6 \? '123456' : ''/u);
     assert.match(verifyOtpRoute, /VerifyEmailOtpRoute/u);
-    assert.match(verifyEmailRoute, /verify-email/u);
+    assert.match(verifyEmailRoute, /VerifyEmailRoute/u);
+    assert.match(verifyEmailRoute, /from '@magic-link-sso\/nextjs'/u);
+    assert.match(verifyEmailRoute, /export async function GET/u);
     assert.match(verifyEmailRoute, /export async function POST/u);
-    assert.match(verifyEmailRoute, /method:\s*'POST'/u);
-    assert.match(verifyEmailRoute, /'content-type':\s*'application\/json'/u);
-    assert.match(verifyEmailRoute, /Continue sign-in/u);
-    assert.match(verifyEmailRoute, /id="email-value"/u);
-    assert.doesNotMatch(verifyEmailRoute, /readonly/u);
-    assert.doesNotMatch(verifyEmailRoute, /name="token"/u);
-    assert.match(verifyEmailRoute, /magic-sso-verify-token/u);
-    assert.match(verifyEmailRoute, /@media \(prefers-color-scheme: dark\)/u);
-    assert.match(verifyEmailRoute, /cookies\.set/u);
-    assert.match(verifyEmailRoute, /buildAuthCookieOptions/u);
-    assert.match(verifyEmailRoute, /MAGICSSO_PREVIEW_SECRET/u);
-    assert.match(verifyEmailRoute, /x-magic-sso-preview-secret/u);
+    assert.match(verifyEmailRoute, /pageTitle: 'Confirm Sign In \| Magic Link SSO Next\.js'/u);
 });
 
 test('login form includes dedicated dark-mode styles', async () => {

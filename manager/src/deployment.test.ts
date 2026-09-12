@@ -62,6 +62,7 @@ describe('manager managed-mode deployment example', () => {
         const localGateTemplate = readManagerFile('dev/magic-gate.local.toml.template');
         const bootstrapScript = readManagerFile('dev/bootstrap-managed-stack.mjs');
         const localBootstrapScript = readManagerFile('dev/bootstrap-local-managed-stack.mjs');
+        const sharedBootstrapModule = readManagerFile('dev/managed-stack.mjs');
 
         expect(baseConfigTemplate).toContain('id = "manager-admin"');
         expect(baseConfigTemplate).toContain(
@@ -98,17 +99,19 @@ describe('manager managed-mode deployment example', () => {
         expect(gateTemplate).toContain('upstreamUrl = "${MAGIC_GATE_RENDER_UPSTREAM_URL}"');
         expect(localGateTemplate).toContain('port = ${MANAGER_PUBLIC_PORT}');
         expect(localGateTemplate).toContain('publicOrigin = "${MAGIC_GATE_RENDER_PUBLIC_ORIGIN}"');
-        expect(bootstrapScript).toContain('applyManagerState');
-        expect(bootstrapScript).toContain('buildRuntimePlan');
-        expect(bootstrapScript).toContain('reload: undefined');
-        expect(bootstrapScript).toContain('resetManagerStateApplyMetadata');
-        expect(bootstrapScript).toContain('saveManagerState');
-        expect(bootstrapScript).toContain(
+        expect(sharedBootstrapModule).toContain('applyManagerState');
+        expect(sharedBootstrapModule).toContain('buildRuntimePlan');
+        expect(sharedBootstrapModule).toContain('reload: undefined');
+        expect(sharedBootstrapModule).toContain('resetManagerStateApplyMetadata');
+        expect(sharedBootstrapModule).toContain('saveManagerState');
+        expect(sharedBootstrapModule).toContain(
             'lastAppliedBaseConfigHash !== currentRuntimePlan.baseConfigHash',
         );
+        expect(bootstrapScript).toContain('applyBootstrappedManagerState');
+        expect(bootstrapScript).toContain("from './managed-stack.mjs'");
         expect(localBootstrapScript).toContain('process.env.MAGICSSO_MANAGER_CONFIG_FILE');
-        expect(localBootstrapScript).toContain('resetManagerStateApplyMetadata');
-        expect(localBootstrapScript).toContain('reload: undefined');
+        expect(localBootstrapScript).toContain('applyBootstrappedManagerState');
+        expect(localBootstrapScript).toContain("from './managed-stack.mjs'");
     });
 
     it('ships a published-image production manager stack', () => {

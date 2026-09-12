@@ -67,12 +67,13 @@ services:
     restart: unless-stopped
     volumes:
       - ./runtime:/app/runtime
-      - ./dev/bootstrap-managed-stack.mjs:/app/manager/bootstrap-managed-stack.mjs:ro
+      - ./dev/bootstrap-managed-stack.mjs:/app/manager/dev/bootstrap-managed-stack.mjs:ro
+      - ./dev/managed-stack.mjs:/app/manager/dev/managed-stack.mjs:ro
       - ./dev/manager-state.json.template:/app/manager/manager-state.json.template:ro
       - ./dev/manager.toml.template:/app/manager/manager.toml.template:ro
       - ./dev/magic-sso.base.toml.template:/app/server/magic-sso.base.toml.template:ro
     command: >
-      sh -c "node /app/manager/bootstrap-managed-stack.mjs && node dist/main.js"
+      sh -c "node /app/manager/dev/bootstrap-managed-stack.mjs && node dist/main.js"
     depends_on:
       mailpit:
         condition: service_started

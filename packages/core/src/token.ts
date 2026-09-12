@@ -3,7 +3,7 @@
 
 import { jwtVerify, type JWTPayload } from 'jose';
 import { MagicSsoConfigurationError } from './errors.js';
-import type { AuthPayload, VerifyAuthTokenOptions } from './types.js';
+import type { AuthPayload, VerifyAuthTokenOptions, VerifyOptionalIssuerOptions } from './types.js';
 
 function isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0;
@@ -67,4 +67,24 @@ export async function verifyAuthToken(
     } catch {
         return null;
     }
+}
+
+/**
+ * Verify a session token only when the caller could resolve an expected issuer.
+ *
+ * Framework adapters derive the issuer from configuration that may be missing,
+ * and a token must never be accepted without one, so an absent issuer rejects
+ * instead of verifying against whatever the token claims.
+ */
+export async function verifyAuthTokenWithOptionalIssuer(
+    token: string,
+    secret: Uint8Array,
+    options: VerifyOptionalIssuerOptions,
+): Promise<AuthPayload | null> {
+    return typeof options.expectedIssuer === 'string'
+        ? verifyAuthToken(token, secret, {
+              expectedAudience: options.expectedAudience,
+              expectedIssuer: options.expectedIssuer,
+          })
+        : null;
 }

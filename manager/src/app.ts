@@ -895,6 +895,61 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         return persistedState;
     }
 
+    /**
+     * Run one audited single-site mutation and answer with the site's refreshed
+     * details. `mutate` performs the request-specific parsing, permission check
+     * and state change, so every route keeps the same ordering, audit trail and
+     * error mapping.
+     */
+    function respondWithSiteMutation(
+        request: FastifyRequest,
+        siteId: string,
+        mutate: () => {
+            kind: Exclude<ManagerAuditEventKind, 'apply-failed' | 'apply-succeeded'>;
+            message: string;
+            nextState: Parameters<typeof persistManagerState>[1];
+        },
+    ): { site: ReturnType<typeof getManagedSiteDetails> } {
+        try {
+            const { kind, message, nextState } = mutate();
+            const persistedState = persistAuditedMutation(request, nextState, {
+                changedSiteIds: [siteId],
+                kind,
+                message,
+            });
+            return { site: getManagedSiteDetails(persistedState, settings, siteId) };
+        } catch (error) {
+            throw mapRouteError(error);
+        }
+    }
+
+    /**
+     * Re-render a site page carrying the failure notice for a rejected form post,
+     * falling back to the plain failure page when the site page itself cannot be
+     * rendered (for example when the site no longer exists).
+     */
+    function renderSiteMutationFailure(
+        reply: FastifyReply,
+        siteId: string,
+        error: unknown,
+        editorState?: ManagerSitePageEditorState,
+    ): void {
+        const routeError = mapRouteError(error);
+        const message = routeError.message;
+        const statusCode = getErrorStatusCode(routeError, 400);
+        try {
+            renderSitePage(
+                reply,
+                settings,
+                siteId,
+                { kind: 'error', text: message },
+                { editorState, statusCode },
+            );
+        } catch {
+            renderUiFailure(reply, statusCode, message);
+        }
+    }
+
     if (isBearerTokenAuthConfig(settings.service.auth)) {
         app.get(
             '/login',
@@ -1071,30 +1126,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     303,
                 );
             } catch (error) {
-                const routeError = mapRouteError(error);
-                const message = routeError.message;
-                const statusCode = getErrorStatusCode(routeError, 400);
-                try {
-                    renderSitePage(
-                        reply,
+                renderSiteMutationFailure(
+                    reply,
+                    request.params.siteId,
+                    error,
+                    buildSiteEditorStateForGrantSubmission(
                         settings,
                         request.params.siteId,
-                        {
-                            kind: 'error',
-                            text: message,
-                        },
-                        {
-                            editorState: buildSiteEditorStateForGrantSubmission(
-                                settings,
-                                request.params.siteId,
-                                request.body,
-                            ),
-                            statusCode,
-                        },
-                    );
-                } catch {
-                    renderUiFailure(reply, statusCode, message);
-                }
+                        request.body,
+                    ),
+                );
             }
         },
     );
@@ -1133,25 +1174,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     303,
                 );
             } catch (error) {
-                const routeError = mapRouteError(error);
-                const message = routeError.message;
-                const statusCode = getErrorStatusCode(routeError, 400);
-                try {
-                    renderSitePage(
-                        reply,
-                        settings,
-                        request.params.siteId,
-                        {
-                            kind: 'error',
-                            text: message,
-                        },
-                        {
-                            statusCode,
-                        },
-                    );
-                } catch {
-                    renderUiFailure(reply, statusCode, message);
-                }
+                renderSiteMutationFailure(reply, request.params.siteId, error);
             }
         },
     );
@@ -1199,25 +1222,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     303,
                 );
             } catch (error) {
-                const routeError = mapRouteError(error);
-                const message = routeError.message;
-                const statusCode = getErrorStatusCode(routeError, 400);
-                try {
-                    renderSitePage(
-                        reply,
-                        settings,
-                        request.params.siteId,
-                        {
-                            kind: 'error',
-                            text: message,
-                        },
-                        {
-                            statusCode,
-                        },
-                    );
-                } catch {
-                    renderUiFailure(reply, statusCode, message);
-                }
+                renderSiteMutationFailure(reply, request.params.siteId, error);
             }
         },
     );
@@ -1256,25 +1261,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     303,
                 );
             } catch (error) {
-                const routeError = mapRouteError(error);
-                const message = routeError.message;
-                const statusCode = getErrorStatusCode(routeError, 400);
-                try {
-                    renderSitePage(
-                        reply,
-                        settings,
-                        request.params.siteId,
-                        {
-                            kind: 'error',
-                            text: message,
-                        },
-                        {
-                            statusCode,
-                        },
-                    );
-                } catch {
-                    renderUiFailure(reply, statusCode, message);
-                }
+                renderSiteMutationFailure(reply, request.params.siteId, error);
             }
         },
     );
@@ -1734,30 +1721,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 Params: { siteId: string };
             }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 const parsedBody = accessReplaceSchema.parse(request.body);
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = replaceSiteGrants(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    parsedBody.grants.map((grant) => ({
-                        email: grant.email,
-                        scopes: parseScopes(grant.fullAccess, grant.scopes),
-                    })),
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'access-replaced',
                     message: `Replaced all grants on ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: replaceSiteGrants(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        parsedBody.grants.map((grant) => ({
+                            email: grant.email,
+                            scopes: parseScopes(grant.fullAccess, grant.scopes),
+                        })),
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1769,28 +1749,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 Params: { siteId: string };
             }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 const parsedBody = grantInputSchema.parse(request.body);
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = updateSiteGrant(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    parsedBody.email,
-                    parseScopes(parsedBody.fullAccess, parsedBody.scopes),
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'grant-saved',
                     message: `Saved grant for ${parsedBody.email.trim().toLowerCase()} on ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: updateSiteGrant(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        parsedBody.email,
+                        parseScopes(parsedBody.fullAccess, parsedBody.scopes),
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1802,28 +1775,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 Params: { email: string; siteId: string };
             }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 const parsedBody = grantPatchSchema.parse(request.body);
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = updateSiteGrant(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    request.params.email,
-                    parseScopes(parsedBody.fullAccess, parsedBody.scopes),
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'grant-saved',
                     message: `Saved grant for ${request.params.email.trim().toLowerCase()} on ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: updateSiteGrant(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        request.params.email,
+                        parseScopes(parsedBody.fullAccess, parsedBody.scopes),
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1832,26 +1798,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         async (
             request: FastifyRequest<{ Params: { email: string; siteId: string } }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = revokeSiteGrant(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    request.params.email,
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'grant-revoked',
                     message: `Revoked grant for ${request.params.email.trim().toLowerCase()} on ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: revokeSiteGrant(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        request.params.email,
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1863,27 +1822,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 Params: { siteId: string };
             }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 const parsedBody = scopesReplaceSchema.parse(request.body);
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = replaceSiteScopes(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    parsedBody.scopes,
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'scope-catalog-replaced',
                     message: `Replaced the scope catalog on ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: replaceSiteScopes(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        parsedBody.scopes,
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1895,27 +1847,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 Params: { siteId: string };
             }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 const parsedBody = addScopeSchema.parse(request.body);
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = addSiteScope(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    parsedBody.scope,
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'scope-added',
                     message: `Added scope ${parsedBody.scope.trim()} to ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: addSiteScope(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        parsedBody.scope,
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 
@@ -1924,26 +1869,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         async (
             request: FastifyRequest<{ Params: { scope: string; siteId: string } }>,
         ): Promise<{ site: ReturnType<typeof getManagedSiteDetails> }> => {
-            try {
+            return respondWithSiteMutation(request, request.params.siteId, () => {
                 assertApiEditingAllowed(settings);
-                const state = loadManagerStateOrEmpty(settings);
-                const nextState = removeSiteScope(
-                    state,
-                    settings,
-                    request.params.siteId,
-                    request.params.scope,
-                );
-                const persistedState = persistAuditedMutation(request, nextState, {
-                    changedSiteIds: [request.params.siteId],
+                return {
                     kind: 'scope-removed',
                     message: `Removed scope ${request.params.scope.trim()} from ${request.params.siteId}.`,
-                });
-                return {
-                    site: getManagedSiteDetails(persistedState, settings, request.params.siteId),
+                    nextState: removeSiteScope(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                        request.params.siteId,
+                        request.params.scope,
+                    ),
                 };
-            } catch (error) {
-                throw mapRouteError(error);
-            }
+            });
         },
     );
 

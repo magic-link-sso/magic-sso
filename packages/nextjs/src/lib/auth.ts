@@ -27,9 +27,12 @@
  */
 
 import {
-    buildAuthCookieOptions as buildCoreAuthCookieOptions,
-    verifyAuthToken as verifyCoreAuthToken,
+    parseBooleanFlag,
     type AuthPayload as CoreAuthPayload,
+    buildAuthCookieOptions as buildCoreAuthCookieOptions,
+    buildVerifyUrl as buildCoreVerifyUrl,
+    normaliseReturnUrl as normaliseCoreReturnUrl,
+    verifyAuthTokenWithOptionalIssuer as verifyCoreAuthTokenWithOptionalIssuer,
 } from '@magic-link-sso/core';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -106,24 +109,7 @@ export function getServerIssuer(): string | null {
 }
 
 function readBooleanEnv(value: string | undefined): boolean {
-    if (typeof value !== 'string') {
-        return false;
-    }
-
-    switch (value.trim().toLowerCase()) {
-        case '1':
-        case 'true':
-        case 'yes':
-        case 'on':
-            return true;
-        case '0':
-        case 'false':
-        case 'no':
-        case 'off':
-            return false;
-        default:
-            return false;
-    }
+    return parseBooleanFlag(value);
 }
 
 export function getPublicOrigin(): string | null {
@@ -222,12 +208,7 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    return typeof options.expectedIssuer === 'string'
-        ? verifyCoreAuthToken(token, secret, {
-              expectedAudience: options.expectedAudience,
-              expectedIssuer: options.expectedIssuer,
-          })
-        : null;
+    return verifyCoreAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
 export async function verifyToken(): Promise<AuthPayload | null> {
@@ -273,4 +254,24 @@ export function redirectToLogin(returnUrl: string, scope?: string): never {
         loginUrl.searchParams.set('scope', scope.trim());
     }
     redirect(`${loginUrl.pathname}${loginUrl.search}`);
+}
+
+/**
+ * Constrain `returnUrl` to `appOrigin`, answering `fallback` for anything that
+ * points elsewhere, carries credentials, or fails to parse.
+ */
+export function normaliseReturnUrl(
+    returnUrl: string | undefined,
+    appOrigin: string,
+    fallback: string = '/',
+): string {
+    const normalised = normaliseCoreReturnUrl({ appOrigin, fallback, returnUrl });
+    return normalised === new URL('/', appOrigin).toString() && fallback === appOrigin
+        ? fallback
+        : normalised;
+}
+
+/** Build this app's `/verify-email` URL for an already-normalised return URL. */
+export function buildVerifyUrl(appOrigin: string, returnUrl: string): string {
+    return buildCoreVerifyUrl(appOrigin, returnUrl);
 }

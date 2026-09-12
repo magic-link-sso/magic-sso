@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { validateConfiguredSecret } from '@magic-link-sso/config-core';
 import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { parse as parseToml } from 'smol-toml';
@@ -230,6 +231,47 @@ function parseIpv4Address(hostname: string): [number, number, number, number] | 
     return [first, second, third, fourth];
 }
 
+/** Classify a private/reserved IPv4 target, or `undefined` for a routable one. */
+function getPrivateIpv4Reason(
+    address: readonly [number, number, number, number],
+): string | undefined {
+    const [first, second] = address;
+    if (first === 0) {
+        return 'unspecified IPv4 target';
+    }
+    if (first === 10 || first === 127) {
+        return 'private or loopback IPv4 target';
+    }
+    if (first === 100 && second >= 64 && second <= 127) {
+        return 'carrier-grade NAT IPv4 target';
+    }
+    if (first === 169 && second === 254) {
+        return 'link-local or metadata-service IPv4 target';
+    }
+    if (first === 172 && second >= 16 && second <= 31) {
+        return 'private IPv4 target';
+    }
+
+    return first === 192 && second === 168 ? 'private IPv4 target' : undefined;
+}
+
+const privateIpv6Prefixes = ['fc', 'fd', 'fe8', 'fe9', 'fea', 'feb'];
+
+/** Classify a private/reserved IPv6 target, or `undefined` for a routable one. */
+function getPrivateIpv6Reason(hostname: string): string | undefined {
+    if (hostname === '::' || hostname === '::1') {
+        return 'unspecified or loopback IPv6 target';
+    }
+
+    return privateIpv6Prefixes.some((prefix) => hostname.startsWith(prefix))
+        ? 'private or link-local IPv6 target'
+        : undefined;
+}
+
+/**
+ * Explain why `hostname` points somewhere the Gate should not proxy to, so the
+ * operator is warned about an unroutable or SSRF-prone upstream.
+ */
 function getPrivateTargetReason(hostname: string): string | undefined {
     const normalizedHostname = stripIpv6Brackets(hostname).toLowerCase();
     if (normalizedHostname === 'localhost' || normalizedHostname.endsWith('.localhost')) {
@@ -238,44 +280,10 @@ function getPrivateTargetReason(hostname: string): string | undefined {
 
     const ipv4Address = parseIpv4Address(normalizedHostname);
     if (ipv4Address !== null) {
-        const [first, second] = ipv4Address;
-        if (first === 0) {
-            return 'unspecified IPv4 target';
-        }
-        if (first === 10 || first === 127) {
-            return 'private or loopback IPv4 target';
-        }
-        if (first === 100 && second >= 64 && second <= 127) {
-            return 'carrier-grade NAT IPv4 target';
-        }
-        if (first === 169 && second === 254) {
-            return 'link-local or metadata-service IPv4 target';
-        }
-        if (first === 172 && second >= 16 && second <= 31) {
-            return 'private IPv4 target';
-        }
-        if (first === 192 && second === 168) {
-            return 'private IPv4 target';
-        }
+        return getPrivateIpv4Reason(ipv4Address);
     }
 
-    if (isIP(normalizedHostname) === 6) {
-        if (normalizedHostname === '::' || normalizedHostname === '::1') {
-            return 'unspecified or loopback IPv6 target';
-        }
-        if (
-            normalizedHostname.startsWith('fc') ||
-            normalizedHostname.startsWith('fd') ||
-            normalizedHostname.startsWith('fe8') ||
-            normalizedHostname.startsWith('fe9') ||
-            normalizedHostname.startsWith('fea') ||
-            normalizedHostname.startsWith('feb')
-        ) {
-            return 'private or link-local IPv6 target';
-        }
-    }
-
-    return undefined;
+    return isIP(normalizedHostname) === 6 ? getPrivateIpv6Reason(normalizedHostname) : undefined;
 }
 
 function buildGateTargetWarning(
@@ -363,17 +371,7 @@ const placeholderSecretsByField = new Map<string, Set<string>>([
 ]);
 
 function parseConfiguredSecret(value: string, fieldName: string): string {
-    const trimmedValue = value.trim();
-    if (trimmedValue.length < MIN_SECRET_LENGTH) {
-        throw new Error(`${fieldName} must be at least ${MIN_SECRET_LENGTH} characters long.`);
-    }
-
-    const placeholderValues = placeholderSecretsByField.get(fieldName);
-    if (placeholderValues?.has(trimmedValue)) {
-        throw new Error(`${fieldName} must be replaced with a real secret value.`);
-    }
-
-    return value;
+    return validateConfiguredSecret(value, fieldName, placeholderSecretsByField.get(fieldName));
 }
 
 function joinPath(left: string, right: string): string {
@@ -491,80 +489,48 @@ export function normaliseReturnUrl(
     return parsedUrl.toString();
 }
 
+/**
+ * Drop the entries whose value is `undefined`, so an optional TOML key that was
+ * never set stays absent from the config input instead of overriding a default.
+ */
+type DefinedProperties<TValue> = {
+    [TKey in keyof TValue]?: Exclude<TValue[TKey], undefined>;
+};
+
+function definedEntries<TValue extends object>(value: TValue): DefinedProperties<TValue> {
+    // Object.fromEntries widens to Record<string, unknown>; the surviving entries
+    // are the same keys the caller passed in, with `undefined` filtered out.
+    return Object.fromEntries(
+        Object.entries(value).filter(([, entry]) => typeof entry !== 'undefined'),
+    ) as DefinedProperties<TValue>;
+}
+
 function mapGateTomlToInput(config: z.infer<typeof gateTomlSchema>): GateConfigInput {
-    const input: GateConfigInput = {
+    return {
         jwtSecret: config.auth.jwtSecret,
         publicOrigin: config.gate.publicOrigin,
         previewSecret: config.auth.previewSecret,
         serverUrl: config.auth.serverUrl,
         upstreamUrl: config.gate.upstreamUrl,
+        ...definedEntries({
+            cookieMaxAge: config.cookie?.maxAge,
+            cookieName: config.cookie?.name,
+            cookiePath: config.cookie?.path,
+            directUse: config.gate.directUse,
+            mode: config.gate.mode,
+            namespace: config.gate.namespace,
+            port: config.gate.port,
+            publicPathPrefix: config.gate.publicPathPrefix,
+            rateLimitKeyPrefix: config.gate.rateLimitKeyPrefix,
+            rateLimitMax: config.gate.rateLimitMax,
+            rateLimitRedisUrl: config.gate.rateLimitRedisUrl,
+            rateLimitWindowMs: config.gate.rateLimitWindowMs,
+            requestTimeoutMs: config.gate.requestTimeoutMs,
+            trustProxy: config.gate.trustProxy,
+            upstreamBasePath: config.gate.upstreamBasePath,
+            wsEnabled: config.gate.wsEnabled,
+        }),
     };
-
-    if (typeof config.cookie?.maxAge === 'number') {
-        input.cookieMaxAge = config.cookie.maxAge;
-    }
-
-    if (typeof config.cookie?.name === 'string') {
-        input.cookieName = config.cookie.name;
-    }
-
-    if (typeof config.cookie?.path === 'string') {
-        input.cookiePath = config.cookie.path;
-    }
-
-    if (typeof config.gate.directUse === 'boolean') {
-        input.directUse = config.gate.directUse;
-    }
-
-    if (typeof config.gate.mode !== 'undefined') {
-        input.mode = config.gate.mode;
-    }
-
-    if (typeof config.gate.namespace === 'string') {
-        input.namespace = config.gate.namespace;
-    }
-
-    if (typeof config.gate.port === 'number') {
-        input.port = config.gate.port;
-    }
-
-    if (typeof config.gate.publicPathPrefix === 'string') {
-        input.publicPathPrefix = config.gate.publicPathPrefix;
-    }
-
-    if (typeof config.gate.rateLimitKeyPrefix === 'string') {
-        input.rateLimitKeyPrefix = config.gate.rateLimitKeyPrefix;
-    }
-
-    if (typeof config.gate.rateLimitMax === 'number') {
-        input.rateLimitMax = config.gate.rateLimitMax;
-    }
-
-    if (typeof config.gate.rateLimitRedisUrl === 'string') {
-        input.rateLimitRedisUrl = config.gate.rateLimitRedisUrl;
-    }
-
-    if (typeof config.gate.rateLimitWindowMs === 'number') {
-        input.rateLimitWindowMs = config.gate.rateLimitWindowMs;
-    }
-
-    if (typeof config.gate.requestTimeoutMs === 'number') {
-        input.requestTimeoutMs = config.gate.requestTimeoutMs;
-    }
-
-    if (typeof config.gate.trustProxy === 'boolean') {
-        input.trustProxy = config.gate.trustProxy;
-    }
-
-    if (typeof config.gate.upstreamBasePath === 'string') {
-        input.upstreamBasePath = config.gate.upstreamBasePath;
-    }
-
-    if (typeof config.gate.wsEnabled === 'boolean') {
-        input.wsEnabled = config.gate.wsEnabled;
-    }
-
-    return input;
 }
 
 function parseGateToml(fileContents: string, filePath: string): GateConfigInput {

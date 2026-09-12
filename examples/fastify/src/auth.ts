@@ -2,13 +2,14 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import {
+    parseBooleanFlag,
+    type AuthPayload as CoreAuthPayload,
     buildAuthCookieOptions as buildCoreAuthCookieOptions,
     buildLoginTarget as buildCoreLoginTarget,
     buildVerifyUrl as buildCoreVerifyUrl,
     normaliseReturnUrl as normaliseCoreReturnUrl,
     readCookieValue,
-    verifyAuthToken as verifyCoreAuthToken,
-    type AuthPayload as CoreAuthPayload,
+    verifyAuthTokenWithOptionalIssuer as verifyCoreAuthTokenWithOptionalIssuer,
 } from '@magic-link-sso/core';
 
 export type AuthPayload = CoreAuthPayload;
@@ -66,24 +67,7 @@ function readPositiveInteger(value: string | undefined): number | undefined {
 }
 
 function readBoolean(value: string | undefined): boolean {
-    if (typeof value !== 'string') {
-        return false;
-    }
-
-    switch (value.trim().toLowerCase()) {
-        case '1':
-        case 'true':
-        case 'yes':
-        case 'on':
-            return true;
-        case '0':
-        case 'false':
-        case 'no':
-        case 'off':
-            return false;
-        default:
-            return false;
-    }
+    return parseBooleanFlag(value);
 }
 
 function readCookiePath(value: string | undefined): string {
@@ -123,12 +107,7 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    return typeof options.expectedIssuer === 'string'
-        ? verifyCoreAuthToken(token, secret, {
-              expectedAudience: options.expectedAudience,
-              expectedIssuer: options.expectedIssuer,
-          })
-        : null;
+    return verifyCoreAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
 export async function verifyRequestAuth(
@@ -199,19 +178,17 @@ export function buildLoginTarget(appOrigin: string, returnTarget: string, scope?
     });
 }
 
+const loginErrorMessages: Record<string, string> = {
+    'missing-verification-token': 'The sign-in link is incomplete. Please request a new email.',
+    'session-verification-failed':
+        'The app could not verify the returned sign-in token. Check that MAGICSSO_JWT_SECRET matches the SSO server.',
+    'session-verification-misconfigured':
+        'This app is missing MAGICSSO_JWT_SECRET, so it cannot verify sign-in tokens.',
+    'verify-email-failed':
+        'We could not complete sign-in from that email link. Please request a new one.',
+    'verify-email-misconfigured': 'This app is missing required SSO verify-email configuration.',
+};
+
 export function getLoginErrorMessage(errorCode: string | undefined): string | undefined {
-    switch (errorCode) {
-        case 'missing-verification-token':
-            return 'The sign-in link is incomplete. Please request a new email.';
-        case 'session-verification-failed':
-            return 'The app could not verify the returned sign-in token. Check that MAGICSSO_JWT_SECRET matches the SSO server.';
-        case 'session-verification-misconfigured':
-            return 'This app is missing MAGICSSO_JWT_SECRET, so it cannot verify sign-in tokens.';
-        case 'verify-email-failed':
-            return 'We could not complete sign-in from that email link. Please request a new one.';
-        case 'verify-email-misconfigured':
-            return 'This app is missing required SSO verify-email configuration.';
-        default:
-            return undefined;
-    }
+    return typeof errorCode === 'string' ? loginErrorMessages[errorCode] : undefined;
 }

@@ -14,7 +14,9 @@
         "typecheck": "nuxi prepare && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
+        "@magic-link-sso/core": "workspace:*",
         "@magic-link-sso/nuxt": "workspace:*",
+        "h3": "^1.15.11",
         "magic-sso-example-ui": "workspace:*",
         "nuxt": "^4.5.2",
         "vue": "^3.5.41"

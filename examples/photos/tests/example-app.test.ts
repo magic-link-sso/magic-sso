@@ -22,11 +22,12 @@ describe('Photos example app', () => {
         expect(globalsCss).toContain('.field-input::placeholder');
     });
 
-    it('keeps the verify-email screen aligned with dark-mode auto styling', async () => {
+    it('delegates the verify-email screen to the shared Next.js route', async () => {
         const verifyEmailRoute = await readFile(verifyEmailRoutePath, 'utf8');
 
-        expect(verifyEmailRoute).toContain('@media (prefers-color-scheme: dark)');
-        expect(verifyEmailRoute).toContain('Continue sign-in');
+        expect(verifyEmailRoute).toContain('VerifyEmailRoute');
+        expect(verifyEmailRoute).toContain("from '@magic-link-sso/nextjs'");
+        expect(verifyEmailRoute).toContain('resolveAppOrigin: resolveRequestAppOrigin');
     });
 
     it('keeps OTP exchange server-side for an already-open Photos session', async () => {

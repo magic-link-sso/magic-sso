@@ -18,8 +18,9 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { collectRecentTimestamps } from './timestampFileStore.js';
 
 export interface SignInAttemptLimitResult {
     allowed: boolean;
@@ -41,41 +42,6 @@ function buildKeyDirectoryPath(directory: string, email: string): string {
 
 function buildAttemptFilePath(directory: string, nowMs: number): string {
     return join(directory, `${nowMs}-${randomUUID()}.txt`);
-}
-
-async function readRecentAttempts(directory: string, windowStartMs: number): Promise<number[]> {
-    const recentAttempts: number[] = [];
-    const entries = await readdir(directory, { withFileTypes: true });
-
-    for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.txt')) {
-            continue;
-        }
-
-        const filePath = join(directory, entry.name);
-
-        let contents: string;
-        try {
-            contents = await readFile(filePath, 'utf8');
-        } catch (error) {
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-                continue;
-            }
-
-            throw error;
-        }
-
-        const attemptTimestampMs = Number.parseInt(contents.trim(), 10);
-        if (Number.isFinite(attemptTimestampMs) && attemptTimestampMs > windowStartMs) {
-            recentAttempts.push(attemptTimestampMs);
-            continue;
-        }
-
-        await rm(filePath, { force: true });
-    }
-
-    recentAttempts.sort((left, right) => left - right);
-    return recentAttempts;
 }
 
 function calculateRetryAfterSeconds(
@@ -150,7 +116,7 @@ export async function createFilePerEmailSignInLimiter(options: {
             await mkdir(keyDirectory, { mode: 0o700, recursive: true });
             await chmod(keyDirectory, 0o700);
 
-            const recentAttempts = await readRecentAttempts(keyDirectory, windowStartMs);
+            const recentAttempts = await collectRecentTimestamps(keyDirectory, windowStartMs);
             if (recentAttempts.length >= options.signInEmailRateLimitMax) {
                 return {
                     allowed: false,

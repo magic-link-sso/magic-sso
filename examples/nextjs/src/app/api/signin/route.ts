@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { NextRequest, NextResponse } from 'next/server';
+import { normaliseReturnUrl } from '@magic-link-sso/nextjs';
 import { sendMagicLink } from '../../login/signin';
 
 function acceptsJson(request: NextRequest): boolean {
@@ -9,32 +10,15 @@ function acceptsJson(request: NextRequest): boolean {
     return typeof accept === 'string' && accept.includes('application/json');
 }
 
+const signInErrorMessages: Record<string, string> = {
+    'invalid-signin-request': 'The sign-in form was incomplete. Please try again.',
+    'verify-email-misconfigured': 'This app is missing required SSO verify-email configuration.',
+};
+
 function getErrorMessage(errorCode: string): string {
-    switch (errorCode) {
-        case 'invalid-signin-request':
-            return 'The sign-in form was incomplete. Please try again.';
-        case 'verify-email-misconfigured':
-            return 'This app is missing required SSO verify-email configuration.';
-        case 'signin-request-failed':
-        default:
-            return 'We could not send the sign-in email. Please try again.';
-    }
-}
-
-function normaliseReturnUrl(returnUrl: string | null, origin: string): string {
-    if (typeof returnUrl !== 'string' || returnUrl.length === 0) {
-        return origin;
-    }
-    if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-        return new URL(returnUrl, origin).toString();
-    }
-
-    try {
-        const parsedUrl = new URL(returnUrl);
-        return parsedUrl.origin === origin ? parsedUrl.toString() : origin;
-    } catch {
-        return origin;
-    }
+    return (
+        signInErrorMessages[errorCode] ?? 'We could not send the sign-in email. Please try again.'
+    );
 }
 
 function buildLoginRedirect(
@@ -64,10 +48,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const scopeValue = formData.get('scope');
     const scope =
         typeof scopeValue === 'string' && scopeValue.trim().length > 0 ? scopeValue : undefined;
+    const returnUrlValue = formData.get('returnUrl');
     const returnUrl = normaliseReturnUrl(
-        typeof formData.get('returnUrl') === 'string'
-            ? (formData.get('returnUrl') as string)
-            : null,
+        typeof returnUrlValue === 'string' ? returnUrlValue : undefined,
+        request.nextUrl.origin,
         request.nextUrl.origin,
     );
 

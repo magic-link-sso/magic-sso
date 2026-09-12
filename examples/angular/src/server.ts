@@ -3,6 +3,7 @@
 
 import 'dotenv/config';
 import { escapeHtml, readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
+import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import express, {
     type NextFunction as ExpressNextFunction,
     type Request as ExpressRequest,
@@ -27,7 +28,8 @@ import {
     verifyAuthToken,
     verifyRequestAuth,
 } from '@magic-link-sso/angular';
-import { buildFailureResult, readMessage, readServerUrlConfigError } from './signin-utils';
+import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
+import { readServerUrlConfigError } from './signin-utils';
 export { AngularAppEngine } from '@angular/ssr';
 
 interface SignInRequestBody {
@@ -48,14 +50,6 @@ interface VerifyOtpRequestBody {
     challengeId?: string;
     code?: string;
     returnUrl?: string;
-}
-
-interface VerifyEmailResponse {
-    accessToken: string;
-}
-
-interface VerifyEmailPreviewResponse {
-    email: string;
 }
 
 type AsyncExpressHandler = (
@@ -156,26 +150,6 @@ function readVerifyOtpRequestBody(value: unknown): VerifyOtpRequestBody {
         code: readBodyString(record?.['code']),
         returnUrl: readBodyString(record?.['returnUrl']),
     };
-}
-
-function isVerifyEmailResponse(value: unknown): value is VerifyEmailResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'accessToken' in value &&
-        typeof value.accessToken === 'string' &&
-        value.accessToken.length > 0
-    );
-}
-
-function isVerifyEmailPreviewResponse(value: unknown): value is VerifyEmailPreviewResponse {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'email' in value &&
-        typeof value.email === 'string' &&
-        value.email.length > 0
-    );
 }
 
 function buildLoginRedirectUrl(request: ExpressRequest, returnUrl: string, error?: string): string {

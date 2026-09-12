@@ -27,16 +27,24 @@
  */
 
 export { sendMagicLink, verifyEmailOtp } from './components/login/actions';
-export type { SendMagicLinkResult, VerifyEmailOtpResult } from './components/login/actions';
+export type {
+    SendMagicLinkOptions,
+    SendMagicLinkResult,
+    VerifyEmailOtpResult,
+} from './components/login/actions';
 export { VerifyEmailOtpRoute } from './components/login/otpRoute';
 export { LogoutRoute } from './components/logout/route';
+export { VerifyEmailRoute } from './components/verifyEmail/route';
+export type { VerifyEmailRouteOptions } from './components/verifyEmail/route';
 export type { AuthPayload, VerifyAuthTokenOptions } from './lib/auth';
 export {
     buildAuthCookieOptions,
+    buildVerifyUrl,
     getCookieMaxAge,
     getCookieName,
     getJwtSecret,
     hasSameOriginMutationSource,
+    normaliseReturnUrl,
     redirectToLogin,
     verifyAuthToken,
     verifyToken,

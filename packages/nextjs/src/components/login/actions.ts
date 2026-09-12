@@ -48,6 +48,14 @@ export type SendMagicLinkResult =
 
 export type VerifyEmailOtpResult = { success: true } | { message: string; success: false };
 
+export interface SendMagicLinkOptions {
+    /**
+     * Absolute URL the SSO server should send the recipient to for confirmation
+     * instead of its own hosted verify page.
+     */
+    verifyUrl?: string;
+}
+
 interface ErrorMessageResponse {
     message?: string;
 }
@@ -85,6 +93,7 @@ export async function sendMagicLink(
     email: string,
     returnUrl: string,
     scope?: string,
+    options?: SendMagicLinkOptions,
 ): Promise<SendMagicLinkResult> {
     const serverUrl = process.env.MAGICSSO_SERVER_URL;
     if (typeof serverUrl !== 'string' || serverUrl.length === 0) {
@@ -103,6 +112,9 @@ export async function sendMagicLink(
                 email,
                 returnUrl,
                 ...(normalizedScope.length > 0 ? { scope: normalizedScope } : {}),
+                ...(typeof options?.verifyUrl === 'string' && options.verifyUrl.length > 0
+                    ? { verifyUrl: options.verifyUrl }
+                    : {}),
             }),
             cache: 'no-store',
         });

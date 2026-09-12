@@ -1,24 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-function readErrorMessage(data: unknown): string | undefined {
-    if (
-        typeof data === 'object' &&
-        data !== null &&
-        'message' in data &&
-        typeof data.message === 'string' &&
-        data.message.length > 0
-    ) {
-        return data.message;
-    }
-
-    return undefined;
-}
-
-async function readResponseMessage(response: Response): Promise<string | undefined> {
-    const payload = (await response.json().catch(() => null)) as unknown;
-    return readErrorMessage(payload);
-}
+import { sendMagicLink as requestMagicLink } from '@magic-link-sso/nextjs';
 
 export interface SignInResult {
     code?: string;
@@ -26,17 +9,6 @@ export interface SignInResult {
     otpChallengeId?: string;
     otpLength?: number;
     success: boolean;
-}
-
-function readOtpMetadata(value: unknown): Pick<SignInResult, 'otpChallengeId' | 'otpLength'> {
-    if (typeof value !== 'object' || value === null) {
-        return {};
-    }
-    const challengeId = Reflect.get(value, 'otpChallengeId');
-    const length = Reflect.get(value, 'otpLength');
-    return typeof challengeId === 'string' && typeof length === 'number'
-        ? { otpChallengeId: challengeId, otpLength: length }
-        : {};
 }
 
 export async function sendMagicLink(
@@ -54,44 +26,20 @@ export async function sendMagicLink(
         };
     }
 
-    const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
-
-    try {
-        const response = await fetch(new URL('/signin', serverUrl), {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify({
-                email,
-                returnUrl,
-                verifyUrl,
-                ...(normalizedScope.length > 0 ? { scope: normalizedScope } : {}),
-            }),
-            cache: 'no-store',
-        });
-        if (!response.ok) {
-            const serverMessage = await readResponseMessage(response);
-            console.error('Error sending magic link:', {
-                serverMessage,
-                status: response.status,
-            });
-            return {
-                success: false,
-                code: 'signin-request-failed',
-                message: serverMessage ?? 'Failed to send verification email.',
-            };
-        }
-
-        return { success: true, ...readOtpMetadata(await response.json().catch(() => null)) };
-    } catch (error: unknown) {
-        if (error instanceof Error) {
-            console.error('Error sending magic link:', { message: error.message });
-        }
+    const result = await requestMagicLink(email, returnUrl, scope, { verifyUrl });
+    if (!result.success) {
+        console.error('Error sending magic link:', { message: result.message });
         return {
             success: false,
             code: 'signin-request-failed',
-            message: 'Failed to send verification email.',
+            message: result.message,
         };
     }
+
+    return {
+        success: true,
+        ...(typeof result.otpChallengeId === 'string' && typeof result.otpLength === 'number'
+            ? { otpChallengeId: result.otpChallengeId, otpLength: result.otpLength }
+            : {}),
+    };
 }

@@ -5,8 +5,12 @@
     "description": "Shared UI assets for Magic Link SSO TypeScript examples",
     "files": [
         "assets",
+        "env-file.d.ts",
+        "env-file.js",
         "index.d.ts",
         "index.js",
+        "signin.d.ts",
+        "signin.js",
         "styles.css"
     ],
     "type": "module",
@@ -15,6 +19,14 @@
             "types": "./index.d.ts",
             "default": "./index.js"
         },
+        "./env-file": {
+            "types": "./env-file.d.ts",
+            "default": "./env-file.js"
+        },
+        "./signin": {
+            "types": "./signin.d.ts",
+            "default": "./signin.js"
+        },
         "./styles.css": "./styles.css",
         "./assets/*": {
             "types": "./svg.d.ts",
@@ -22,9 +34,9 @@
         }
     },
     "scripts": {
-        "format": "oxfmt package.json index.js index.d.ts index.test.ts svg.d.ts",
-        "format:check": "oxfmt --check package.json index.js index.d.ts index.test.ts svg.d.ts",
-        "lint": "oxlint index.js index.test.ts",
+        "format": "oxfmt package.json index.js index.d.ts index.test.ts env-file.js env-file.d.ts signin.js signin.d.ts svg.d.ts",
+        "format:check": "oxfmt --check package.json index.js index.d.ts index.test.ts env-file.js env-file.d.ts signin.js signin.d.ts svg.d.ts",
+        "lint": "oxlint index.js index.test.ts env-file.js signin.js",
         "test": "vitest run"
     },
     "devDependencies": {

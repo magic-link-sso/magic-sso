@@ -22,6 +22,7 @@
         "@angular/ssr": "22.1.5",
         "@magic-link-sso/angular": "workspace:*",
         "@magic-link-sso/config-core": "workspace:*",
+        "@magic-link-sso/core": "workspace:*",
         "dotenv": "^17.4.2",
         "express": "^5.2.1",
         "magic-sso-example-ui": "workspace:*",

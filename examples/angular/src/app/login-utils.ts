@@ -25,23 +25,20 @@ export function getAppOrigin(request: Request | null | undefined): string {
     return 'http://localhost:3004';
 }
 
+const loginErrorMessages: Record<string, string> = {
+    'invalid-session': 'Your session could not be verified. Please sign in again.',
+    'missing-verification-token': 'The sign-in link is incomplete. Please request a new email.',
+    'session-verification-failed':
+        'The app could not verify the returned sign-in token. Check that MAGICSSO_JWT_SECRET matches the SSO server.',
+    'session-verification-misconfigured':
+        'This app is missing MAGICSSO_JWT_SECRET, so it cannot verify sign-in tokens.',
+    'verify-email-failed':
+        'We could not complete sign-in from that email link. Please request a new one.',
+    'verify-email-misconfigured': 'This app is missing required SSO verify-email configuration.',
+};
+
 export function getLoginErrorMessage(errorCode: string | undefined): string | undefined {
-    switch (errorCode) {
-        case 'invalid-session':
-            return 'Your session could not be verified. Please sign in again.';
-        case 'missing-verification-token':
-            return 'The sign-in link is incomplete. Please request a new email.';
-        case 'session-verification-failed':
-            return 'The app could not verify the returned sign-in token. Check that MAGICSSO_JWT_SECRET matches the SSO server.';
-        case 'session-verification-misconfigured':
-            return 'This app is missing MAGICSSO_JWT_SECRET, so it cannot verify sign-in tokens.';
-        case 'verify-email-failed':
-            return 'We could not complete sign-in from that email link. Please request a new one.';
-        case 'verify-email-misconfigured':
-            return 'This app is missing required SSO verify-email configuration.';
-        default:
-            return undefined;
-    }
+    return typeof errorCode === 'string' ? loginErrorMessages[errorCode] : undefined;
 }
 
 export function normaliseReturnUrl(returnUrl: string | undefined, appOrigin: string): string {

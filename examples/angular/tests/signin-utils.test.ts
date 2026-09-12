@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { describe, expect, it } from 'vitest';
-import { buildFailureResult, readMessage, readServerUrlConfigError } from '../src/signin-utils';
+import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
+import { readServerUrlConfigError } from '../src/signin-utils';
 
 describe('Angular signin utilities', () => {
     it('reads a non-empty message field from payloads', () => {
