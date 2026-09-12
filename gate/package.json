@@ -19,7 +19,7 @@
         "@magic-link-sso/config-core": "workspace:*",
         "@magic-link-sso/core": "workspace:*",
         "dotenv": "^17.4.2",
-        "fastify": "^5.11.3",
+        "fastify": "^5.12.4",
         "ioredis": "^5.11.1",
         "jose": "^6.2.8",
         "magic-sso-example-ui": "workspace:*",

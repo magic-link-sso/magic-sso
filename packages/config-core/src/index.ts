@@ -194,7 +194,7 @@ export interface AppConfig extends HostedAuthConfig {
     signInPageRateLimitMax: number;
     signInRateLimitMax: number;
     sites: SiteConfig[];
-    trustProxy: boolean | number;
+    trustProxy: boolean;
     verifyRateLimitMax: number;
     verifyTokenStoreDir: string;
 }
@@ -486,7 +486,7 @@ const rawConfigSchema = z
                     .optional(),
                 serveRootLandingPage: z.boolean().optional(),
                 signInEmailRateLimitStoreDir: z.string().min(1).optional(),
-                trustProxy: z.union([z.boolean(), z.number().int().nonnegative()]).optional(),
+                trustProxy: z.boolean().optional(),
                 verifyTokenStoreDir: z.string().min(1).optional(),
             })
             .strict()
