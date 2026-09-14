@@ -1,6 +1,6 @@
 [project]
 name = "example-app-django"
-version = "1.4.1"
+version = "1.4.2"
 description = "Magic Link SSO Django Demo"
 readme = "README.md"
 requires-python = ">=3.12,<4"
