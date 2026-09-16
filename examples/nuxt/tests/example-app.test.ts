@@ -13,7 +13,7 @@ const loginPagePath = path.join(rootDir, 'app/pages/login.vue');
 const protectedPagePath = path.join(rootDir, 'app/pages/protected.vue');
 const nuxtConfigPath = path.join(rootDir, 'nuxt.config.ts');
 const envExamplePath = path.join(rootDir, '.env.example');
-const signInRoutePath = path.join(rootDir, 'server/api/signin.post.ts');
+const signInFlowPath = path.join(rootDir, 'server/api/signin.ts');
 const verifyEmailGetRoutePath = path.join(
     rootDir,
     '../../packages/nuxt/src/runtime/server/routes/verify-email.get.ts',
@@ -80,7 +80,7 @@ describe('Nuxt example app', () => {
         const [loginPage, signInRoute, verifyEmailGetRoute, verifyEmailPostRoute] =
             await Promise.all([
                 readFile(loginPagePath, 'utf8'),
-                readFile(signInRoutePath, 'utf8'),
+                readFile(signInFlowPath, 'utf8'),
                 readFile(verifyEmailGetRoutePath, 'utf8'),
                 readFile(verifyEmailPostRoutePath, 'utf8'),
             ]);

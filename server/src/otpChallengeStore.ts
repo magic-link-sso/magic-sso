@@ -123,6 +123,36 @@ async function pause(milliseconds: number): Promise<void> {
     });
 }
 
+function hasErrorCode(error: unknown, code: string): boolean {
+    return error instanceof Error && 'code' in error && error.code === code;
+}
+
+async function tryCreateLockFile(path: string): Promise<boolean> {
+    try {
+        const handle = await open(path, 'wx', 0o600);
+        await handle.close();
+        return true;
+    } catch (error) {
+        if (!hasErrorCode(error, 'EEXIST')) {
+            throw error;
+        }
+        return false;
+    }
+}
+
+async function removeStaleLockFile(path: string): Promise<void> {
+    try {
+        const lockInfo = await stat(path);
+        if (Date.now() - lockInfo.mtimeMs > 10_000) {
+            await rm(path, { force: true });
+        }
+    } catch (error) {
+        if (!hasErrorCode(error, 'ENOENT')) {
+            throw error;
+        }
+    }
+}
+
 async function withFileLock<T>(
     directory: string,
     challengeId: string,
@@ -130,37 +160,16 @@ async function withFileLock<T>(
 ): Promise<T> {
     const path = lockPath(directory, challengeId);
     for (let attempt = 0; attempt < 100; attempt += 1) {
-        try {
-            const handle = await open(path, 'wx', 0o600);
-            await handle.close();
+        if (await tryCreateLockFile(path)) {
             try {
                 return await callback();
             } finally {
                 await rm(path, { force: true });
             }
-        } catch (error) {
-            if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {
-                throw error;
-            }
-
-            try {
-                const lockInfo = await stat(path);
-                if (Date.now() - lockInfo.mtimeMs > 10_000) {
-                    await rm(path, { force: true });
-                }
-            } catch (statError) {
-                if (
-                    !(
-                        statError instanceof Error &&
-                        'code' in statError &&
-                        statError.code === 'ENOENT'
-                    )
-                ) {
-                    throw statError;
-                }
-            }
-            await pause(5);
         }
+
+        await removeStaleLockFile(path);
+        await pause(5);
     }
 
     throw new Error('Timed out waiting for OTP challenge file lock.');
@@ -171,7 +180,7 @@ async function readChallenge(path: string): Promise<OtpChallenge | null> {
         const parsed: unknown = JSON.parse(await readFile(path, 'utf8'));
         return parseOtpChallenge(parsed);
     } catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        if (hasErrorCode(error, 'ENOENT')) {
             return null;
         }
         throw error;
@@ -186,7 +195,7 @@ async function readActiveChallengeId(
         const challengeId = await readFile(rotationPointerPath(directory, rotationKey), 'utf8');
         return challengeId.length > 0 ? challengeId : null;
     } catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        if (hasErrorCode(error, 'ENOENT')) {
             return null;
         }
         throw error;

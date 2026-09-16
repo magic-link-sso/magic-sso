@@ -129,6 +129,51 @@ export interface GateProxyServer {
     ws(req: IncomingMessage, socket: Socket, head: Buffer, options: GateProxyOptions): void;
 }
 
+function resolveProxyErrorTarget(
+    response: ServerResponse<IncomingMessage> | Socket | undefined,
+    socket: Socket | undefined,
+): ServerResponse<IncomingMessage> | Socket {
+    return response ?? socket ?? new Socket();
+}
+
+function formatRawHeaderLines(headers: OutgoingHttpHeaders): string[] {
+    return Object.entries(headers).flatMap(([name, value]) =>
+        (Array.isArray(value) ? value : [value]).map((entry) => `${name}: ${entry}\r\n`),
+    );
+}
+
+function writeUpgradeResponseHead(
+    socket: Socket,
+    upstreamResponse: IncomingMessage,
+    headers: OutgoingHttpHeaders,
+): void {
+    const statusCode = upstreamResponse.statusCode ?? 101;
+    const statusMessage = upstreamResponse.statusMessage ?? 'Switching Protocols';
+    socket.write(`HTTP/1.1 ${statusCode} ${statusMessage}\r\n`);
+    for (const line of formatRawHeaderLines(headers)) {
+        socket.write(line);
+    }
+    socket.write('\r\n');
+}
+
+function connectUpgradedSockets(
+    socket: Socket,
+    head: Buffer,
+    upstreamSocket: Socket,
+    upstreamHead: Buffer,
+): void {
+    if (upstreamHead.length > 0) {
+        socket.write(upstreamHead);
+    }
+    if (head.length > 0) {
+        upstreamSocket.write(head);
+    }
+    upstreamSocket.pipe(socket);
+    socket.pipe(upstreamSocket);
+    socket.on('error', () => upstreamSocket.destroy());
+    upstreamSocket.on('error', () => socket.destroy());
+}
+
 function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
     type ProxyErrorListener = (
         error: Error,
@@ -373,30 +418,23 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
         });
 
         proxyRequest.on('upgrade', (upstreamResponse, upstreamSocket, upstreamHead) => {
-            if (typeof onUpgrade !== 'function') {
-                upstreamSocket.destroy();
-                const failureResponse =
-                    response ?? (typeof socket === 'undefined' ? new Socket() : socket);
-                emitProxyError(
-                    new Error(
-                        `Unexpected proxy upgrade response status ${upstreamResponse.statusCode ?? 502}.`,
-                    ),
-                    req,
-                    failureResponse,
-                );
+            if (typeof onUpgrade === 'function') {
+                onUpgrade(upstreamResponse, upstreamSocket, upstreamHead);
                 return;
             }
 
-            onUpgrade(upstreamResponse, upstreamSocket, upstreamHead);
+            upstreamSocket.destroy();
+            emitProxyError(
+                new Error(
+                    `Unexpected proxy upgrade response status ${upstreamResponse.statusCode ?? 502}.`,
+                ),
+                req,
+                resolveProxyErrorTarget(response, socket),
+            );
         });
 
         proxyRequest.on('error', (error) => {
-            if (typeof response === 'undefined') {
-                emitProxyError(error, req, typeof socket === 'undefined' ? new Socket() : socket);
-                return;
-            }
-
-            emitProxyError(error, req, response);
+            emitProxyError(error, req, resolveProxyErrorTarget(response, socket));
         });
 
         if (typeof options.requestBody === 'undefined') {
@@ -427,35 +465,15 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
                 socket,
                 socket,
                 (upstreamResponse, upstreamSocket, upstreamHead) => {
-                    const statusCode = upstreamResponse.statusCode ?? 101;
-                    const statusMessage = upstreamResponse.statusMessage ?? 'Switching Protocols';
-                    socket.write(`HTTP/1.1 ${statusCode} ${statusMessage}\r\n`);
-                    for (const [name, value] of Object.entries(
+                    writeUpgradeResponseHead(
+                        socket,
+                        upstreamResponse,
                         copyProxyResponseHeaders(
                             upstreamResponse.headers,
                             options.blockedResponseCookieNames,
                         ),
-                    )) {
-                        if (Array.isArray(value)) {
-                            for (const entry of value) {
-                                socket.write(`${name}: ${entry}\r\n`);
-                            }
-                            continue;
-                        }
-
-                        socket.write(`${name}: ${value}\r\n`);
-                    }
-                    socket.write('\r\n');
-                    if (upstreamHead.length > 0) {
-                        socket.write(upstreamHead);
-                    }
-                    if (head.length > 0) {
-                        upstreamSocket.write(head);
-                    }
-                    upstreamSocket.pipe(socket);
-                    socket.pipe(upstreamSocket);
-                    socket.on('error', () => upstreamSocket.destroy());
-                    upstreamSocket.on('error', () => socket.destroy());
+                    );
+                    connectUpgradedSockets(socket, head, upstreamSocket, upstreamHead);
                 },
             );
         },

@@ -166,6 +166,33 @@ describe('manager cli', () => {
         expect(stderr.output).toBe('');
     });
 
+    it('shows site details with grants as text', async () => {
+        const setup = setupManagerFiles();
+        const stdout = createWriter();
+        const stderr = createWriter();
+        const run = (argv: string[]): Promise<number> =>
+            runCli({ argv, env: setup.env, stderr: stderr.writer, stdout: stdout.writer });
+
+        expect(await run(['sites', 'show', 'client'])).toBe(0);
+        expect(stdout.output).toContain('Scope catalog: (empty)');
+        expect(stdout.output).toContain('Grants: (empty)');
+
+        expect(await run(['scopes', 'add', 'client', 'reports'])).toBe(0);
+        expect(await run(['access', 'grant', 'client', 'admin@example.com', '--full-access'])).toBe(
+            0,
+        );
+        expect(
+            await run(['access', 'grant', 'client', 'reader@example.com', '--scope', 'reports']),
+        ).toBe(0);
+        expect(await run(['sites', 'show', 'client'])).toBe(0);
+
+        expect(stdout.output).toContain('Site: client');
+        expect(stdout.output).toContain('Scope catalog: reports');
+        expect(stdout.output).toContain('- admin@example.com: full-access');
+        expect(stdout.output).toContain('- reader@example.com: reports');
+        expect(stderr.output).toBe('');
+    });
+
     it('grants full access and persists normalized state', async () => {
         const setup = setupManagerFiles();
         const stdout = createWriter();

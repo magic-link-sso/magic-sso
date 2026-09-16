@@ -1196,15 +1196,138 @@ function assertSitesAreConsistent(sites: readonly ConfiguredSite[]): void {
     }
 }
 
+type MagicSsoTomlAuth = MagicSsoTomlConfig['auth'];
+type MagicSsoTomlServer = NonNullable<MagicSsoTomlConfig['server']>;
+type MagicSsoTomlCookie = NonNullable<MagicSsoTomlConfig['cookie']>;
+type MagicSsoTomlRateLimit = NonNullable<MagicSsoTomlConfig['rateLimit']>;
+
+function resolveAuthSettings(
+    auth: MagicSsoTomlAuth,
+): Pick<
+    AppConfig,
+    | 'csrfSecret'
+    | 'emailExpirationSeconds'
+    | 'emailSecret'
+    | 'jwtExpirationSeconds'
+    | 'jwtSecret'
+    | 'otp'
+    | 'previewSecret'
+> {
+    const jwtSecret = parseConfiguredSecret(auth.jwtSecret, 'auth.jwtSecret');
+    const emailSecret = parseConfiguredSecret(auth.emailSecret, 'auth.emailSecret');
+    const csrfSecret = parseConfiguredSecret(auth.csrfSecret, 'auth.csrfSecret');
+    const previewSecret = parseConfiguredSecret(auth.previewSecret, 'auth.previewSecret');
+    const otpSecret =
+        typeof auth.otp.secret === 'string'
+            ? parseConfiguredSecret(auth.otp.secret, 'auth.otp.secret')
+            : undefined;
+    const otpExpirationSeconds = parseDurationToSeconds(auth.otp.expiration);
+    const emailExpirationSeconds = parseDurationToSeconds(auth.emailExpiration);
+    if (auth.otp.enabled && otpExpirationSeconds > emailExpirationSeconds) {
+        throw new Error('auth.otp.expiration must not exceed auth.emailExpiration.');
+    }
+    validateDistinctSecrets(jwtSecret, emailSecret, csrfSecret, previewSecret, otpSecret);
+
+    return {
+        csrfSecret,
+        emailExpirationSeconds,
+        emailSecret,
+        jwtExpirationSeconds: parseDurationToSeconds(auth.jwtExpiration),
+        jwtSecret,
+        otp: {
+            allowedAttempts: auth.otp.allowedAttempts,
+            enabled: auth.otp.enabled,
+            expirationSeconds: otpExpirationSeconds,
+            length: auth.otp.length,
+            resendStrategy: auth.otp.resendStrategy,
+            secret: otpSecret,
+        },
+        previewSecret,
+    };
+}
+
+function resolveServerSettings(
+    serverConfig: MagicSsoTomlServer,
+): Pick<
+    AppConfig,
+    | 'appPort'
+    | 'appUrl'
+    | 'logFormat'
+    | 'logLevel'
+    | 'reload'
+    | 'securityState'
+    | 'serveRootLandingPage'
+    | 'signInEmailRateLimitStoreDir'
+    | 'trustProxy'
+    | 'verifyTokenStoreDir'
+> {
+    const reloadConfig = serverConfig.reload;
+    return {
+        appPort: serverConfig.appPort ?? 3000,
+        appUrl: serverConfig.appUrl ?? 'http://localhost:3000',
+        logFormat: serverConfig.logFormat ?? 'json',
+        logLevel: serverConfig.logLevel ?? 'info',
+        reload:
+            typeof reloadConfig === 'undefined'
+                ? undefined
+                : {
+                      secret: parseConfiguredSecret(reloadConfig.secret, 'server.reload.secret'),
+                  },
+        securityState: resolveSecurityStateConfig(serverConfig.securityState ?? {}),
+        serveRootLandingPage: serverConfig.serveRootLandingPage ?? true,
+        signInEmailRateLimitStoreDir:
+            serverConfig.signInEmailRateLimitStoreDir ?? '.magic-sso/signin-email-rate-limit',
+        trustProxy: serverConfig.trustProxy ?? false,
+        verifyTokenStoreDir: serverConfig.verifyTokenStoreDir ?? '.magic-sso/verification-tokens',
+    };
+}
+
+function resolveCookieSettings(
+    cookieConfig: MagicSsoTomlCookie,
+    appUrl: URL,
+): Pick<
+    AppConfig,
+    | 'cookieDomain'
+    | 'cookieHttpOnly'
+    | 'cookieName'
+    | 'cookiePath'
+    | 'cookieSameSite'
+    | 'cookieSecure'
+> {
+    return {
+        cookieDomain: cookieConfig.domain,
+        cookieHttpOnly: parseCookieHttpOnly(cookieConfig.httpOnly),
+        cookieName: cookieConfig.name ?? 'magic-sso',
+        cookiePath: cookieConfig.path,
+        cookieSameSite: parseCookieSameSite(cookieConfig.sameSite, appUrl),
+        cookieSecure: parseCookieSecure(cookieConfig.secure, appUrl),
+    };
+}
+
+function resolveRateLimitSettings(
+    rateLimitConfig: MagicSsoTomlRateLimit,
+): Pick<
+    AppConfig,
+    | 'healthzRateLimitMax'
+    | 'rateLimitWindowMs'
+    | 'signInEmailRateLimitMax'
+    | 'signInPageRateLimitMax'
+    | 'signInRateLimitMax'
+    | 'verifyRateLimitMax'
+> {
+    return {
+        healthzRateLimitMax: rateLimitConfig.healthzMax ?? 60,
+        rateLimitWindowMs: rateLimitConfig.windowMs ?? 10 * 60 * 1000,
+        signInEmailRateLimitMax: rateLimitConfig.signInEmailMax ?? 5,
+        signInPageRateLimitMax: rateLimitConfig.signInPageMax ?? 30,
+        signInRateLimitMax: rateLimitConfig.signInMax ?? 20,
+        verifyRateLimitMax: rateLimitConfig.verifyMax ?? 40,
+    };
+}
+
 export function parseMagicSsoConfigToml(fileContents: string, filePath: string): AppConfig {
     const parsedConfig = parseMagicSsoTomlConfig(fileContents, filePath);
-
-    const serverConfig = parsedConfig.server ?? {};
-    const cookieConfig = parsedConfig.cookie ?? {};
-    const rateLimitConfig = parsedConfig.rateLimit ?? {};
-    const reloadConfig = serverConfig.reload;
-    const securityStateConfig = serverConfig.securityState ?? {};
-    const appUrl = new URL(serverConfig.appUrl ?? 'http://localhost:3000');
+    const serverSettings = resolveServerSettings(parsedConfig.server ?? {});
     const hostedAuthCopy = resolveHostedAuthPageCopy(
         parsedConfig.hostedAuth.copy,
         createDefaultHostedAuthPageCopy(),
@@ -1215,24 +1338,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         createDefaultHostedAuthBranding(),
         'hostedAuth.branding',
     );
-    const jwtSecret = parseConfiguredSecret(parsedConfig.auth.jwtSecret, 'auth.jwtSecret');
-    const emailSecret = parseConfiguredSecret(parsedConfig.auth.emailSecret, 'auth.emailSecret');
-    const csrfSecret = parseConfiguredSecret(parsedConfig.auth.csrfSecret, 'auth.csrfSecret');
-    const previewSecret = parseConfiguredSecret(
-        parsedConfig.auth.previewSecret,
-        'auth.previewSecret',
-    );
-    const otpSecret =
-        typeof parsedConfig.auth.otp.secret === 'string'
-            ? parseConfiguredSecret(parsedConfig.auth.otp.secret, 'auth.otp.secret')
-            : undefined;
-    const otpExpirationSeconds = parseDurationToSeconds(parsedConfig.auth.otp.expiration);
-    const emailExpirationSeconds = parseDurationToSeconds(parsedConfig.auth.emailExpiration);
-    if (parsedConfig.auth.otp.enabled && otpExpirationSeconds > emailExpirationSeconds) {
-        throw new Error('auth.otp.expiration must not exceed auth.emailExpiration.');
-    }
-    const securityState = resolveSecurityStateConfig(securityStateConfig);
-    validateDistinctSecrets(jwtSecret, emailSecret, csrfSecret, previewSecret, otpSecret);
+    const authSettings = resolveAuthSettings(parsedConfig.auth);
 
     const sites = parsedConfig.sites.map((site) =>
         buildConfiguredSite(site, hostedAuthCopy, hostedAuthBranding),
@@ -1240,18 +1346,11 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
     assertSitesAreConsistent(sites);
 
     return {
-        appPort: serverConfig.appPort ?? 3000,
-        appUrl: serverConfig.appUrl ?? 'http://localhost:3000',
-        csrfSecret,
-        cookieDomain: cookieConfig.domain,
-        cookieHttpOnly: parseCookieHttpOnly(cookieConfig.httpOnly),
-        cookieName: cookieConfig.name ?? 'magic-sso',
-        cookiePath: cookieConfig.path,
-        cookieSameSite: parseCookieSameSite(cookieConfig.sameSite, appUrl),
-        cookieSecure: parseCookieSecure(cookieConfig.secure, appUrl),
-        emailExpirationSeconds,
+        ...serverSettings,
+        ...authSettings,
+        ...resolveCookieSettings(parsedConfig.cookie ?? {}, new URL(serverSettings.appUrl)),
+        ...resolveRateLimitSettings(parsedConfig.rateLimit ?? {}),
         emailFrom: parsedConfig.email.from,
-        emailSecret,
         emailSignature: parsedConfig.email.signature,
         emailSmtpFallbacks: parsedConfig.email.smtpFallbacks,
         emailSmtpHost: parsedConfig.email.smtp.host,
@@ -1261,38 +1360,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         emailSmtpUser: parsedConfig.email.smtp.user,
         hostedAuthBranding,
         hostedAuthPageCopy: hostedAuthCopy,
-        healthzRateLimitMax: rateLimitConfig.healthzMax ?? 60,
-        logFormat: serverConfig.logFormat ?? 'json',
-        jwtExpirationSeconds: parseDurationToSeconds(parsedConfig.auth.jwtExpiration),
-        jwtSecret,
-        previewSecret,
-        logLevel: serverConfig.logLevel ?? 'info',
-        otp: {
-            allowedAttempts: parsedConfig.auth.otp.allowedAttempts,
-            enabled: parsedConfig.auth.otp.enabled,
-            expirationSeconds: otpExpirationSeconds,
-            length: parsedConfig.auth.otp.length,
-            resendStrategy: parsedConfig.auth.otp.resendStrategy,
-            secret: otpSecret,
-        },
-        rateLimitWindowMs: rateLimitConfig.windowMs ?? 10 * 60 * 1000,
-        reload:
-            typeof reloadConfig === 'undefined'
-                ? undefined
-                : {
-                      secret: parseConfiguredSecret(reloadConfig.secret, 'server.reload.secret'),
-                  },
-        securityState,
-        serveRootLandingPage: serverConfig.serveRootLandingPage ?? true,
-        signInEmailRateLimitMax: rateLimitConfig.signInEmailMax ?? 5,
-        signInEmailRateLimitStoreDir:
-            serverConfig.signInEmailRateLimitStoreDir ?? '.magic-sso/signin-email-rate-limit',
-        signInPageRateLimitMax: rateLimitConfig.signInPageMax ?? 30,
-        signInRateLimitMax: rateLimitConfig.signInMax ?? 20,
         sites,
-        trustProxy: serverConfig.trustProxy ?? false,
-        verifyRateLimitMax: rateLimitConfig.verifyMax ?? 40,
-        verifyTokenStoreDir: serverConfig.verifyTokenStoreDir ?? '.magic-sso/verification-tokens',
     };
 }
 

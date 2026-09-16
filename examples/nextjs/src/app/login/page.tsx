@@ -6,6 +6,7 @@ import { headers } from 'next/headers';
 import { normaliseReturnUrl } from '@magic-link-sso/nextjs';
 import React from 'react';
 import { getAppOrigin } from './url';
+import { firstSearchParam, lookupMessage } from './form-state';
 import LoginForm from './LoginForm';
 
 type LoginPageProps = {
@@ -35,14 +36,6 @@ const loginSuccessMessages: Record<string, string> = {
   'verification-email-sent': 'Verification email sent',
 };
 
-function getLoginErrorMessage(errorCode: string | undefined): string | undefined {
-  return typeof errorCode === 'string' ? loginErrorMessages[errorCode] : undefined;
-}
-
-function getLoginSuccessMessage(successCode: string | undefined): string | undefined {
-  return typeof successCode === 'string' ? loginSuccessMessages[successCode] : undefined;
-}
-
 export const metadata: Metadata = {
   title: 'Sign In | Magic Link SSO Next.js',
 };
@@ -50,21 +43,12 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: LoginPageProps): Promise<React.JSX.Element> {
-  const headerStore = await headers();
-  const host = headerStore.get('x-forwarded-host') ?? headerStore.get('host') ?? 'localhost:3001';
-  const appOrigin = getAppOrigin(host, headerStore.get('x-forwarded-proto'));
-  const resolvedSearchParams = await searchParams;
-  const errorValue = resolvedSearchParams?.error;
-  const returnUrlValue = resolvedSearchParams?.returnUrl;
-  const successValue = resolvedSearchParams?.success;
-  const scopeValue = resolvedSearchParams?.scope;
-  const requestedError = Array.isArray(errorValue) ? errorValue[0] : errorValue;
-  const requestedReturnUrl = Array.isArray(returnUrlValue) ? returnUrlValue[0] : returnUrlValue;
-  const requestedSuccess = Array.isArray(successValue) ? successValue[0] : successValue;
-  const requestedScope = Array.isArray(scopeValue) ? scopeValue[0] : scopeValue;
-  const returnUrl = normaliseReturnUrl(requestedReturnUrl, appOrigin, appOrigin);
-  const initialError = getLoginErrorMessage(requestedError);
-  const initialSuccess = getLoginSuccessMessage(requestedSuccess);
+  const appOrigin = getAppOrigin(await headers());
+  const params = (await searchParams) ?? {};
+  const returnUrl = normaliseReturnUrl(firstSearchParam(params.returnUrl), appOrigin, appOrigin);
+  const initialError = lookupMessage(loginErrorMessages, firstSearchParam(params.error));
+  const initialSuccess = lookupMessage(loginSuccessMessages, firstSearchParam(params.success));
+  const requestedScope = firstSearchParam(params.scope);
 
   return (
     <LoginForm

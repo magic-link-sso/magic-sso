@@ -113,88 +113,112 @@ async function writeRepositoryFile(rootDir, relativePath, contents) {
 }
 
 /**
- * @param {{
+ * @typedef {{
  *   apply: boolean;
  *   nextVersion: string;
  *   rootDir: string;
- * }} options
- * @returns {Promise<VersionChange[]>}
+ * }} BumpVersionOptions
  */
-export async function bumpVersion(options) {
-    const { apply, nextVersion, rootDir } = options;
-    /** @type {VersionChange[]} */
-    const changes = [];
 
-    for (const relativePath of JS_PACKAGE_FILES) {
-        const source = await readRepositoryFile(rootDir, relativePath);
-        const previousVersion = readJsonVersion(source);
+/**
+ * @param {BumpVersionOptions} options
+ * @param {string} relativePath
+ * @param {(source: string) => string} readVersion
+ * @param {(source: string, nextVersion: string) => string} replaceVersion
+ * @returns {Promise<VersionChange | null>}
+ */
+async function bumpManifestVersion(options, relativePath, readVersion, replaceVersion) {
+    const source = await readRepositoryFile(options.rootDir, relativePath);
+    const previousVersion = readVersion(source);
 
-        if (previousVersion === nextVersion) {
-            continue;
-        }
-
-        const nextSource = replaceJsonVersion(source, nextVersion);
-
-        if (apply) {
-            await writeRepositoryFile(rootDir, relativePath, nextSource);
-        }
-
-        changes.push({
-            file: relativePath,
-            nextVersion,
-            previousVersion,
-        });
+    if (previousVersion === options.nextVersion) {
+        return null;
     }
 
-    for (const { lockFile, packageNames, pyprojectFile } of PYTHON_PROJECTS) {
-        const pyprojectSource = await readRepositoryFile(rootDir, pyprojectFile);
-        const previousPyprojectVersion = readTomlVersion(pyprojectSource);
+    if (options.apply) {
+        await writeRepositoryFile(
+            options.rootDir,
+            relativePath,
+            replaceVersion(source, options.nextVersion),
+        );
+    }
 
-        if (previousPyprojectVersion !== nextVersion) {
-            const nextPyprojectSource = replaceTomlVersion(pyprojectSource, nextVersion);
+    return { file: relativePath, nextVersion: options.nextVersion, previousVersion };
+}
 
-            if (apply) {
-                await writeRepositoryFile(rootDir, pyprojectFile, nextPyprojectSource);
-            }
+/**
+ * @param {string} lockSource
+ * @param {string} lockFile
+ * @param {string} packageName
+ * @returns {string}
+ */
+function readUvLockPackageVersion(lockSource, lockFile, packageName) {
+    const packagePattern = new RegExp(
+        String.raw`\[\[package\]\]\nname = "${packageName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}"\nversion = "([^"]+)"`,
+        'm',
+    );
+    const packageVersion = packagePattern.exec(lockSource)?.[1];
 
-            changes.push({
-                file: pyprojectFile,
-                nextVersion,
-                previousVersion: previousPyprojectVersion,
-            });
-        }
+    if (!packageVersion) {
+        throw new Error(`Expected ${lockFile} to contain package "${packageName}".`);
+    }
 
-        let lockSource = await readRepositoryFile(rootDir, lockFile);
+    return packageVersion;
+}
 
-        for (const packageName of packageNames) {
-            const packagePattern = new RegExp(
-                String.raw`\[\[package\]\]\nname = "${packageName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}"\nversion = "([^"]+)"`,
-                'm',
-            );
-            const packageMatch = packagePattern.exec(lockSource);
+/**
+ * @param {BumpVersionOptions} options
+ * @param {{ lockFile: string; packageNames: readonly string[] }} project
+ * @returns {Promise<VersionChange[]>}
+ */
+async function bumpUvLockVersions(options, { lockFile, packageNames }) {
+    const { nextVersion } = options;
+    /** @type {VersionChange[]} */
+    const changes = [];
+    let lockSource = await readRepositoryFile(options.rootDir, lockFile);
 
-            if (!packageMatch?.[1]) {
-                throw new Error(`Expected ${lockFile} to contain package "${packageName}".`);
-            }
-
-            if (packageMatch[1] === nextVersion) {
-                continue;
-            }
-
+    for (const packageName of packageNames) {
+        const previousVersion = readUvLockPackageVersion(lockSource, lockFile, packageName);
+        if (previousVersion !== nextVersion) {
             lockSource = replaceUvLockPackageVersion(lockSource, packageName, nextVersion);
-            changes.push({
-                file: `${lockFile} (${packageName})`,
-                nextVersion,
-                previousVersion: packageMatch[1],
-            });
+            changes.push({ file: `${lockFile} (${packageName})`, nextVersion, previousVersion });
         }
+    }
 
-        if (apply) {
-            await writeRepositoryFile(rootDir, lockFile, lockSource);
-        }
+    if (options.apply) {
+        await writeRepositoryFile(options.rootDir, lockFile, lockSource);
     }
 
     return changes;
+}
+
+/**
+ * @param {BumpVersionOptions} options
+ * @returns {Promise<VersionChange[]>}
+ */
+export async function bumpVersion(options) {
+    /** @type {Array<VersionChange | null>} */
+    const changes = [];
+
+    for (const relativePath of JS_PACKAGE_FILES) {
+        changes.push(
+            await bumpManifestVersion(options, relativePath, readJsonVersion, replaceJsonVersion),
+        );
+    }
+
+    for (const project of PYTHON_PROJECTS) {
+        changes.push(
+            await bumpManifestVersion(
+                options,
+                project.pyprojectFile,
+                readTomlVersion,
+                replaceTomlVersion,
+            ),
+            ...(await bumpUvLockVersions(options, project)),
+        );
+    }
+
+    return changes.filter((change) => change !== null);
 }
 
 /**

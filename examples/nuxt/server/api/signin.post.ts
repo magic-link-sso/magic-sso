@@ -2,131 +2,21 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { createError, getRequestURL, readBody } from 'h3';
-import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
-import { readServerUrlConfigError } from './signin';
-
-interface SignInRequestBody {
-    email?: string;
-    returnUrl?: string;
-    scope?: string;
-    verifyUrl?: string;
-}
-
-interface SignInResult {
-    success: boolean;
-    message: string;
-    otpChallengeId?: string;
-    otpExpiresInSeconds?: number;
-    otpLength?: number;
-}
-
-function readOtpMetadata(
-    value: unknown,
-): Pick<SignInResult, 'otpChallengeId' | 'otpExpiresInSeconds' | 'otpLength'> {
-    if (typeof value !== 'object' || value === null) {
-        return {};
-    }
-    const challengeId = Reflect.get(value, 'otpChallengeId');
-    const expiresInSeconds = Reflect.get(value, 'otpExpiresInSeconds');
-    const length = Reflect.get(value, 'otpLength');
-    return typeof challengeId === 'string' &&
-        typeof expiresInSeconds === 'number' &&
-        typeof length === 'number'
-        ? {
-              otpChallengeId: challengeId,
-              otpExpiresInSeconds: expiresInSeconds,
-              otpLength: length,
-          }
-        : {};
-}
-
-function getServerUrl(magicSsoConfig: unknown): string {
-    if (
-        typeof magicSsoConfig === 'object' &&
-        magicSsoConfig !== null &&
-        'serverUrl' in magicSsoConfig &&
-        typeof magicSsoConfig.serverUrl === 'string' &&
-        magicSsoConfig.serverUrl.length > 0
-    ) {
-        return magicSsoConfig.serverUrl;
-    }
-
-    const fallbackServerUrl = process.env.MAGICSSO_SERVER_URL ?? process.env.APP_URL;
-    return typeof fallbackServerUrl === 'string' ? fallbackServerUrl : '';
-}
-
-function isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0;
-}
+import {
+    readValidSignInBody,
+    requestSignIn,
+    type SignInRequestBody,
+    type SignInResult,
+} from './signin';
 
 export default defineEventHandler(async (event): Promise<SignInResult> => {
-    const body = await readBody<SignInRequestBody>(event);
-    if (
-        !isNonEmptyString(body.email) ||
-        !isNonEmptyString(body.returnUrl) ||
-        !isNonEmptyString(body.verifyUrl)
-    ) {
+    const body = readValidSignInBody(await readBody<SignInRequestBody>(event));
+    if (body === null) {
         throw createError({
             statusCode: 400,
             statusMessage: 'Invalid sign-in request payload.',
         });
     }
 
-    const runtimeConfig = useRuntimeConfig(event);
-    const serverUrl = getServerUrl(runtimeConfig.magicSso);
-    if (serverUrl.length === 0) {
-        return {
-            success: false,
-            message: 'MAGICSSO_SERVER_URL is not configured.',
-        };
-    }
-
-    const serverUrlConfigError = readServerUrlConfigError(serverUrl, getRequestURL(event).origin);
-    if (typeof serverUrlConfigError === 'string') {
-        return {
-            success: false,
-            message: serverUrlConfigError,
-        };
-    }
-
-    try {
-        const response = await fetch(`${serverUrl}/signin`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify({
-                email: body.email,
-                returnUrl: body.returnUrl,
-                verifyUrl: body.verifyUrl,
-                ...(typeof body.scope === 'string' && body.scope.trim().length > 0
-                    ? { scope: body.scope.trim() }
-                    : {}),
-            }),
-        });
-
-        if (!response.ok) {
-            const payload: unknown = await response.json().catch(async () => ({
-                message: await response.text().catch(() => ''),
-            }));
-            return {
-                success: false,
-                message: buildFailureResult(payload).message,
-            };
-        }
-
-        const payload: unknown = await response.json().catch(() => null);
-        return {
-            success: true,
-            message: 'Verification email sent.',
-            ...readOtpMetadata(payload),
-        };
-    } catch (error: unknown) {
-        const message = readMessage(error);
-
-        return {
-            success: false,
-            message: message ?? 'Failed to send verification email.',
-        };
-    }
+    return requestSignIn(body, useRuntimeConfig(event).magicSso, getRequestURL(event).origin);
 });

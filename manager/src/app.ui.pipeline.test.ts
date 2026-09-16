@@ -230,4 +230,54 @@ describe('manager service ui diff and apply routes', () => {
             await app.close();
         }
     });
+    it.each([
+        {
+            expectedStatusCode: 502,
+            name: 'the reload endpoint is unreachable',
+            prepare: (): void => undefined,
+        },
+        {
+            expectedStatusCode: 409,
+            name: 'another apply holds the lock',
+            prepare: (settings: ReturnType<typeof createFileBackedSettings>): void => {
+                writeFileSync(
+                    settings.paths.lockFile,
+                    `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
+                    'utf8',
+                );
+            },
+        },
+    ])('renders the diff page with an error when $name', async (testCase) => {
+        const tempDirectory = createTempDirectory('magic-sso-manager-ui-apply-failure-');
+        const settings = createFileBackedSettings(tempDirectory, {
+            secret: 'manager-reload-secret-0123456789abcdefghij',
+            timeoutMs: 5_000,
+            url: 'http://127.0.0.1:3000/internal/access-config/reload',
+        });
+        writeFileSync(settings.paths.baseConfigFile, createBaseConfigToml(), 'utf8');
+        writeValidState(settings);
+        testCase.prepare(settings);
+
+        const app = await buildApp({
+            fetchImplementation: vi.fn<typeof fetch>(async () => {
+                throw new Error('connect ECONNREFUSED');
+            }),
+            logger: false,
+            settings,
+        });
+
+        try {
+            const response = await app.inject({
+                headers: uiHeaders,
+                method: 'POST',
+                payload: '',
+                url: '/diff/apply',
+            });
+
+            expect(response.statusCode).toBe(testCase.expectedStatusCode);
+            expect(response.body).toContain('Check pending changes');
+        } finally {
+            await app.close();
+        }
+    });
 });

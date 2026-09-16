@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { normaliseReturnUrl } from '@magic-link-sso/nextjs';
-import { sendMagicLink } from '../../login/signin';
+import { readOtpMetadata, sendMagicLink, type SignInResult } from '../../login/signin';
 
 function acceptsJson(request: NextRequest): boolean {
     const accept = request.headers.get('accept');
@@ -29,75 +29,60 @@ function buildLoginRedirect(
 ): NextResponse {
     const loginUrl = new URL('/login', request.nextUrl.origin);
     loginUrl.searchParams.set('returnUrl', returnUrl);
-    if (typeof scope === 'string' && scope.length > 0) {
-        loginUrl.searchParams.set('scope', scope);
-    }
-    if (typeof result.error === 'string') {
-        loginUrl.searchParams.set('error', result.error);
-    }
-    if (typeof result.success === 'string') {
-        loginUrl.searchParams.set('success', result.success);
+    for (const [name, value] of Object.entries({ scope, ...result })) {
+        if (typeof value === 'string' && value.length > 0) {
+            loginUrl.searchParams.set(name, value);
+        }
     }
     return NextResponse.redirect(loginUrl, 303);
 }
 
+interface SignInOutcome {
+    body: Record<string, unknown>;
+    redirect: { error?: string; success?: string };
+    status: number;
+}
+
+function readFormText(formData: FormData, name: string): string | undefined {
+    const value = formData.get(name);
+    return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function failedSignIn(code: string): SignInOutcome {
+    return {
+        body: { message: getErrorMessage(code), success: false },
+        redirect: { error: code },
+        status: 400,
+    };
+}
+
+function signInOutcomeFor(result: SignInResult): SignInOutcome {
+    if (!result.success) {
+        return failedSignIn(result.code ?? 'signin-request-failed');
+    }
+
+    return {
+        body: { message: 'Verification email sent', ...readOtpMetadata(result), success: true },
+        redirect: { success: 'verification-email-sent' },
+        status: 200,
+    };
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+    const appOrigin = request.nextUrl.origin;
     const formData = await request.formData();
-    const email = formData.get('email');
-    const verifyUrl = formData.get('verifyUrl');
-    const scopeValue = formData.get('scope');
-    const scope =
-        typeof scopeValue === 'string' && scopeValue.trim().length > 0 ? scopeValue : undefined;
-    const returnUrlValue = formData.get('returnUrl');
-    const returnUrl = normaliseReturnUrl(
-        typeof returnUrlValue === 'string' ? returnUrlValue : undefined,
-        request.nextUrl.origin,
-        request.nextUrl.origin,
-    );
+    const email = readFormText(formData, 'email');
+    const verifyUrl = readFormText(formData, 'verifyUrl');
+    const scope = readFormText(formData, 'scope');
+    const returnUrl = normaliseReturnUrl(readFormText(formData, 'returnUrl'), appOrigin, appOrigin);
+    const respond = (outcome: SignInOutcome): NextResponse =>
+        acceptsJson(request)
+            ? NextResponse.json(outcome.body, { status: outcome.status })
+            : buildLoginRedirect(request, returnUrl, scope, outcome.redirect);
 
-    if (
-        typeof email !== 'string' ||
-        email.length === 0 ||
-        typeof verifyUrl !== 'string' ||
-        verifyUrl.length === 0
-    ) {
-        if (acceptsJson(request)) {
-            return NextResponse.json(
-                { message: getErrorMessage('invalid-signin-request'), success: false },
-                { status: 400 },
-            );
-        }
-        return buildLoginRedirect(request, returnUrl, scope, { error: 'invalid-signin-request' });
+    if (typeof email !== 'string' || typeof verifyUrl !== 'string') {
+        return respond(failedSignIn('invalid-signin-request'));
     }
 
-    const result = await sendMagicLink(email, returnUrl, verifyUrl, scope);
-    if (result.success) {
-        if (acceptsJson(request)) {
-            return NextResponse.json({
-                message: 'Verification email sent',
-                ...(typeof result.otpChallengeId === 'string' &&
-                typeof result.otpLength === 'number'
-                    ? { otpChallengeId: result.otpChallengeId, otpLength: result.otpLength }
-                    : {}),
-                success: true,
-            });
-        }
-        return buildLoginRedirect(request, returnUrl, scope, {
-            success: 'verification-email-sent',
-        });
-    }
-
-    if (acceptsJson(request)) {
-        return NextResponse.json(
-            {
-                message: getErrorMessage(result.code ?? 'signin-request-failed'),
-                success: false,
-            },
-            { status: 400 },
-        );
-    }
-
-    return buildLoginRedirect(request, returnUrl, scope, {
-        error: result.code ?? 'signin-request-failed',
-    });
+    return respond(signInOutcomeFor(await sendMagicLink(email, returnUrl, verifyUrl, scope)));
 }

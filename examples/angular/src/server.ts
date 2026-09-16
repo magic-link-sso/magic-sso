@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import 'dotenv/config';
-import { escapeHtml, readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
-import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
+import { escapeHtml, readCookieValue } from '@magic-link-sso/config-core/runtime';
 import express, {
     type NextFunction as ExpressNextFunction,
     type Request as ExpressRequest,
@@ -22,45 +21,30 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     buildAuthCookieOptions,
-    exchangeEmailOtp,
-    getJwtSecret,
     normaliseReturnUrl,
-    verifyAuthToken,
     verifyRequestAuth,
 } from '@magic-link-sso/angular';
-import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
-import { readServerUrlConfigError } from './signin-utils';
+import {
+    exchangeOtpCode,
+    exchangeVerificationToken,
+    hasValidCsrfPair,
+    isSameOriginMutation,
+    previewVerificationToken,
+    readBodyString,
+    readSignInRequestBody,
+    readVerifyOtpRequestBody,
+    requestSignIn,
+    selectVerifyToken,
+    toWebHeaders,
+    type SignInResult,
+} from './server-flows';
 export { AngularAppEngine } from '@angular/ssr';
-
-interface SignInRequestBody {
-    email?: string;
-    returnUrl?: string;
-    scope?: string;
-    verifyUrl?: string;
-}
-
-interface SignInResult {
-    message: string;
-    otpChallengeId?: string;
-    otpLength?: number;
-    success: boolean;
-}
-
-interface VerifyOtpRequestBody {
-    challengeId?: string;
-    code?: string;
-    returnUrl?: string;
-}
 
 type AsyncExpressHandler = (
     request: ExpressRequest,
     response: ExpressResponse,
     next: ExpressNextFunction,
 ) => Promise<void>;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
@@ -75,22 +59,11 @@ function getRequestOrigin(request: ExpressRequest): string {
 }
 
 function hasSameOriginMutationSource(request: ExpressRequest): boolean {
-    const expectedOrigin = getRequestOrigin(request);
-    const originHeader = request.get('origin');
-    if (typeof originHeader === 'string' && originHeader.length > 0) {
-        return originHeader === expectedOrigin;
-    }
-
-    const refererHeader = request.get('referer');
-    if (typeof refererHeader !== 'string' || refererHeader.length === 0) {
-        return false;
-    }
-
-    try {
-        return new URL(refererHeader).origin === expectedOrigin;
-    } catch {
-        return false;
-    }
+    return isSameOriginMutation(
+        getRequestOrigin(request),
+        request.get('origin'),
+        request.get('referer'),
+    );
 }
 
 function buildRequestUrl(request: ExpressRequest): string {
@@ -98,58 +71,14 @@ function buildRequestUrl(request: ExpressRequest): string {
 }
 
 function buildWebRequest(request: ExpressRequest): Request {
-    const headers = new Headers();
-    for (const [name, value] of Object.entries(request.headers)) {
-        if (Array.isArray(value)) {
-            for (const entry of value) {
-                headers.append(name, entry);
-            }
-            continue;
-        }
-
-        if (typeof value === 'string') {
-            headers.set(name, value);
-        }
-    }
-
     return new Request(buildRequestUrl(request), {
-        headers,
+        headers: toWebHeaders(request.headers),
         method: request.method,
     });
 }
 
-function readBodyString(value: unknown): string | undefined {
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
 function readQueryString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function readPreviewSecret(): string | null {
-    const previewSecret = process.env['MAGICSSO_PREVIEW_SECRET'];
-    return typeof previewSecret === 'string' && previewSecret.length > 0 ? previewSecret : null;
-}
-
-function readSignInRequestBody(value: unknown): SignInRequestBody {
-    const record = isRecord(value) ? value : null;
-
-    return {
-        email: readBodyString(record?.['email']),
-        returnUrl: readBodyString(record?.['returnUrl']),
-        scope: readBodyString(record?.['scope']),
-        verifyUrl: readBodyString(record?.['verifyUrl']),
-    };
-}
-
-function readVerifyOtpRequestBody(value: unknown): VerifyOtpRequestBody {
-    const record = isRecord(value) ? value : null;
-
-    return {
-        challengeId: readBodyString(record?.['challengeId']),
-        code: readBodyString(record?.['code']),
-        returnUrl: readBodyString(record?.['returnUrl']),
-    };
 }
 
 function buildLoginRedirectUrl(request: ExpressRequest, returnUrl: string, error?: string): string {
@@ -206,10 +135,6 @@ function clearVerifyCookies(response: ExpressResponse, request: ExpressRequest):
 
 function createVerifyCsrfToken(): string {
     return randomBytes(32).toString('base64url');
-}
-
-function hasValidVerifyCsrfToken(submittedToken: string, cookieToken: string): boolean {
-    return safeCompare(submittedToken, cookieToken);
 }
 
 function renderVerifyEmailConfirmationPage(
@@ -363,11 +288,10 @@ function clearAuthCookie(response: ExpressResponse): void {
     });
 }
 
-async function readResponsePayload(response: Response): Promise<unknown> {
-    return response.json().catch(async () => ({
-        message: await response.text().catch(() => ''),
-    }));
-}
+const invalidOtpResult: SignInResult = {
+    success: false,
+    message: 'Invalid or expired code.',
+};
 
 function handleAsync(handler: AsyncExpressHandler): ExpressRequestHandler {
     return (request, response, next) => {
@@ -394,89 +318,12 @@ function createApp(): express.Express {
     app.post(
         '/api/signin',
         handleAsync(async (request, response) => {
-            const body = readSignInRequestBody(request.body);
-            if (
-                typeof body.email !== 'string' ||
-                typeof body.returnUrl !== 'string' ||
-                typeof body.verifyUrl !== 'string'
-            ) {
-                response.status(400).json({
-                    success: false,
-                    message: 'Invalid sign-in request payload.',
-                } satisfies SignInResult);
-                return;
-            }
-
-            const serverUrl = process.env['MAGICSSO_SERVER_URL'];
-            if (typeof serverUrl !== 'string' || serverUrl.length === 0) {
-                response.status(500).json({
-                    success: false,
-                    message: 'MAGICSSO_SERVER_URL is not configured.',
-                } satisfies SignInResult);
-                return;
-            }
-
-            const serverUrlConfigError = readServerUrlConfigError(
-                serverUrl,
+            const { result, status } = await requestSignIn(
+                readSignInRequestBody(request.body),
                 getRequestOrigin(request),
+                process.env['MAGICSSO_SERVER_URL'],
             );
-            if (typeof serverUrlConfigError === 'string') {
-                response.status(500).json({
-                    success: false,
-                    message: serverUrlConfigError,
-                } satisfies SignInResult);
-                return;
-            }
-
-            try {
-                const ssoResponse = await fetch(new URL('/signin', serverUrl), {
-                    method: 'POST',
-                    headers: {
-                        'content-type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: body.email,
-                        returnUrl: body.returnUrl,
-                        verifyUrl: body.verifyUrl,
-                        ...(typeof body.scope === 'string' && body.scope.trim().length > 0
-                            ? { scope: body.scope.trim() }
-                            : {}),
-                    }),
-                    cache: 'no-store',
-                });
-
-                if (!ssoResponse.ok) {
-                    const payload = await readResponsePayload(ssoResponse);
-                    response.status(ssoResponse.status).json({
-                        success: false,
-                        message: buildFailureResult(payload).message,
-                    } satisfies SignInResult);
-                    return;
-                }
-
-                const payload = await readResponsePayload(ssoResponse);
-                const otpChallengeId =
-                    isRecord(payload) && typeof payload['otpChallengeId'] === 'string'
-                        ? payload['otpChallengeId']
-                        : undefined;
-                const otpLength =
-                    isRecord(payload) && Number.isInteger(payload['otpLength'])
-                        ? payload['otpLength']
-                        : undefined;
-
-                response.json({
-                    success: true,
-                    message: 'Verification email sent.',
-                    ...(typeof otpChallengeId === 'string' && typeof otpLength === 'number'
-                        ? { otpChallengeId, otpLength }
-                        : {}),
-                } satisfies SignInResult);
-            } catch (error: unknown) {
-                response.status(502).json({
-                    success: false,
-                    message: readMessage(error) ?? 'Failed to send verification email.',
-                } satisfies SignInResult);
-            }
+            response.status(status).json(result);
         }),
     );
 
@@ -484,43 +331,21 @@ function createApp(): express.Express {
         '/api/verify-email/otp',
         handleAsync(async (request, response) => {
             if (!hasSameOriginMutationSource(request)) {
-                response.status(403).json({
-                    success: false,
-                    message: 'Invalid or expired code.',
-                } satisfies SignInResult);
+                response.status(403).json(invalidOtpResult);
                 return;
             }
 
-            const body = readVerifyOtpRequestBody(request.body);
-            const appOrigin = getRequestOrigin(request);
-            const serverUrl = process.env['MAGICSSO_SERVER_URL'];
-            if (
-                typeof body.challengeId !== 'string' ||
-                typeof body.code !== 'string' ||
-                typeof serverUrl !== 'string' ||
-                serverUrl.length === 0
-            ) {
-                response.status(400).json({
-                    success: false,
-                    message: 'Invalid or expired code.',
-                } satisfies SignInResult);
+            const accessToken = await exchangeOtpCode(
+                readVerifyOtpRequestBody(request.body),
+                getRequestOrigin(request),
+                process.env['MAGICSSO_SERVER_URL'],
+            );
+            if (accessToken === null) {
+                response.status(400).json(invalidOtpResult);
                 return;
             }
 
-            const result = await exchangeEmailOtp({
-                challengeId: body.challengeId,
-                code: body.code,
-                expectedAudience: appOrigin,
-            });
-            if (result === null) {
-                response.status(400).json({
-                    success: false,
-                    message: 'Invalid or expired code.',
-                } satisfies SignInResult);
-                return;
-            }
-
-            setAuthCookie(response, result.accessToken);
+            setAuthCookie(response, accessToken);
             response.json({ success: true, message: 'Signed in.' } satisfies SignInResult);
         }),
     );
@@ -528,81 +353,30 @@ function createApp(): express.Express {
     app.get(
         '/verify-email',
         handleAsync(async (request, response) => {
-            const appOrigin = getRequestOrigin(request);
-            const token = readQueryString(request.query['token']);
             const returnUrl = normaliseReturnUrl(
                 readQueryString(request.query['returnUrl']),
-                appOrigin,
+                getRequestOrigin(request),
                 '/',
             );
-
-            if (typeof token !== 'string') {
-                response.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, 'missing-verification-token'),
-                );
+            const preview = await previewVerificationToken({
+                previewSecret: process.env['MAGICSSO_PREVIEW_SECRET'],
+                serverUrl: process.env['MAGICSSO_SERVER_URL'],
+                token: readQueryString(request.query['token']),
+            });
+            if ('error' in preview) {
+                response.redirect(buildLoginRedirectUrl(request, returnUrl, preview.error));
                 return;
             }
 
-            const serverUrl = process.env['MAGICSSO_SERVER_URL'];
-            if (typeof serverUrl !== 'string' || serverUrl.length === 0) {
-                response.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, 'verify-email-misconfigured'),
-                );
-                return;
-            }
-            const previewSecret = readPreviewSecret();
-            if (previewSecret === null) {
-                response.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, 'verify-email-misconfigured'),
-                );
-                return;
-            }
-
-            try {
-                const previewUrl = new URL('/verify-email', serverUrl);
-                previewUrl.searchParams.set('token', token);
-
-                const verifyResponse = await fetch(previewUrl, {
-                    headers: {
-                        accept: 'application/json',
-                        'x-magic-sso-preview-secret': previewSecret,
-                    },
-                    cache: 'no-store',
-                });
-
-                if (!verifyResponse.ok) {
-                    response.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'),
-                    );
-                    return;
-                }
-
-                const payload: unknown = await verifyResponse.json();
-                if (!isVerifyEmailPreviewResponse(payload)) {
-                    response.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'),
-                    );
-                    return;
-                }
-
-                const csrfToken = createVerifyCsrfToken();
-                response.cookie(
-                    verifyCsrfCookieName,
-                    csrfToken,
-                    buildVerifyCsrfCookieOptions(request),
-                );
-                response.cookie(
-                    verifyTokenCookieName,
-                    token,
-                    buildVerifyTokenCookieOptions(request),
-                );
-                response.type('text/html; charset=utf-8');
-                response.send(
-                    renderVerifyEmailConfirmationPage(payload.email, returnUrl, csrfToken),
-                );
-            } catch {
-                response.redirect(buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'));
-            }
+            const csrfToken = createVerifyCsrfToken();
+            response.cookie(verifyCsrfCookieName, csrfToken, buildVerifyCsrfCookieOptions(request));
+            response.cookie(
+                verifyTokenCookieName,
+                preview.token,
+                buildVerifyTokenCookieOptions(request),
+            );
+            response.type('text/html; charset=utf-8');
+            response.send(renderVerifyEmailConfirmationPage(preview.email, returnUrl, csrfToken));
         }),
     );
 
@@ -610,104 +384,36 @@ function createApp(): express.Express {
         '/verify-email',
         handleAsync(async (request, response) => {
             const appOrigin = getRequestOrigin(request);
-            const submittedToken = readBodyString(request.body['token']);
-            const cookieToken = readCookieValue(request.headers.cookie, verifyTokenCookieName);
-            const submittedCsrfToken = readBodyString(request.body['csrfToken']);
             const returnUrl = normaliseReturnUrl(
                 readBodyString(request.body['returnUrl']),
                 appOrigin,
                 '/',
             );
-            const cookieCsrfToken = readCookieValue(request.headers.cookie, verifyCsrfCookieName);
-            const token =
-                typeof submittedToken === 'string'
-                    ? typeof cookieToken === 'string' && submittedToken !== cookieToken
-                        ? undefined
-                        : submittedToken
-                    : cookieToken;
+            const token = selectVerifyToken(
+                readBodyString(request.body['token']),
+                readCookieValue(request.headers.cookie, verifyTokenCookieName),
+            );
+            const csrfIsValid = hasValidCsrfPair(
+                readBodyString(request.body['csrfToken']),
+                readCookieValue(request.headers.cookie, verifyCsrfCookieName),
+            );
+            const outcome =
+                typeof token === 'string' && csrfIsValid
+                    ? await exchangeVerificationToken({
+                          appOrigin,
+                          serverUrl: process.env['MAGICSSO_SERVER_URL'],
+                          token,
+                      })
+                    : { error: 'verify-email-failed' };
 
-            if (
-                typeof token !== 'string' ||
-                typeof submittedCsrfToken !== 'string' ||
-                typeof cookieCsrfToken !== 'string' ||
-                !hasValidVerifyCsrfToken(submittedCsrfToken, cookieCsrfToken)
-            ) {
-                clearVerifyCookies(response, request);
-                response.redirect(buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'));
+            clearVerifyCookies(response, request);
+            if ('error' in outcome) {
+                response.redirect(buildLoginRedirectUrl(request, returnUrl, outcome.error));
                 return;
             }
 
-            const serverUrl = process.env['MAGICSSO_SERVER_URL'];
-            if (typeof serverUrl !== 'string' || serverUrl.length === 0) {
-                clearVerifyCookies(response, request);
-                response.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, 'verify-email-misconfigured'),
-                );
-                return;
-            }
-
-            try {
-                const verifyUrl = new URL('/verify-email', serverUrl);
-
-                const verifyResponse = await fetch(verifyUrl, {
-                    method: 'POST',
-                    headers: {
-                        accept: 'application/json',
-                        'content-type': 'application/json',
-                    },
-                    body: JSON.stringify({ token }),
-                    cache: 'no-store',
-                });
-
-                if (!verifyResponse.ok) {
-                    clearVerifyCookies(response, request);
-                    response.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'),
-                    );
-                    return;
-                }
-
-                const payload: unknown = await verifyResponse.json();
-                if (!isVerifyEmailResponse(payload)) {
-                    clearVerifyCookies(response, request);
-                    response.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'),
-                    );
-                    return;
-                }
-
-                const jwtSecret = getJwtSecret();
-                if (jwtSecret === null) {
-                    clearVerifyCookies(response, request);
-                    response.redirect(
-                        buildLoginRedirectUrl(
-                            request,
-                            returnUrl,
-                            'session-verification-misconfigured',
-                        ),
-                    );
-                    return;
-                }
-
-                const auth = await verifyAuthToken(payload.accessToken, jwtSecret, {
-                    expectedAudience: getRequestOrigin(request),
-                    expectedIssuer: new URL(serverUrl).origin,
-                });
-                if (auth === null) {
-                    clearVerifyCookies(response, request);
-                    response.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, 'session-verification-failed'),
-                    );
-                    return;
-                }
-
-                clearVerifyCookies(response, request);
-                setAuthCookie(response, payload.accessToken);
-                response.redirect(returnUrl);
-            } catch {
-                clearVerifyCookies(response, request);
-                response.redirect(buildLoginRedirectUrl(request, returnUrl, 'verify-email-failed'));
-            }
+            setAuthCookie(response, outcome.accessToken);
+            response.redirect(returnUrl);
         }),
     );
 

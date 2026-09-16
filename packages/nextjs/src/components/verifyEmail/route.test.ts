@@ -1,11 +1,38 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
+import { SignJWT } from 'jose';
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VerifyEmailRoute } from './route';
 
 const serverUrl = 'https://sso.example.com';
+
+const jwtSecret = 'jwt-secret-0123456789-0123456789';
+
+function createConfirmedPost(): NextRequest {
+    const formData = new FormData();
+    formData.set('csrfToken', 'csrf-pair');
+    formData.set('returnUrl', '/albums');
+    const request = new NextRequest('https://app.example.com/verify-email', {
+        method: 'POST',
+        body: formData,
+    });
+    request.cookies.set('magic-sso-verify-csrf', 'csrf-pair');
+    request.cookies.set('magic-sso-verify-token', 'abc');
+    return request;
+}
+
+async function signAccessToken(secret: string): Promise<string> {
+    return new SignJWT({ email: 'user@example.com', scope: '*', siteId: 'app' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setAudience('https://app.example.com')
+        .setIssuer(serverUrl)
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .setJti('session-1')
+        .sign(new TextEncoder().encode(secret));
+}
 
 function createGetRequest(url: string): NextRequest {
     return new NextRequest(url, { method: 'GET' });
@@ -95,5 +122,90 @@ describe('VerifyEmailRoute', () => {
 
         expect(response.headers.get('location')).toContain('error=verify-email-failed');
         expect(response.cookies.get('magic-sso-verify-token')?.value).toBe('');
+    });
+    describe('confirmed POST', () => {
+        beforeEach(() => {
+            process.env.MAGICSSO_JWT_SECRET = jwtSecret;
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        });
+
+        afterEach(() => {
+            delete process.env.MAGICSSO_JWT_SECRET;
+        });
+
+        it('exchanges the token and sets the session cookie', async () => {
+            const accessToken = await signAccessToken(jwtSecret);
+            const fetchMock = vi
+                .spyOn(globalThis, 'fetch')
+                .mockResolvedValue(Response.json({ accessToken }));
+
+            const response = await VerifyEmailRoute(createConfirmedPost());
+
+            expect(response.headers.get('location')).toBe('https://app.example.com/albums');
+            expect(response.cookies.get('token')?.value).toBe(accessToken);
+            expect(response.cookies.get('magic-sso-verify-token')?.value).toBe('');
+            const [requestUrl, init] = fetchMock.mock.calls[0] ?? [];
+            expect(String(requestUrl)).toBe(`${serverUrl}/verify-email`);
+            expect(init?.body).toBe(JSON.stringify({ token: 'abc' }));
+        });
+
+        it.each([
+            {
+                expectedError: 'verify-email-misconfigured',
+                name: 'the JWT secret is missing',
+                prepare: (): void => {
+                    delete process.env.MAGICSSO_JWT_SECRET;
+                },
+            },
+            {
+                expectedError: 'verify-email-misconfigured',
+                name: 'the server URL is missing',
+                prepare: (): void => {
+                    delete process.env.MAGICSSO_SERVER_URL;
+                },
+            },
+            {
+                expectedError: 'verify-email-failed',
+                name: 'the server rejects the token',
+                prepare: (): void => {
+                    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+                        Response.json({ message: 'Token already used' }, { status: 400 }),
+                    );
+                },
+            },
+            {
+                expectedError: 'verify-email-failed',
+                name: 'the server response has no access token',
+                prepare: (): void => {
+                    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({}));
+                },
+            },
+            {
+                expectedError: 'verify-email-failed',
+                name: 'the server is unreachable',
+                prepare: (): void => {
+                    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
+                },
+            },
+        ])('redirects to login when $name', async ({ expectedError, prepare }) => {
+            prepare();
+
+            const response = await VerifyEmailRoute(createConfirmedPost());
+
+            expect(response.headers.get('location')).toContain(`error=${expectedError}`);
+            expect(response.cookies.get('token')).toBeUndefined();
+        });
+
+        it('rejects access tokens signed with a different secret', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+                Response.json({
+                    accessToken: await signAccessToken('other-secret-0123456789-012345678'),
+                }),
+            );
+
+            const response = await VerifyEmailRoute(createConfirmedPost());
+
+            expect(response.headers.get('location')).toContain('error=session-verification-failed');
+        });
     });
 });

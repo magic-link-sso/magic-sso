@@ -45,7 +45,7 @@
         "python:test": "make python-test",
         "release:prepare": "node scripts/release-prepare.mjs",
         "test": "pnpm run test:root && turbo run test",
-        "test:coverage": "pnpm --filter magic-sso-server test:coverage",
+        "test:coverage": "node scripts/coverage.mjs",
         "test:e2e": "pnpm --filter magic-sso-e2e test:e2e",
         "test:e2e:ui": "pnpm --filter magic-sso-e2e test:e2e:ui",
         "test:js": "pnpm run test:root && turbo run test --filter=!example-app-django",

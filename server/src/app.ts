@@ -993,6 +993,27 @@ type SignInResolutionResult =
           ok: false;
       };
 
+type ResolvedSignInRequest = Extract<SignInResolutionResult, { ok: true }>;
+
+function findSiteForAbsoluteUrl(config: AppConfig, url: string): SiteConfig | undefined {
+    const parsedUrl = parseTrustedAbsoluteUrl(url);
+    return parsedUrl === null ? undefined : findSiteByOrigin(config, parsedUrl.origin);
+}
+
+function resolveRedirectTarget(
+    config: AppConfig,
+    url: string,
+    knownSite: SiteConfig | undefined,
+): { normalisedUrl: string; site: SiteConfig } | null {
+    const site = knownSite ?? findSiteForAbsoluteUrl(config, url);
+    if (typeof site === 'undefined') {
+        return null;
+    }
+
+    const normalisedUrl = normaliseRedirectUrlForSite(url, site);
+    return typeof normalisedUrl === 'string' ? { normalisedUrl, site } : null;
+}
+
 function resolveSignInRequest(
     config: AppConfig,
     options: {
@@ -1000,77 +1021,37 @@ function resolveSignInRequest(
         verifyUrl?: string | undefined;
     },
 ): SignInResolutionResult {
-    let site: SiteConfig | undefined;
-    let safeReturnUrl: string | undefined;
-
-    if (typeof options.returnUrl === 'string') {
-        const parsedReturnUrl = parseTrustedAbsoluteUrl(options.returnUrl);
-        if (parsedReturnUrl === null) {
-            return {
-                ok: false,
-                messageKey: 'invalidOrUntrustedReturnUrl',
-            };
-        }
-
-        site = findSiteByOrigin(config, parsedReturnUrl.origin);
-        if (typeof site === 'undefined') {
-            return {
-                ok: false,
-                messageKey: 'invalidOrUntrustedReturnUrl',
-            };
-        }
-
-        const normalisedReturnUrl = normaliseRedirectUrlForSite(options.returnUrl, site);
-        if (typeof normalisedReturnUrl !== 'string') {
-            return {
-                ok: false,
-                messageKey: 'invalidOrUntrustedReturnUrl',
-            };
-        }
-
-        safeReturnUrl = normalisedReturnUrl;
+    const returnTarget =
+        typeof options.returnUrl === 'string'
+            ? resolveRedirectTarget(config, options.returnUrl, undefined)
+            : undefined;
+    if (returnTarget === null) {
+        return {
+            ok: false,
+            messageKey: 'invalidOrUntrustedReturnUrl',
+        };
     }
 
+    const safeReturnUrl = returnTarget?.normalisedUrl;
+
     if (typeof options.verifyUrl === 'string') {
-        let verifySite = site;
-        if (typeof verifySite === 'undefined') {
-            const parsedVerifyUrl = parseTrustedAbsoluteUrl(options.verifyUrl);
-            if (parsedVerifyUrl === null) {
-                return {
-                    ok: false,
-                    messageKey: 'invalidOrUntrustedVerifyUrl',
-                };
-            }
-
-            verifySite = findSiteByOrigin(config, parsedVerifyUrl.origin);
-        }
-
-        if (typeof verifySite === 'undefined') {
+        const verifyTarget = resolveRedirectTarget(config, options.verifyUrl, returnTarget?.site);
+        if (verifyTarget === null) {
             return {
                 ok: false,
                 messageKey: 'invalidOrUntrustedVerifyUrl',
             };
         }
-
-        const normalisedVerifyUrl = normaliseRedirectUrlForSite(options.verifyUrl, verifySite);
-        if (typeof normalisedVerifyUrl !== 'string') {
-            return {
-                ok: false,
-                messageKey: 'invalidOrUntrustedVerifyUrl',
-            };
-        }
-
-        site = verifySite;
 
         return {
             ok: true,
             safeReturnUrl,
-            safeVerifyUrl: normalisedVerifyUrl,
-            site,
+            safeVerifyUrl: verifyTarget.normalisedUrl,
+            site: verifyTarget.site,
         };
     }
 
-    if (typeof site === 'undefined') {
+    if (typeof returnTarget === 'undefined') {
         return {
             ok: false,
             messageKey: 'invalidRequest',
@@ -1080,9 +1061,176 @@ function resolveSignInRequest(
     return {
         ok: true,
         safeReturnUrl,
-        safeVerifyUrl: options.verifyUrl ?? defaultVerifyUrl(config),
-        site,
+        safeVerifyUrl: defaultVerifyUrl(config),
+        site: returnTarget.site,
     };
+}
+
+async function respondWithSignInError(
+    reply: FastifyReply,
+    options: {
+        config: AppConfig;
+        isJson: boolean;
+        jsonMessage: string;
+        messageKey: HostedAuthFeedbackKey;
+        returnUrl: string;
+        scope: string;
+        statusCode: number;
+        verifyUrl: string;
+    },
+): Promise<void> {
+    if (options.isJson) {
+        reply.code(options.statusCode).send({ message: options.jsonMessage });
+        return;
+    }
+
+    await renderSigninPage(
+        reply,
+        options.config,
+        createHtmlSecurityContext(reply, options.config, {
+            includeCsrfToken: true,
+        }),
+        {
+            returnUrl: options.returnUrl,
+            scope: options.scope,
+            verifyUrl: options.verifyUrl,
+            message: false,
+            error: getHostedAuthFeedbackMessage(options.config, options.messageKey),
+            statusCode: options.statusCode,
+        },
+    );
+}
+
+async function readValidSignInBody(
+    request: FastifyRequest<{ Body: unknown }>,
+    reply: FastifyReply,
+    options: { config: AppConfig; isJson: boolean },
+): Promise<z.infer<typeof signInBodySchema> | null> {
+    const { config, isJson } = options;
+    const rejection = {
+        config,
+        isJson,
+        messageKey: 'invalidRequest' as const,
+        returnUrl: '',
+        scope: normalizeRequestedScope(readSubmittedField(request.body, 'scope')),
+        verifyUrl: '',
+    };
+
+    if (!hasSafeApiContentType(request, config) && !hasValidHtmlCsrfToken(request, config)) {
+        request.log.info('Rejected sign-in form request with invalid CSRF token');
+        await respondWithSignInError(reply, {
+            ...rejection,
+            jsonMessage: 'Invalid or missing CSRF token',
+            statusCode: 403,
+        });
+        return null;
+    }
+
+    const parsedBody = signInBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+        request.log.info({ issues: parsedBody.error.issues }, 'Rejected invalid sign-in request');
+        await respondWithSignInError(reply, {
+            ...rejection,
+            jsonMessage: 'Invalid request',
+            statusCode: 400,
+        });
+        return null;
+    }
+
+    return parsedBody.data;
+}
+
+async function createSignInOtpChallenge(options: {
+    config: AppConfig;
+    email: string;
+    otpChallengeStore: OtpChallengeStore;
+    resolvedRequest: ResolvedSignInRequest;
+    scope: string;
+    token: string;
+    verifyUrl: string | undefined;
+}): Promise<{ otpChallengeId: string; otpCode: string }> {
+    const { config, email, resolvedRequest, scope } = options;
+    const otpSecret = config.otp.secret;
+    const verificationGrant = await verifyEmailToken(options.token, config.emailSecret, {
+        expectedIssuer: getAppOrigin(config),
+    });
+    if (
+        typeof otpSecret !== 'string' ||
+        verificationGrant === null ||
+        typeof verificationGrant.exp !== 'number'
+    ) {
+        throw new Error('Unable to create OTP challenge for a verification grant.');
+    }
+
+    const otpChallengeId = randomUUID();
+    const otpCode = generateOtpCode(config.otp.length);
+    const siteId = resolvedRequest.site.id;
+    const { safeReturnUrl } = resolvedRequest;
+    const safeVerifyUrl =
+        typeof options.verifyUrl === 'string' ? resolvedRequest.safeVerifyUrl : undefined;
+    const createdAt = Date.now();
+
+    await options.otpChallengeStore.create({
+        attemptsRemaining: config.otp.allowedAttempts,
+        challengeId: otpChallengeId,
+        createdAt,
+        email,
+        expiresAt: Math.min(
+            createdAt + config.otp.expirationSeconds * 1000,
+            verificationGrant.exp * 1000,
+        ),
+        jti: verificationGrant.jti,
+        otpHash: hashOtpCode({
+            challengeId: otpChallengeId,
+            code: otpCode,
+            jti: verificationGrant.jti,
+            secret: otpSecret,
+            siteId,
+        }),
+        rotationKey: createOtpRotationKey({
+            email,
+            safeReturnUrl,
+            safeVerifyUrl,
+            scope,
+            secret: otpSecret,
+            siteId,
+        }),
+        safeReturnUrl,
+        safeVerifyUrl,
+        scope,
+        siteId,
+    });
+
+    return { otpChallengeId, otpCode };
+}
+
+async function sendSignInVerificationEmail(options: {
+    config: AppConfig;
+    email: string;
+    mailer: VerificationEmailSender;
+    otpChallengeStore: OtpChallengeStore;
+    resolvedRequest: ResolvedSignInRequest;
+    scope: string;
+    token: string;
+    verifyUrl: string | undefined;
+}): Promise<string | undefined> {
+    const { config, resolvedRequest } = options;
+    const otpChallenge = config.otp.enabled ? await createSignInOtpChallenge(options) : undefined;
+
+    await options.mailer.sendVerificationEmail({
+        email: options.email,
+        ...(typeof otpChallenge === 'undefined'
+            ? {}
+            : {
+                  otpCode: otpChallenge.otpCode,
+                  otpExpiresInSeconds: config.otp.expirationSeconds,
+              }),
+        siteTitle: resolvedRequest.site.hostedAuthBranding.title || config.hostedAuthBranding.title,
+        token: options.token,
+        verifyUrl: resolvedRequest.safeVerifyUrl,
+    });
+
+    return otpChallenge?.otpChallengeId;
 }
 
 async function completeEmailVerification(
@@ -1594,66 +1742,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         },
         async (request, reply): Promise<void> => {
             const isJson = expectsJsonResponse(request);
-            if (
-                !hasSafeApiContentType(request, config) &&
-                !hasValidHtmlCsrfToken(request, config)
-            ) {
-                request.log.info('Rejected sign-in form request with invalid CSRF token');
-                if (isJson) {
-                    reply.code(403).send({ message: 'Invalid or missing CSRF token' });
-                    return;
-                }
-                await renderSigninPage(
-                    reply,
-                    config,
-                    createHtmlSecurityContext(reply, config, {
-                        includeCsrfToken: true,
-                    }),
-                    {
-                        returnUrl: '',
-                        scope: normalizeRequestedScope(readSubmittedField(request.body, 'scope')),
-                        verifyUrl: '',
-                        message: false,
-                        error: getHostedAuthFeedbackMessage(config, 'invalidRequest'),
-                        statusCode: 403,
-                    },
-                );
+            const body = await readValidSignInBody(request, reply, { config, isJson });
+            if (body === null) {
                 return;
             }
 
-            const parsedBody = signInBodySchema.safeParse(request.body);
-
-            if (!parsedBody.success) {
-                request.log.info(
-                    { issues: parsedBody.error.issues },
-                    'Rejected invalid sign-in request',
-                );
-
-                if (isJson) {
-                    reply.code(400).send({ message: 'Invalid request' });
-                    return;
-                }
-
-                await renderSigninPage(
-                    reply,
-                    config,
-                    createHtmlSecurityContext(reply, config, {
-                        includeCsrfToken: true,
-                    }),
-                    {
-                        returnUrl: '',
-                        scope: normalizeRequestedScope(readSubmittedField(request.body, 'scope')),
-                        verifyUrl: '',
-                        message: false,
-                        error: getHostedAuthFeedbackMessage(config, 'invalidRequest'),
-                        statusCode: 400,
-                    },
-                );
-                return;
-            }
-
-            const { email, returnUrl, scope, verifyUrl } = parsedBody.data;
+            const { email, returnUrl, scope, verifyUrl } = body;
             const requestedScope = normalizeRequestedScope(scope);
+            const submittedVerifyUrl = verifyUrl ?? '';
             const resolvedRequest = resolveSignInRequest(config, {
                 returnUrl,
                 verifyUrl,
@@ -1666,30 +1762,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     scope: requestedScope,
                     verifyUrl,
                 });
-                if (isJson) {
-                    reply
-                        .code(400)
-                        .send({ message: getDefaultFeedbackMessage(resolvedRequest.messageKey) });
-                    return;
-                }
-
-                await renderSigninPage(
-                    reply,
+                await respondWithSignInError(reply, {
                     config,
-                    createHtmlSecurityContext(reply, config, {
-                        includeCsrfToken: true,
-                    }),
-                    {
-                        returnUrl: returnUrl ?? '',
-                        scope: requestedScope,
-                        verifyUrl: verifyUrl ?? '',
-                        message: false,
-                        error: getHostedAuthFeedbackMessage(config, resolvedRequest.messageKey),
-                        statusCode: 400,
-                    },
-                );
+                    isJson,
+                    jsonMessage: getDefaultFeedbackMessage(resolvedRequest.messageKey),
+                    messageKey: resolvedRequest.messageKey,
+                    returnUrl: returnUrl ?? '',
+                    scope: requestedScope,
+                    statusCode: 400,
+                    verifyUrl: submittedVerifyUrl,
+                });
                 return;
             }
+
+            const confirmation = {
+                config,
+                isJson,
+                returnUrl: resolvedRequest.safeReturnUrl ?? '',
+                scope: requestedScope,
+                site: resolvedRequest.site,
+                verifyUrl: submittedVerifyUrl,
+            };
 
             const perEmailLimit = await perEmailSignInLimiter.consume(email, request.ip);
             if (!perEmailLimit.allowed) {
@@ -1702,13 +1795,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     'Rejected sign-in request due to per-email rate limit',
                 );
                 await respondWithTooManyRequests(reply, {
-                    config,
-                    isJson,
+                    ...confirmation,
                     retryAfterSeconds: perEmailLimit.retryAfterSeconds,
-                    returnUrl: resolvedRequest.safeReturnUrl ?? '',
-                    scope: requestedScope,
-                    site: resolvedRequest.site,
-                    verifyUrl: verifyUrl ?? '',
                 });
                 return;
             }
@@ -1723,13 +1811,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 });
 
                 await respondWithVerificationEmailSent(reply, {
-                    config,
-                    isJson,
+                    ...confirmation,
                     otpChallengeId: config.otp.enabled ? randomUUID() : undefined,
-                    returnUrl: resolvedRequest.safeReturnUrl ?? '',
-                    scope: requestedScope,
-                    site: resolvedRequest.site,
-                    verifyUrl: verifyUrl ?? '',
                 });
                 return;
             }
@@ -1745,75 +1828,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             );
 
             let otpChallengeId: string | undefined;
-            let otpCode: string | undefined;
-
             try {
-                if (config.otp.enabled) {
-                    const otpSecret = config.otp.secret;
-                    const verificationGrant = await verifyEmailToken(token, config.emailSecret, {
-                        expectedIssuer: getAppOrigin(config),
-                    });
-                    if (
-                        typeof otpSecret !== 'string' ||
-                        verificationGrant === null ||
-                        typeof verificationGrant.exp !== 'number'
-                    ) {
-                        throw new Error('Unable to create OTP challenge for a verification grant.');
-                    }
-                    otpChallengeId = randomUUID();
-                    otpCode = generateOtpCode(config.otp.length);
-                    const safeVerifyUrl =
-                        typeof verifyUrl === 'string' ? resolvedRequest.safeVerifyUrl : undefined;
-                    const expiresAt = Math.min(
-                        Date.now() + config.otp.expirationSeconds * 1000,
-                        verificationGrant.exp * 1000,
-                    );
-                    const otpChallenge = {
-                        attemptsRemaining: config.otp.allowedAttempts,
-                        challengeId: otpChallengeId,
-                        createdAt: Date.now(),
-                        email,
-                        expiresAt,
-                        jti: verificationGrant.jti,
-                        otpHash: hashOtpCode({
-                            challengeId: otpChallengeId,
-                            code: otpCode,
-                            jti: verificationGrant.jti,
-                            secret: otpSecret,
-                            siteId: resolvedRequest.site.id,
-                        }),
-                        rotationKey: createOtpRotationKey({
-                            email,
-                            safeReturnUrl: resolvedRequest.safeReturnUrl,
-                            safeVerifyUrl,
-                            scope: requestedScope,
-                            secret: otpSecret,
-                            siteId: resolvedRequest.site.id,
-                        }),
-                        safeReturnUrl: resolvedRequest.safeReturnUrl,
-                        safeVerifyUrl,
-                        scope: requestedScope,
-                        siteId: resolvedRequest.site.id,
-                    };
-                    switch (config.otp.resendStrategy) {
-                        case 'rotate':
-                            await otpChallengeStore.create(otpChallenge);
-                            break;
-                    }
-                }
-                await mailer.sendVerificationEmail({
+                otpChallengeId = await sendSignInVerificationEmail({
+                    config,
                     email,
-                    ...(typeof otpCode === 'string'
-                        ? {
-                              otpCode,
-                              otpExpiresInSeconds: config.otp.expirationSeconds,
-                          }
-                        : {}),
-                    siteTitle:
-                        resolvedRequest.site.hostedAuthBranding.title ||
-                        config.hostedAuthBranding.title,
+                    mailer,
+                    otpChallengeStore,
+                    resolvedRequest,
+                    scope: requestedScope,
                     token,
-                    verifyUrl: resolvedRequest.safeVerifyUrl,
+                    verifyUrl,
                 });
             } catch (error) {
                 request.log.error(
@@ -1822,38 +1846,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     },
                     'Failed to send verification email',
                 );
-
-                if (isJson) {
-                    reply.code(500).send({ message: 'Failed to send email' });
-                    return;
-                }
-
-                await renderSigninPage(
-                    reply,
+                await respondWithSignInError(reply, {
                     config,
-                    createHtmlSecurityContext(reply, config, {
-                        includeCsrfToken: true,
-                    }),
-                    {
-                        returnUrl: resolvedRequest.safeReturnUrl ?? '',
-                        scope: requestedScope,
-                        verifyUrl: verifyUrl ?? '',
-                        message: false,
-                        error: getHostedAuthFeedbackMessage(config, 'failedToSendEmail'),
-                        statusCode: 500,
-                    },
-                );
+                    isJson,
+                    jsonMessage: 'Failed to send email',
+                    messageKey: 'failedToSendEmail',
+                    returnUrl: confirmation.returnUrl,
+                    scope: requestedScope,
+                    statusCode: 500,
+                    verifyUrl: submittedVerifyUrl,
+                });
                 return;
             }
 
             await respondWithVerificationEmailSent(reply, {
-                config,
-                isJson,
+                ...confirmation,
                 otpChallengeId,
-                returnUrl: resolvedRequest.safeReturnUrl ?? '',
-                scope: requestedScope,
-                site: resolvedRequest.site,
-                verifyUrl: verifyUrl ?? '',
             });
         },
     );
@@ -2059,51 +2067,33 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 reply.code(404).send({ message: 'Not found' });
                 return;
             }
+            const otpRejection = {
+                config,
+                isJson,
+                messageKey: 'invalidOrExpiredOtp' as const,
+                returnUrl: '',
+                scope: '',
+                verifyUrl: '',
+            };
             if (
                 !hasSafeApiContentType(request, config) &&
                 !hasValidHtmlCsrfToken(request, config)
             ) {
-                if (isJson) {
-                    reply.code(403).send({ message: 'Invalid or missing CSRF token' });
-                    return;
-                }
-                await renderSigninPage(
-                    reply,
-                    config,
-                    createHtmlSecurityContext(reply, config, { includeCsrfToken: true }),
-                    {
-                        error: getHostedAuthFeedbackMessage(config, 'invalidOrExpiredOtp'),
-                        message: false,
-                        returnUrl: '',
-                        scope: '',
-                        verifyUrl: '',
-                        statusCode: 403,
-                    },
-                );
+                await respondWithSignInError(reply, {
+                    ...otpRejection,
+                    jsonMessage: 'Invalid or missing CSRF token',
+                    statusCode: 403,
+                });
                 return;
             }
 
             const parsedBody = verifyEmailOtpBodySchema.safeParse(request.body);
             if (!parsedBody.success) {
-                if (isJson) {
-                    reply
-                        .code(400)
-                        .send({ message: getDefaultFeedbackMessage('invalidOrExpiredOtp') });
-                    return;
-                }
-                await renderSigninPage(
-                    reply,
-                    config,
-                    createHtmlSecurityContext(reply, config, { includeCsrfToken: true }),
-                    {
-                        error: getHostedAuthFeedbackMessage(config, 'invalidOrExpiredOtp'),
-                        message: false,
-                        returnUrl: '',
-                        scope: '',
-                        verifyUrl: '',
-                        statusCode: 400,
-                    },
-                );
+                await respondWithSignInError(reply, {
+                    ...otpRejection,
+                    jsonMessage: getDefaultFeedbackMessage('invalidOrExpiredOtp'),
+                    statusCode: 400,
+                });
                 return;
             }
 

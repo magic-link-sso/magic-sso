@@ -4,6 +4,7 @@
 import type { JSX } from 'react';
 import Image from 'next/image';
 import Script from 'next/script';
+import { buildLoginFormState, hasText } from './form-state';
 import { signinBadgeUrl } from 'magic-sso-example-ui';
 
 type LoginFormProps = {
@@ -14,6 +15,16 @@ type LoginFormProps = {
   scope?: string;
 };
 
+const sentCopy = {
+  help: 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.',
+  title: 'Check your email',
+};
+
+const formCopy = {
+  help: "We'll email you a sign-in link.",
+  title: 'Sign in',
+};
+
 export default function LoginForm({
   returnUrl,
   appOrigin,
@@ -21,12 +32,13 @@ export default function LoginForm({
   initialSuccess,
   scope,
 }: LoginFormProps): JSX.Element {
-  const verifyUrl = `${appOrigin}/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`;
-  const errorMessage = initialError;
-  const hasError = typeof errorMessage === 'string' && errorMessage.length > 0;
-  const hasSuccess = typeof initialSuccess === 'string' && initialSuccess.length > 0;
-  const feedbackId = hasSuccess || hasError ? 'login-feedback' : undefined;
-  const emailDescribedBy = hasError ? 'login-help login-feedback' : 'login-help';
+  const { emailDescribedBy, feedbackId, hasError, hasSuccess, verifyUrl } = buildLoginFormState({
+    appOrigin,
+    initialError,
+    initialSuccess,
+    returnUrl,
+  });
+  const copy = hasSuccess ? sentCopy : formCopy;
 
   return (
     <main className="login-shell">
@@ -45,12 +57,10 @@ export default function LoginForm({
         />
         <p className="eyebrow">Sign In</p>
         <h1 id="login-title" className="login-title" data-login-title>
-          {hasSuccess ? 'Check your email' : 'Sign in'}
+          {copy.title}
         </h1>
         <p id="login-help" className="login-copy" data-login-help>
-          {hasSuccess
-            ? 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.'
-            : "We'll email you a sign-in link."}
+          {copy.help}
         </p>
 
         <form
@@ -80,9 +90,7 @@ export default function LoginForm({
           />
           <input type="hidden" name="returnUrl" value={returnUrl} />
           <input type="hidden" name="verifyUrl" value={verifyUrl} />
-          {typeof scope === 'string' && scope.length > 0 && (
-            <input type="hidden" name="scope" value={scope} />
-          )}
+          {hasText(scope) && <input type="hidden" name="scope" value={scope} />}
           <div className="login-actions">
             <button
               type="submit"
@@ -144,7 +152,7 @@ export default function LoginForm({
         </div>
         {hasError && (
           <p id={feedbackId} role="alert" className="message message-error">
-            {errorMessage}
+            {initialError}
           </p>
         )}
         <Script id="login-form-enhancements" strategy="afterInteractive">

@@ -10,6 +10,8 @@ import {
     buildBoundedRequirement,
     collectJsRejectNames,
     deduplicateDependencyChanges,
+    loadNcuRun,
+    parseCliArgs,
     parseTomlArrayLine,
     parseUvLockVersions,
     planPythonManifestUpdate,
@@ -23,6 +25,54 @@ const fixtureDir = path.join(import.meta.dirname, 'fixtures');
 async function readFixture(fileName: string): Promise<string> {
     return readFile(path.join(fixtureDir, fileName), 'utf8');
 }
+
+describe('CLI options', () => {
+    it('defaults to compatible mode without optional flags', () => {
+        expect(parseCliArgs([])).toEqual({
+            apply: false,
+            includePeer: false,
+            includePythonPackage: false,
+            mode: 'compatible',
+        });
+    });
+
+    it('reads the mode and optional flags', () => {
+        expect(
+            parseCliArgs(['latest', '--apply', '--include-peer', '--include-python-package']),
+        ).toEqual({
+            apply: true,
+            includePeer: true,
+            includePythonPackage: true,
+            mode: 'latest',
+        });
+    });
+
+    it('rejects unknown modes', () => {
+        expect(() => parseCliArgs(['major'])).toThrow('Unknown mode "major"');
+    });
+
+    it('prints usage and exits for --help', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as typeof process.exit);
+
+        try {
+            expect(() => parseCliArgs(['-h'])).toThrow('process.exit');
+            expect(exit).toHaveBeenCalledWith(0);
+            expect(log).toHaveBeenCalledWith(
+                expect.stringContaining('Usage: node scripts/upgrade-deps.mjs'),
+            );
+        } finally {
+            exit.mockRestore();
+            log.mockRestore();
+        }
+    });
+
+    it('loads the npm-check-updates run helper', async () => {
+        await expect(loadNcuRun()).resolves.toBeTypeOf('function');
+    });
+});
 
 describe('JS dependency planning', () => {
     it('skips peer dependencies unless explicitly requested', async () => {

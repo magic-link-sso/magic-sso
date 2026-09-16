@@ -28,6 +28,23 @@ export async function generateMetadata({ params }: PhotoPageProps): Promise<Meta
   };
 }
 
+function ViewerCaption({
+  viewer,
+}: {
+  viewer: Awaited<ReturnType<typeof readViewer>>;
+}): React.JSX.Element | null {
+  if (viewer === null) {
+    return null;
+  }
+
+  return (
+    <p className="detail-caption">
+      Signed in as <strong>{viewer.email}</strong> with{' '}
+      {viewer.scope === '*' ? 'owner access' : viewer.scope}.
+    </p>
+  );
+}
+
 export default async function PhotoPage({ params }: PhotoPageProps): Promise<React.JSX.Element> {
   const { photoSlug } = await params;
   const photo = getPhoto(photoSlug);
@@ -78,12 +95,7 @@ export default async function PhotoPage({ params }: PhotoPageProps): Promise<Rea
             <p className="panel-eyebrow">About this work</p>
             <h2 className="detail-title">{photo.title}</h2>
             <p className="detail-copy">{photo.caption}</p>
-            {viewer !== null && (
-              <p className="detail-caption">
-                Signed in as <strong>{viewer.email}</strong> with{' '}
-                {viewer.scope === '*' ? 'owner access' : viewer.scope}.
-              </p>
-            )}
+            <ViewerCaption viewer={viewer} />
             <p className="detail-caption">{photo.blurb}</p>
             <div className="detail-nav">
               <Link href="/" className="button button-ghost">

@@ -81,42 +81,32 @@ function hasValidVerifyCsrfToken(submittedToken: string, cookieToken: string): b
     return timingSafeEqual(submittedBuffer, cookieBuffer);
 }
 
-export default defineEventHandler(async (event): Promise<void> => {
-    const body = (await readBody(event)) as unknown;
-    const requestUrl = getRequestURL(event);
-    const parsedBody = asVerifyEmailBody(body);
-    const token = typeof parsedBody?.token === 'string' ? parsedBody.token : undefined;
-    const submittedCsrfToken =
-        typeof parsedBody?.csrfToken === 'string' ? parsedBody.csrfToken : undefined;
-    const returnUrl = normaliseReturnUrl(
-        typeof parsedBody?.returnUrl === 'string' ? parsedBody.returnUrl : undefined,
-        requestUrl.origin,
-    );
+/** Return the posted verification token when the double-submit CSRF pair matches. */
+function readConfirmedToken(event: H3Event, body: VerifyEmailBody | undefined): string | null {
+    const token = body?.token;
+    const submittedCsrfToken = body?.csrfToken;
     const cookieCsrfToken = getCookie(event, verifyCsrfCookieName);
-
     if (
         typeof token !== 'string' ||
         token.length === 0 ||
         typeof submittedCsrfToken !== 'string' ||
-        typeof cookieCsrfToken !== 'string' ||
-        !hasValidVerifyCsrfToken(submittedCsrfToken, cookieCsrfToken)
+        typeof cookieCsrfToken !== 'string'
     ) {
-        clearVerifyCookie(event);
-        await redirectToLogin(event, returnUrl);
-        return;
+        return null;
     }
 
-    const config = getMagicSsoConfig(event);
-    if (config.serverUrl.length === 0) {
-        clearVerifyCookie(event);
-        await redirectToLogin(event, returnUrl);
-        return;
-    }
+    return hasValidVerifyCsrfToken(submittedCsrfToken, cookieCsrfToken) ? token : null;
+}
 
-    const verifyUrl = new URL('/verify-email', config.serverUrl);
-
+/** Exchange a verification token for an access token this app can verify. */
+async function exchangeVerificationToken(
+    event: H3Event,
+    token: string,
+    serverUrl: string,
+    appOrigin: string,
+): Promise<string | null> {
     try {
-        const response = await fetch(verifyUrl, {
+        const response = await fetch(new URL('/verify-email', serverUrl), {
             method: 'POST',
             headers: {
                 accept: 'application/json',
@@ -125,47 +115,45 @@ export default defineEventHandler(async (event): Promise<void> => {
             body: JSON.stringify({ token }),
             cache: 'no-store',
         });
-        if (!response.ok) {
-            clearVerifyCookie(event);
-            await redirectToLogin(event, returnUrl);
-            return;
-        }
-
-        const payload: unknown = await response.json();
-        if (!isVerifyEmailResponse(payload)) {
-            clearVerifyCookie(event);
-            await redirectToLogin(event, returnUrl);
-            return;
-        }
-
+        const payload: unknown = response.ok ? await response.json() : null;
         const jwtSecret = getJwtSecret(event);
-        if (jwtSecret === null) {
-            clearVerifyCookie(event);
-            await redirectToLogin(event, returnUrl);
-            return;
+        if (!isVerifyEmailResponse(payload) || jwtSecret === null) {
+            return null;
         }
 
         const verifiedAccessToken = await verifyAuthToken(payload.accessToken, jwtSecret, {
-            expectedAudience: requestUrl.origin,
-            expectedIssuer: new URL(config.serverUrl).origin,
+            expectedAudience: appOrigin,
+            expectedIssuer: new URL(serverUrl).origin,
         });
-        if (verifiedAccessToken === null) {
-            clearVerifyCookie(event);
-            await redirectToLogin(event, returnUrl);
-            return;
-        }
-
-        clearVerifyCookie(event);
-        setCookie(event, getCookieName(event), payload.accessToken, {
-            path: config.cookiePath,
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            ...(typeof config.cookieMaxAge === 'number' ? { maxAge: config.cookieMaxAge } : {}),
-        });
-        await sendRedirect(event, new URL(returnUrl, requestUrl.origin).toString(), 303);
+        return verifiedAccessToken === null ? null : payload.accessToken;
     } catch {
-        clearVerifyCookie(event);
-        await redirectToLogin(event, returnUrl);
+        return null;
     }
+}
+
+export default defineEventHandler(async (event): Promise<void> => {
+    const parsedBody = asVerifyEmailBody(await readBody(event));
+    const requestUrl = getRequestURL(event);
+    const returnUrl = normaliseReturnUrl(parsedBody?.returnUrl, requestUrl.origin);
+    const token = readConfirmedToken(event, parsedBody);
+    const config = getMagicSsoConfig(event);
+    const accessToken =
+        token === null || config.serverUrl.length === 0
+            ? null
+            : await exchangeVerificationToken(event, token, config.serverUrl, requestUrl.origin);
+
+    clearVerifyCookie(event);
+    if (accessToken === null) {
+        await redirectToLogin(event, returnUrl);
+        return;
+    }
+
+    setCookie(event, getCookieName(event), accessToken, {
+        path: config.cookiePath,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        ...(typeof config.cookieMaxAge === 'number' ? { maxAge: config.cookieMaxAge } : {}),
+    });
+    await sendRedirect(event, new URL(returnUrl, requestUrl.origin).toString(), 303);
 });

@@ -50,8 +50,8 @@ describe('Nuxt sign-in helpers', () => {
         ).toBeNull();
     });
 
-    it('sign-in route falls back to process env for the server URL', async () => {
-        const routePath = path.join(process.cwd(), 'server/api/signin.post.ts');
+    it('sign-in flow falls back to process env for the server URL', async () => {
+        const routePath = path.join(process.cwd(), 'server/api/signin.ts');
         const routeSource = await readFile(routePath, 'utf8');
 
         expect(routeSource).toContain('process.env.MAGICSSO_SERVER_URL');

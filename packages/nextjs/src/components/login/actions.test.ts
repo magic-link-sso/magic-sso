@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendMagicLink } from './actions';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sendMagicLink, verifyEmailOtp } from './actions';
+
+const cookieSet = vi.fn();
+
+vi.mock('next/headers', () => ({
+    cookies: async () => ({ set: cookieSet }),
+}));
 
 describe('sendMagicLink', () => {
     beforeEach(() => {
@@ -131,6 +137,53 @@ describe('sendMagicLink', () => {
         ).resolves.toEqual({
             success: false,
             message: 'Invalid or untrusted return URL',
+        });
+    });
+});
+
+describe('verifyEmailOtp', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        cookieSet.mockReset();
+        process.env.MAGICSSO_SERVER_URL = 'http://sso.example.com';
+        process.env.MAGICSSO_JWT_SECRET = 'jwt-secret-0123456789-0123456789';
+        process.env.MAGICSSO_PUBLIC_ORIGIN = 'http://app.example.com';
+    });
+
+    afterEach(() => {
+        delete process.env.MAGICSSO_JWT_SECRET;
+        delete process.env.MAGICSSO_PUBLIC_ORIGIN;
+    });
+
+    it('reports incomplete server configuration without calling the server', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch');
+        delete process.env.MAGICSSO_PUBLIC_ORIGIN;
+
+        await expect(verifyEmailOtp('challenge-1', '123456')).resolves.toEqual({
+            success: false,
+            message: 'Magic Link SSO server configuration is incomplete.',
+        });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('returns a generic failure when the code is rejected', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            Response.json({ message: 'Invalid code' }, { status: 400 }),
+        );
+
+        await expect(verifyEmailOtp('challenge-1', '000000')).resolves.toEqual({
+            success: false,
+            message: 'Invalid or expired code.',
+        });
+        expect(cookieSet).not.toHaveBeenCalled();
+    });
+
+    it('returns a generic failure when the server is unreachable', async () => {
+        vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
+
+        await expect(verifyEmailOtp('challenge-1', '123456')).resolves.toEqual({
+            success: false,
+            message: 'Invalid or expired code.',
         });
     });
 });

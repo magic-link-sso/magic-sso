@@ -4,6 +4,7 @@
 import { Fragment, type JSX } from 'react';
 import Image from 'next/image';
 import Script from 'next/script';
+import { buildLoginFormState, hasText } from './form-state';
 import { getScopeDisplayName } from '@/lib/access';
 
 type LoginFormProps = {
@@ -15,6 +16,29 @@ type LoginFormProps = {
   scope?: string;
 };
 
+const sentCopy = {
+  help: 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.',
+  title: 'Check your email',
+};
+
+const formCopy = {
+  help: "We'll email a sign-in link and return you to the exact page you asked for.",
+  title: 'Unlock the next album with Magic Link SSO.',
+};
+
+function listSeparator(index: number, length: number): string {
+  if (index < length - 2) {
+    return ', ';
+  }
+  return index === length - 2 ? ', or ' : '';
+}
+
+function ScopeHint({ scope }: { scope: string | undefined }): JSX.Element | null {
+  return hasText(scope) ? (
+    <p className="scope-hint">Requested access level: {getScopeDisplayName(scope)}</p>
+  ) : null;
+}
+
 export default function LoginForm({
   appOrigin,
   demoEmails,
@@ -23,14 +47,13 @@ export default function LoginForm({
   returnUrl,
   scope,
 }: LoginFormProps): JSX.Element {
-  const verifyUrl = `${appOrigin}/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`;
-  const errorMessage = initialError;
-  const hasError = typeof errorMessage === 'string' && errorMessage.length > 0;
-  const hasSuccess = typeof initialSuccess === 'string' && initialSuccess.length > 0;
-  const feedbackId = hasSuccess || hasError ? 'login-feedback' : undefined;
-  const emailDescribedBy = hasError ? 'login-help login-feedback' : 'login-help';
-  const scopeSummary =
-    typeof scope === 'string' && scope.length > 0 ? getScopeDisplayName(scope) : undefined;
+  const { emailDescribedBy, feedbackId, hasError, hasSuccess, verifyUrl } = buildLoginFormState({
+    appOrigin,
+    initialError,
+    initialSuccess,
+    returnUrl,
+  });
+  const copy = hasSuccess ? sentCopy : formCopy;
 
   return (
     <main className="login-shell">
@@ -48,31 +71,23 @@ export default function LoginForm({
         />
         <p className="eyebrow">Sign In</p>
         <h1 id="login-title" className="login-title" data-login-title>
-          {hasSuccess ? 'Check your email' : 'Unlock the next album with Magic Link SSO.'}
+          {copy.title}
         </h1>
         <p id="login-help" className="login-copy" data-login-help>
-          {hasSuccess
-            ? 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.'
-            : "We'll email a sign-in link and return you to the exact page you asked for."}
+          {copy.help}
         </p>
         <p className="login-tip">
           Demo tip: try{' '}
           {demoEmails.map((email, index) => (
             <Fragment key={email}>
               <strong>{email}</strong>
-              {index < demoEmails.length - 2
-                ? ', '
-                : index === demoEmails.length - 2
-                  ? ', or '
-                  : ''}
+              {listSeparator(index, demoEmails.length)}
             </Fragment>
           ))}
           . On this generic sign-in page, the demo will automatically map the seeded friend and
           family emails to their matching access levels.
         </p>
-        {typeof scopeSummary === 'string' && (
-          <p className="scope-hint">Requested access level: {scopeSummary}</p>
-        )}
+        <ScopeHint scope={scope} />
 
         <form
           action="/api/signin"
@@ -101,9 +116,7 @@ export default function LoginForm({
           />
           <input type="hidden" name="returnUrl" value={returnUrl} />
           <input type="hidden" name="verifyUrl" value={verifyUrl} />
-          {typeof scope === 'string' && scope.length > 0 && (
-            <input type="hidden" name="scope" value={scope} />
-          )}
+          {hasText(scope) && <input type="hidden" name="scope" value={scope} />}
           <div className="login-actions">
             <button
               type="submit"
@@ -165,7 +178,7 @@ export default function LoginForm({
         </div>
         {hasError && (
           <p id={feedbackId} role="alert" className="message message-error">
-            {errorMessage}
+            {initialError}
           </p>
         )}
         <Script id="login-form-enhancements" strategy="afterInteractive">

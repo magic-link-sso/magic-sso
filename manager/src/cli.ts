@@ -79,6 +79,10 @@ function printJson(output: OutputOptions, value: unknown): void {
     writeLine(output.stdout, JSON.stringify(value, null, 2));
 }
 
+function formatGrantScopes(scopes: readonly string[]): string {
+    return scopes[0] === '*' ? 'full-access' : scopes.join(', ');
+}
+
 function printSiteDetails(
     output: OutputOptions,
     siteDetails: ReturnType<typeof getManagedSiteDetails>,
@@ -99,10 +103,27 @@ function printSiteDetails(
 
     writeLine(output.stdout, 'Grants:');
     for (const grant of siteDetails.grants) {
-        writeLine(
-            output.stdout,
-            `- ${grant.email}: ${grant.scopes[0] === '*' ? 'full-access' : grant.scopes.join(', ')}`,
-        );
+        writeLine(output.stdout, `- ${grant.email}: ${formatGrantScopes(grant.scopes)}`);
+    }
+}
+
+type ChangedSiteDiff = ReturnType<typeof buildManagerDiff>['summary']['changedSites'][number];
+
+function printChangedSites(output: OutputOptions, changedSites: readonly ChangedSiteDiff[]): void {
+    for (const siteDiff of changedSites) {
+        writeLine(output.stdout, `Site ${siteDiff.siteId}`);
+        for (const email of siteDiff.addedFullAccessEmails) {
+            writeLine(output.stdout, `+ full-access ${email}`);
+        }
+        for (const email of siteDiff.removedFullAccessEmails) {
+            writeLine(output.stdout, `- full-access ${email}`);
+        }
+        for (const grant of siteDiff.addedScopedGrants) {
+            writeLine(output.stdout, `+ scoped ${grant.email} [${grant.scopes.join(', ')}]`);
+        }
+        for (const grant of siteDiff.removedScopedGrants) {
+            writeLine(output.stdout, `- scoped ${grant.email} [${grant.scopes.join(', ')}]`);
+        }
     }
 }
 
@@ -121,21 +142,7 @@ function printDiff(output: OutputOptions, diffResult: ReturnType<typeof buildMan
     }
 
     writeLine(output.stdout, `Current source: ${diffResult.diffSource}`);
-    for (const siteDiff of diffResult.summary.changedSites) {
-        writeLine(output.stdout, `Site ${siteDiff.siteId}`);
-        for (const email of siteDiff.addedFullAccessEmails) {
-            writeLine(output.stdout, `+ full-access ${email}`);
-        }
-        for (const email of siteDiff.removedFullAccessEmails) {
-            writeLine(output.stdout, `- full-access ${email}`);
-        }
-        for (const grant of siteDiff.addedScopedGrants) {
-            writeLine(output.stdout, `+ scoped ${grant.email} [${grant.scopes.join(', ')}]`);
-        }
-        for (const grant of siteDiff.removedScopedGrants) {
-            writeLine(output.stdout, `- scoped ${grant.email} [${grant.scopes.join(', ')}]`);
-        }
-    }
+    printChangedSites(output, diffResult.summary.changedSites);
 }
 
 function printManagedSiteDiffSummary(
@@ -149,21 +156,7 @@ function printManagedSiteDiffSummary(
         return;
     }
 
-    for (const siteDiff of diffSummary.changedSites) {
-        writeLine(output.stdout, `Site ${siteDiff.siteId}`);
-        for (const email of siteDiff.addedFullAccessEmails) {
-            writeLine(output.stdout, `+ full-access ${email}`);
-        }
-        for (const email of siteDiff.removedFullAccessEmails) {
-            writeLine(output.stdout, `- full-access ${email}`);
-        }
-        for (const grant of siteDiff.addedScopedGrants) {
-            writeLine(output.stdout, `+ scoped ${grant.email} [${grant.scopes.join(', ')}]`);
-        }
-        for (const grant of siteDiff.removedScopedGrants) {
-            writeLine(output.stdout, `- scoped ${grant.email} [${grant.scopes.join(', ')}]`);
-        }
-    }
+    printChangedSites(output, diffSummary.changedSites);
 }
 
 function createCliAuditActor(actor: RunCliOptions['actor']): ManagerAuditActor {
@@ -298,136 +291,269 @@ async function handleSitesCommand(
     throw new Error('Usage: manager sites list [--json] | manager sites show <siteId> [--json]');
 }
 
-async function handleAccessCommand(
+interface MutationCommandContext {
+    isInteractive: boolean;
+    options: RunCliOptions;
+    output: OutputOptions;
+    settings: ReturnType<typeof loadManagerRuntimeSettings>;
+    state: ReturnType<typeof loadManagerStateOrEmpty>;
+}
+
+type SubcommandHandler = (
+    context: MutationCommandContext,
     args: readonly string[],
-    output: OutputOptions,
-    env: NodeJS.ProcessEnv,
-    isInteractive: boolean,
-    confirm: RunCliOptions['confirm'],
-    options: RunCliOptions,
+) => Promise<number>;
+
+const JSON_FLAG: Record<string, CliOptionDefinition> = {
+    json: {
+        type: 'boolean',
+    },
+};
+
+const YES_FLAG: Record<string, CliOptionDefinition> = {
+    yes: {
+        type: 'boolean',
+    },
+};
+
+function readSiteId(positionals: readonly string[], usage: string): string {
+    const [siteId] = positionals;
+    if (typeof siteId !== 'string') {
+        throw new Error(usage);
+    }
+    return siteId;
+}
+
+function readSiteIdAndValue(positionals: readonly string[], usage: string): [string, string] {
+    const [siteId, value] = positionals;
+    if (typeof siteId !== 'string' || typeof value !== 'string') {
+        throw new Error(usage);
+    }
+    return [siteId, value];
+}
+
+async function confirmOrAbort(
+    context: MutationCommandContext,
+    yes: unknown,
+    prompt: string,
+    abortMessage: string,
+): Promise<void> {
+    const confirmed =
+        yes === true ||
+        (await confirmAction(context.isInteractive, context.options.confirm, prompt));
+    if (!confirmed) {
+        throw new Error(abortMessage);
+    }
+}
+
+function persistMutation(
+    context: MutationCommandContext,
+    nextState: Parameters<typeof persistManagerState>[1],
+    mutation: Parameters<typeof persistCliAuditEvent>[3],
+): void {
+    const persistedState = persistManagerState(context.settings, nextState);
+    persistCliAuditEvent(
+        context.output,
+        persistedState,
+        context.settings,
+        mutation,
+        context.options,
+    );
+}
+
+async function runSubcommand(
+    handlers: Record<string, SubcommandHandler>,
+    args: readonly string[],
+    context: MutationCommandContext,
+    usage: string,
 ): Promise<number> {
-    const command = args[0];
-    const settings = loadManagerRuntimeSettings({ env });
-    const state = loadManagerStateOrEmpty(settings);
+    const command = args[0] ?? '';
+    const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined;
+    if (typeof handler === 'undefined') {
+        throw new Error(usage);
+    }
+    return handler(context, args.slice(1));
+}
 
-    if (command === 'list') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            json: {
-                type: 'boolean',
-            },
-        });
-        const siteId = parsedArgs.positionals[0];
-        if (typeof siteId !== 'string') {
-            throw new Error('Usage: manager access list <siteId> [--json]');
-        }
-
-        const siteDetails = getManagedSiteDetails(state, settings, siteId);
-        if (parsedArgs.values.json === true) {
-            printJson(output, siteDetails.grants);
-            return 0;
-        }
-
-        if (siteDetails.grants.length === 0) {
-            writeLine(output.stdout, '(empty)');
-            return 0;
-        }
-
-        for (const grant of siteDetails.grants) {
-            writeLine(
-                output.stdout,
-                `${grant.email} ${grant.scopes[0] === '*' ? 'full-access' : grant.scopes.join(', ')}`,
-            );
-        }
+async function listAccess(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, JSON_FLAG);
+    const siteId = readSiteId(
+        parsedArgs.positionals,
+        'Usage: manager access list <siteId> [--json]',
+    );
+    const { grants } = getManagedSiteDetails(context.state, context.settings, siteId);
+    if (parsedArgs.values.json === true) {
+        printJson(context.output, grants);
         return 0;
     }
 
-    if (command === 'grant') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            'full-access': {
-                type: 'boolean',
-            },
-            scope: {
-                multiple: true,
-                type: 'string',
-            },
-        });
-        const siteId = parsedArgs.positionals[0];
-        const email = parsedArgs.positionals[1];
-        if (typeof siteId !== 'string' || typeof email !== 'string') {
-            throw new Error(
-                'Usage: manager access grant <siteId> <email> (--full-access | --scope <scope>...)',
-            );
-        }
+    if (grants.length === 0) {
+        writeLine(context.output.stdout, '(empty)');
+    }
+    for (const grant of grants) {
+        writeLine(context.output.stdout, `${grant.email} ${formatGrantScopes(grant.scopes)}`);
+    }
+    return 0;
+}
 
-        const scopeValues = Array.isArray(parsedArgs.values.scope)
-            ? parsedArgs.values.scope.filter((value): value is string => typeof value === 'string')
-            : undefined;
+async function grantAccess(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, {
+        'full-access': {
+            type: 'boolean',
+        },
+        scope: {
+            multiple: true,
+            type: 'string',
+        },
+    });
+    const [siteId, email] = readSiteIdAndValue(
+        parsedArgs.positionals,
+        'Usage: manager access grant <siteId> <email> (--full-access | --scope <scope>...)',
+    );
+    const scopeValues = Array.isArray(parsedArgs.values.scope)
+        ? parsedArgs.values.scope.filter((value): value is string => typeof value === 'string')
+        : undefined;
 
-        const nextState = updateSiteGrant(
-            state,
-            settings,
+    persistMutation(
+        context,
+        updateSiteGrant(
+            context.state,
+            context.settings,
             siteId,
             email,
             normalizeScopes(scopeValues, parsedArgs.values['full-access'] === true),
-        );
-        const persistedState = persistManagerState(settings, nextState);
-        persistCliAuditEvent(
-            output,
-            persistedState,
-            settings,
-            {
-                changedSiteIds: [siteId],
-                kind: 'grant-saved',
-                message: `Saved grant for ${email.trim().toLowerCase()} on ${siteId}.`,
-            },
-            options,
-        );
-        writeLine(output.stdout, `Updated grant for ${email} on ${siteId}.`);
+        ),
+        {
+            changedSiteIds: [siteId],
+            kind: 'grant-saved',
+            message: `Saved grant for ${email.trim().toLowerCase()} on ${siteId}.`,
+        },
+    );
+    writeLine(context.output.stdout, `Updated grant for ${email} on ${siteId}.`);
+    return 0;
+}
+
+async function revokeAccess(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, YES_FLAG);
+    const [siteId, email] = readSiteIdAndValue(
+        parsedArgs.positionals,
+        'Usage: manager access revoke <siteId> <email> [--yes]',
+    );
+    await confirmOrAbort(
+        context,
+        parsedArgs.values.yes,
+        `Revoke access for ${email} on ${siteId}?`,
+        'Access revoke aborted.',
+    );
+
+    persistMutation(context, revokeSiteGrant(context.state, context.settings, siteId, email), {
+        changedSiteIds: [siteId],
+        kind: 'grant-revoked',
+        message: `Revoked grant for ${email.trim().toLowerCase()} on ${siteId}.`,
+    });
+    writeLine(context.output.stdout, `Revoked access for ${email} on ${siteId}.`);
+    return 0;
+}
+
+async function listScopes(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, JSON_FLAG);
+    const siteId = readSiteId(
+        parsedArgs.positionals,
+        'Usage: manager scopes list <siteId> [--json]',
+    );
+    const { scopeCatalog } = getManagedSiteDetails(context.state, context.settings, siteId);
+    if (parsedArgs.values.json === true) {
+        printJson(context.output, scopeCatalog);
         return 0;
     }
 
-    if (command === 'revoke') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            yes: {
-                type: 'boolean',
-            },
-        });
-        const siteId = parsedArgs.positionals[0];
-        const email = parsedArgs.positionals[1];
-        if (typeof siteId !== 'string' || typeof email !== 'string') {
-            throw new Error('Usage: manager access revoke <siteId> <email> [--yes]');
-        }
-
-        const confirmed =
-            parsedArgs.values.yes === true
-                ? true
-                : await confirmAction(
-                      isInteractive,
-                      confirm,
-                      `Revoke access for ${email} on ${siteId}?`,
-                  );
-        if (!confirmed) {
-            throw new Error('Access revoke aborted.');
-        }
-
-        const nextState = revokeSiteGrant(state, settings, siteId, email);
-        const persistedState = persistManagerState(settings, nextState);
-        persistCliAuditEvent(
-            output,
-            persistedState,
-            settings,
-            {
-                changedSiteIds: [siteId],
-                kind: 'grant-revoked',
-                message: `Revoked grant for ${email.trim().toLowerCase()} on ${siteId}.`,
-            },
-            options,
-        );
-        writeLine(output.stdout, `Revoked access for ${email} on ${siteId}.`);
-        return 0;
+    for (const scope of scopeCatalog) {
+        writeLine(context.output.stdout, scope);
     }
+    if (scopeCatalog.length === 0) {
+        writeLine(context.output.stdout, '(empty)');
+    }
+    return 0;
+}
 
-    throw new Error(
+async function addScope(context: MutationCommandContext, args: readonly string[]): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, {});
+    const [siteId, scope] = readSiteIdAndValue(
+        parsedArgs.positionals,
+        'Usage: manager scopes add <siteId> <scope>',
+    );
+
+    persistMutation(context, addSiteScope(context.state, context.settings, siteId, scope), {
+        changedSiteIds: [siteId],
+        kind: 'scope-added',
+        message: `Added scope ${scope.trim()} to ${siteId}.`,
+    });
+    writeLine(context.output.stdout, `Added scope ${scope} to ${siteId}.`);
+    return 0;
+}
+
+async function removeScope(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const parsedArgs = parseFlagOptions(args, YES_FLAG);
+    const [siteId, scope] = readSiteIdAndValue(
+        parsedArgs.positionals,
+        'Usage: manager scopes remove <siteId> <scope> [--yes]',
+    );
+    await confirmOrAbort(
+        context,
+        parsedArgs.values.yes,
+        `Remove scope ${scope} from ${siteId}?`,
+        'Scope removal aborted.',
+    );
+
+    persistMutation(context, removeSiteScope(context.state, context.settings, siteId, scope), {
+        changedSiteIds: [siteId],
+        kind: 'scope-removed',
+        message: `Removed scope ${scope.trim()} from ${siteId}.`,
+    });
+    writeLine(context.output.stdout, `Removed scope ${scope} from ${siteId}.`);
+    return 0;
+}
+
+function createMutationCommandContext(
+    output: OutputOptions,
+    options: RunCliOptions,
+    isInteractive: boolean,
+): MutationCommandContext {
+    const settings = loadManagerRuntimeSettings({ env: options.env });
+    return {
+        isInteractive,
+        options,
+        output,
+        settings,
+        state: loadManagerStateOrEmpty(settings),
+    };
+}
+
+async function handleAccessCommand(
+    args: readonly string[],
+    output: OutputOptions,
+    options: RunCliOptions,
+    isInteractive: boolean,
+): Promise<number> {
+    return runSubcommand(
+        { grant: grantAccess, list: listAccess, revoke: revokeAccess },
+        args,
+        createMutationCommandContext(output, options, isInteractive),
         'Usage: manager access list <siteId> [--json] | manager access grant <siteId> <email> (--full-access | --scope <scope>...) | manager access revoke <siteId> <email> [--yes]',
     );
 }
@@ -435,108 +561,13 @@ async function handleAccessCommand(
 async function handleScopesCommand(
     args: readonly string[],
     output: OutputOptions,
-    env: NodeJS.ProcessEnv,
-    isInteractive: boolean,
-    confirm: RunCliOptions['confirm'],
     options: RunCliOptions,
+    isInteractive: boolean,
 ): Promise<number> {
-    const command = args[0];
-    const settings = loadManagerRuntimeSettings({ env });
-    const state = loadManagerStateOrEmpty(settings);
-
-    if (command === 'list') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            json: {
-                type: 'boolean',
-            },
-        });
-        const siteId = parsedArgs.positionals[0];
-        if (typeof siteId !== 'string') {
-            throw new Error('Usage: manager scopes list <siteId> [--json]');
-        }
-
-        const siteDetails = getManagedSiteDetails(state, settings, siteId);
-        if (parsedArgs.values.json === true) {
-            printJson(output, siteDetails.scopeCatalog);
-            return 0;
-        }
-
-        for (const scope of siteDetails.scopeCatalog) {
-            writeLine(output.stdout, scope);
-        }
-        if (siteDetails.scopeCatalog.length === 0) {
-            writeLine(output.stdout, '(empty)');
-        }
-        return 0;
-    }
-
-    if (command === 'add') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {});
-        const siteId = parsedArgs.positionals[0];
-        const scope = parsedArgs.positionals[1];
-        if (typeof siteId !== 'string' || typeof scope !== 'string') {
-            throw new Error('Usage: manager scopes add <siteId> <scope>');
-        }
-
-        const nextState = addSiteScope(state, settings, siteId, scope);
-        const persistedState = persistManagerState(settings, nextState);
-        persistCliAuditEvent(
-            output,
-            persistedState,
-            settings,
-            {
-                changedSiteIds: [siteId],
-                kind: 'scope-added',
-                message: `Added scope ${scope.trim()} to ${siteId}.`,
-            },
-            options,
-        );
-        writeLine(output.stdout, `Added scope ${scope} to ${siteId}.`);
-        return 0;
-    }
-
-    if (command === 'remove') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            yes: {
-                type: 'boolean',
-            },
-        });
-        const siteId = parsedArgs.positionals[0];
-        const scope = parsedArgs.positionals[1];
-        if (typeof siteId !== 'string' || typeof scope !== 'string') {
-            throw new Error('Usage: manager scopes remove <siteId> <scope> [--yes]');
-        }
-
-        const confirmed =
-            parsedArgs.values.yes === true
-                ? true
-                : await confirmAction(
-                      isInteractive,
-                      confirm,
-                      `Remove scope ${scope} from ${siteId}?`,
-                  );
-        if (!confirmed) {
-            throw new Error('Scope removal aborted.');
-        }
-
-        const nextState = removeSiteScope(state, settings, siteId, scope);
-        const persistedState = persistManagerState(settings, nextState);
-        persistCliAuditEvent(
-            output,
-            persistedState,
-            settings,
-            {
-                changedSiteIds: [siteId],
-                kind: 'scope-removed',
-                message: `Removed scope ${scope.trim()} from ${siteId}.`,
-            },
-            options,
-        );
-        writeLine(output.stdout, `Removed scope ${scope} from ${siteId}.`);
-        return 0;
-    }
-
-    throw new Error(
+    return runSubcommand(
+        { add: addScope, list: listScopes, remove: removeScope },
+        args,
+        createMutationCommandContext(output, options, isInteractive),
         'Usage: manager scopes list <siteId> [--json] | manager scopes add <siteId> <scope> | manager scopes remove <siteId> <scope> [--yes]',
     );
 }
@@ -633,90 +664,85 @@ async function handleImportCommand(
     return 0;
 }
 
+function formatDriftStatus(driftStatus: unknown): string {
+    return typeof driftStatus === 'undefined' ? 'not established yet' : JSON.stringify(driftStatus);
+}
+
+async function showReconcileStatus(
+    context: MutationCommandContext,
+    args: readonly string[],
+): Promise<number> {
+    const { output } = context;
+    const parsedArgs = parseFlagOptions(args, JSON_FLAG);
+    const status = buildManagerReconcileStatus(context.state, context.settings);
+    if (parsedArgs.values.json === true) {
+        printJson(output, status);
+        return 0;
+    }
+
+    writeLine(output.stdout, `Drift: ${formatDriftStatus(status.driftStatus)}`);
+    for (const entry of [status.base, status.runtime]) {
+        writeLine(output.stdout, `Source: ${entry.source}`);
+        if (!entry.available) {
+            writeLine(output.stdout, `Error: ${entry.error ?? 'unknown error'}`);
+        } else if (typeof entry.preview === 'undefined') {
+            writeLine(output.stdout, 'No preview available.');
+        } else {
+            printManagedSiteDiffSummary(output, entry.preview.diff);
+        }
+    }
+    return 0;
+}
+
+function createReconcileFromSource(source: 'base' | 'runtime'): SubcommandHandler {
+    return async (context, args) => {
+        const { output } = context;
+        const parsedArgs = parseFlagOptions(args, YES_FLAG);
+        const preview = buildManagerReconcilePreview(context.state, context.settings, source);
+        writeLine(output.stdout, `Reconcile source: ${source}`);
+        printManagedSiteDiffSummary(output, preview.diff);
+
+        await confirmOrAbort(
+            context,
+            parsedArgs.values.yes,
+            `Replace manager state from the ${source} config?`,
+            'Reconciliation aborted.',
+        );
+
+        const message = `Reconciled manager state from the ${source} config.`;
+        const persistedState = persistManagerState(context.settings, preview.state);
+        writeLine(output.stdout, message);
+        persistCliAuditEvent(
+            output,
+            persistedState,
+            context.settings,
+            {
+                changedSiteIds: preview.changedSiteIds,
+                kind: 'state-reconciled',
+                message,
+            },
+            context.options,
+        );
+        return 0;
+    };
+}
+
 async function handleReconcileCommand(
     args: readonly string[],
     output: OutputOptions,
     options: RunCliOptions,
     isInteractive: boolean,
 ): Promise<number> {
-    const command = args[0];
-    const settings = loadManagerRuntimeSettings({ env: options.env });
-    const state = loadManagerStateOrEmpty(settings);
-
-    if (command === 'status') {
-        const parsedArgs = parseFlagOptions(args.slice(1), {
-            json: {
-                type: 'boolean',
-            },
-        });
-        const status = buildManagerReconcileStatus(state, settings);
-        if (parsedArgs.values.json === true) {
-            printJson(output, status);
-            return 0;
-        }
-
-        writeLine(
-            output.stdout,
-            `Drift: ${typeof status.driftStatus === 'undefined' ? 'not established yet' : JSON.stringify(status.driftStatus)}`,
-        );
-        for (const entry of [status.base, status.runtime]) {
-            writeLine(output.stdout, `Source: ${entry.source}`);
-            if (!entry.available) {
-                writeLine(output.stdout, `Error: ${entry.error ?? 'unknown error'}`);
-                continue;
-            }
-
-            if (typeof entry.preview === 'undefined') {
-                writeLine(output.stdout, 'No preview available.');
-                continue;
-            }
-
-            printManagedSiteDiffSummary(output, entry.preview.diff);
-        }
-        return 0;
-    }
-
-    if (command !== 'base' && command !== 'runtime') {
-        throw new Error(
-            'Usage: manager reconcile status [--json] | manager reconcile <base|runtime> [--yes]',
-        );
-    }
-
-    const parsedArgs = parseFlagOptions(args.slice(1), {
-        yes: {
-            type: 'boolean',
-        },
-    });
-    const preview = buildManagerReconcilePreview(state, settings, command);
-    writeLine(output.stdout, `Reconcile source: ${command}`);
-    printManagedSiteDiffSummary(output, preview.diff);
-
-    const confirmed =
-        parsedArgs.values.yes === true
-            ? true
-            : await confirmAction(
-                  isInteractive,
-                  options.confirm,
-                  `Replace manager state from the ${command} config?`,
-              );
-    if (!confirmed) {
-        throw new Error('Reconciliation aborted.');
-    }
-
-    const persistedState = persistManagerState(settings, preview.state);
-    writeLine(output.stdout, `Reconciled manager state from the ${command} config.`);
-    persistCliAuditEvent(
-        output,
-        persistedState,
-        settings,
+    return runSubcommand(
         {
-            changedSiteIds: preview.changedSiteIds,
-            kind: 'state-reconciled',
-            message: `Reconciled manager state from the ${command} config.`,
+            base: createReconcileFromSource('base'),
+            runtime: createReconcileFromSource('runtime'),
+            status: showReconcileStatus,
         },
-        options,
+        args,
+        createMutationCommandContext(output, options, isInteractive),
+        'Usage: manager reconcile status [--json] | manager reconcile <base|runtime> [--yes]',
     );
-    return 0;
 }
 
 async function handleValidateCommand(
@@ -752,10 +778,7 @@ async function handleValidateCommand(
     writeLine(output.stdout, 'Candidate runtime config is valid.');
     writeLine(output.stdout, `Runtime file: ${result.runtimeConfigFile}`);
     writeLine(output.stdout, `Runtime hash: ${result.runtimeConfigHash}`);
-    writeLine(
-        output.stdout,
-        `Drift: ${typeof driftStatus === 'undefined' ? 'not established yet' : JSON.stringify(driftStatus)}`,
-    );
+    writeLine(output.stdout, `Drift: ${formatDriftStatus(driftStatus)}`);
     return 0;
 }
 
@@ -823,23 +846,9 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
             case 'sites':
                 return await handleSitesCommand(rest, output, env);
             case 'access':
-                return await handleAccessCommand(
-                    rest,
-                    output,
-                    env,
-                    isInteractive,
-                    options.confirm,
-                    options,
-                );
+                return await handleAccessCommand(rest, output, { ...options, env }, isInteractive);
             case 'scopes':
-                return await handleScopesCommand(
-                    rest,
-                    output,
-                    env,
-                    isInteractive,
-                    options.confirm,
-                    options,
-                );
+                return await handleScopesCommand(rest, output, { ...options, env }, isInteractive);
             case 'export':
                 return await handleExportCommand(rest, output, env);
             case 'import':

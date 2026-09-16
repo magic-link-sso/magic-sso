@@ -633,6 +633,27 @@ function renderSitePage(
         );
 }
 
+function classifyApplyFailure(message: string): {
+    kind: 'error' | 'warning';
+    statusCode: number;
+} {
+    if (
+        message ===
+        'Base config drift detected. Reconcile magic-sso.base.toml before running apply again.'
+    ) {
+        return { kind: 'warning', statusCode: 409 };
+    }
+
+    if (message.startsWith('Another manager apply is already in progress:')) {
+        return { kind: 'error', statusCode: 409 };
+    }
+
+    const isReloadFailure =
+        message.startsWith('Failed to reach the server reload endpoint:') ||
+        message.startsWith('Server reload failed:');
+    return { kind: 'error', statusCode: isReloadFailure ? 502 : 400 };
+}
+
 function renderDiffPage(
     reply: FastifyReply,
     settings: ManagerRuntimeSettings,
@@ -1357,60 +1378,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             );
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-
-            if (
-                message ===
-                'Base config drift detected. Reconcile magic-sso.base.toml before running apply again.'
-            ) {
-                renderDiffPage(
-                    reply,
-                    settings,
-                    {
-                        kind: 'warning',
-                        text: message,
-                    },
-                    409,
-                );
-                return;
-            }
-
-            if (message.startsWith('Another manager apply is already in progress:')) {
-                renderDiffPage(
-                    reply,
-                    settings,
-                    {
-                        kind: 'error',
-                        text: message,
-                    },
-                    409,
-                );
-                return;
-            }
-
-            if (
-                message.startsWith('Failed to reach the server reload endpoint:') ||
-                message.startsWith('Server reload failed:')
-            ) {
-                renderDiffPage(
-                    reply,
-                    settings,
-                    {
-                        kind: 'error',
-                        text: message,
-                    },
-                    502,
-                );
-                return;
-            }
-
+            const failure = classifyApplyFailure(message);
             renderDiffPage(
                 reply,
                 settings,
                 {
-                    kind: 'error',
+                    kind: failure.kind,
                     text: message,
                 },
-                400,
+                failure.statusCode,
             );
         }
     });

@@ -113,55 +113,25 @@ describe('resolveMagicSsoConfig', () => {
 });
 
 describe('getMagicSsoConfig', () => {
-    const originalAppUrl = process.env.APP_URL;
-    const originalDirectUse = process.env.MAGICSSO_DIRECT_USE;
-    const originalCookiePath = process.env.MAGICSSO_COOKIE_PATH;
-    const originalJwtSecret = process.env.JWT_SECRET;
-    const originalCookieName = process.env.COOKIE_NAME;
-    const originalCookieMaxAge = process.env.MAGICSSO_COOKIE_MAX_AGE;
-    const originalPublicOrigin = process.env.MAGICSSO_PUBLIC_ORIGIN;
-    const originalTrustProxy = process.env.MAGICSSO_TRUST_PROXY;
+    const envKeys = [
+        'APP_URL',
+        'COOKIE_NAME',
+        'JWT_SECRET',
+        'MAGICSSO_COOKIE_MAX_AGE',
+        'MAGICSSO_COOKIE_PATH',
+        'MAGICSSO_DIRECT_USE',
+        'MAGICSSO_PUBLIC_ORIGIN',
+        'MAGICSSO_TRUST_PROXY',
+    ] as const;
+    const originalEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
 
     afterEach(() => {
-        if (typeof originalAppUrl === 'string') {
-            process.env.APP_URL = originalAppUrl;
-        } else {
-            delete process.env.APP_URL;
-        }
-        if (typeof originalDirectUse === 'string') {
-            process.env.MAGICSSO_DIRECT_USE = originalDirectUse;
-        } else {
-            delete process.env.MAGICSSO_DIRECT_USE;
-        }
-        if (typeof originalCookiePath === 'string') {
-            process.env.MAGICSSO_COOKIE_PATH = originalCookiePath;
-        } else {
-            delete process.env.MAGICSSO_COOKIE_PATH;
-        }
-        if (typeof originalJwtSecret === 'string') {
-            process.env.JWT_SECRET = originalJwtSecret;
-        } else {
-            delete process.env.JWT_SECRET;
-        }
-        if (typeof originalCookieName === 'string') {
-            process.env.COOKIE_NAME = originalCookieName;
-        } else {
-            delete process.env.COOKIE_NAME;
-        }
-        if (typeof originalCookieMaxAge === 'string') {
-            process.env.MAGICSSO_COOKIE_MAX_AGE = originalCookieMaxAge;
-        } else {
-            delete process.env.MAGICSSO_COOKIE_MAX_AGE;
-        }
-        if (typeof originalPublicOrigin === 'string') {
-            process.env.MAGICSSO_PUBLIC_ORIGIN = originalPublicOrigin;
-        } else {
-            delete process.env.MAGICSSO_PUBLIC_ORIGIN;
-        }
-        if (typeof originalTrustProxy === 'string') {
-            process.env.MAGICSSO_TRUST_PROXY = originalTrustProxy;
-        } else {
-            delete process.env.MAGICSSO_TRUST_PROXY;
+        for (const [key, value] of originalEnv) {
+            if (typeof value === 'string') {
+                process.env[key] = value;
+            } else {
+                delete process.env[key];
+            }
         }
     });
 

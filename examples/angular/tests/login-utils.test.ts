@@ -6,7 +6,9 @@ import {
     buildLoginTarget,
     buildVerifyUrl,
     getLoginErrorMessage,
+    isAbsoluteHttpUrl,
     normaliseReturnUrl,
+    readSignInOutcome,
 } from '../src/app/login-utils';
 
 describe('Angular login utilities', () => {
@@ -79,5 +81,32 @@ describe('Angular login utilities', () => {
             'We could not complete sign-in from that email link. Please request a new one.',
         );
         expect(getLoginErrorMessage('unknown')).toBeUndefined();
+    });
+    it('reads sign-in responses with OTP metadata and fallback messages', () => {
+        expect(readSignInOutcome(true, { otpChallengeId: 'challenge-1', otpLength: 8 })).toEqual({
+            otpChallengeId: 'challenge-1',
+            otpLength: 8,
+            result: { success: true, message: 'Verification email sent.' },
+        });
+        expect(readSignInOutcome(true, { message: 'Sent.' })).toEqual({
+            otpChallengeId: null,
+            otpLength: 6,
+            result: { success: true, message: 'Sent.' },
+        });
+        expect(readSignInOutcome(false, { message: 'Blocked.' }).result).toEqual({
+            success: false,
+            message: 'Blocked.',
+        });
+        expect(readSignInOutcome(false, null)).toEqual({
+            otpChallengeId: null,
+            otpLength: 6,
+            result: { success: false, message: 'Failed to send verification email.' },
+        });
+    });
+
+    it('detects absolute http(s) login targets', () => {
+        expect(isAbsoluteHttpUrl('https://sso.example.com/signin')).toBe(true);
+        expect(isAbsoluteHttpUrl('http://localhost:3000/signin')).toBe(true);
+        expect(isAbsoluteHttpUrl('/login')).toBe(false);
     });
 });

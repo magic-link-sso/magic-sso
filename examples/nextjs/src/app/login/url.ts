@@ -3,9 +3,20 @@
 
 import { buildLoginTarget as buildCoreLoginTarget, parseBooleanFlag } from '@magic-link-sso/core';
 
-export function getAppOrigin(host: string, forwardedProtocol?: string | null): string {
-    const protocol = forwardedProtocol ?? (host.startsWith('localhost') ? 'http' : 'https');
-    return `${protocol}://${host}`;
+interface HeaderReader {
+    get(name: string): string | null;
+}
+
+/** Resolve this app's public origin from the (possibly proxied) request headers. */
+export function getAppOrigin(headerStore: HeaderReader): string {
+    const host = headerStore.get('x-forwarded-host') ?? headerStore.get('host') ?? 'localhost:3001';
+    return `${readProtocol(headerStore, host)}://${host}`;
+}
+
+function readProtocol(headerStore: HeaderReader, host: string): string {
+    return (
+        headerStore.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')
+    );
 }
 
 export function buildLoginTarget(appOrigin: string, scope?: string): string {

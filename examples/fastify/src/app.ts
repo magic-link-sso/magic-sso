@@ -170,6 +170,105 @@ function readOtpChallenge(
     }
 }
 
+function readSignInConfigError(serverUrl: string, appOrigin: string): string | null {
+    return serverUrl.length === 0
+        ? 'MAGICSSO_SERVER_URL is not configured.'
+        : readServerUrlConfigError(serverUrl, appOrigin);
+}
+
+function logInvalidSignInPayload(
+    request: FastifyRequest,
+    ssoResponse: Response,
+    payload: unknown,
+    serverUrl: string,
+): void {
+    const message =
+        typeof payload === 'object' && payload !== null
+            ? Reflect.get(payload, 'message')
+            : undefined;
+    const responsePreview = (typeof message === 'string' ? message : JSON.stringify(payload)).slice(
+        0,
+        160,
+    );
+
+    request.log.error(
+        {
+            contentType: ssoResponse.headers.get('content-type'),
+            payload,
+            responsePreview,
+            serverUrl,
+            status: ssoResponse.status,
+        },
+        'Magic Link SSO server returned an invalid sign-in success payload',
+    );
+}
+
+/** Remember an OTP challenge in a signed cookie, or clear a stale one. Returns an error message. */
+function storeOtpChallengeCookie(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    challenge: OtpChallengePayload | undefined,
+    jwtSecret: string,
+): string | undefined {
+    if (typeof challenge === 'undefined') {
+        reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
+        return undefined;
+    }
+    if (jwtSecret.length === 0) {
+        return 'MAGICSSO_JWT_SECRET is not configured.';
+    }
+
+    reply.setCookie(
+        otpChallengeCookieName,
+        signOtpChallenge(challenge, jwtSecret),
+        buildOtpChallengeCookieOptions(request),
+    );
+    return undefined;
+}
+
+/** Ask the SSO server to send the magic link. Returns an error message when it did not. */
+async function postSignInRequest(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    options: {
+        email: string;
+        jwtSecret: string;
+        returnUrl: string;
+        serverUrl: string;
+        verifyUrl: string;
+    },
+): Promise<string | undefined> {
+    const ssoResponse = await fetch(new URL('/signin', options.serverUrl), {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: options.email,
+            returnUrl: options.returnUrl,
+            verifyUrl: options.verifyUrl,
+        }),
+        cache: 'no-store',
+    });
+    const payload = await readResponsePayload(ssoResponse);
+
+    if (!ssoResponse.ok) {
+        return buildFailureResult(payload).message;
+    }
+    if (!isSignInSuccessResponse(payload)) {
+        logInvalidSignInPayload(request, ssoResponse, payload, options.serverUrl);
+        return buildUnexpectedUpstreamMessage(options.serverUrl);
+    }
+
+    return storeOtpChallengeCookie(
+        request,
+        reply,
+        readOtpChallengeMetadata(payload),
+        options.jwtSecret,
+    );
+}
+
 function createVerifyCsrfToken(): string {
     return randomBytes(32).toString('base64url');
 }
@@ -380,122 +479,32 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         );
         const verifyUrl =
             readString(request.body.verifyUrl) ?? buildVerifyUrl(appOrigin, returnUrl);
+        const redirectWith = (message: string, status: 'error' | 'success' = 'error') =>
+            reply.redirect(buildLoginRedirectUrl(request, returnUrl, { message, status }));
 
-        if (typeof email !== 'string' || typeof verifyUrl !== 'string' || verifyUrl.length === 0) {
-            return reply.redirect(
-                buildLoginRedirectUrl(request, returnUrl, {
-                    message: 'Invalid sign-in request payload.',
-                    status: 'error',
-                }),
-            );
+        if (typeof email !== 'string' || verifyUrl.length === 0) {
+            return redirectWith('Invalid sign-in request payload.');
         }
 
         const resolvedConfig = resolveMagicSsoConfig();
-        if (resolvedConfig.serverUrl.length === 0) {
-            return reply.redirect(
-                buildLoginRedirectUrl(request, returnUrl, {
-                    message: 'MAGICSSO_SERVER_URL is not configured.',
-                    status: 'error',
-                }),
-            );
-        }
-
-        const serverUrlConfigError = readServerUrlConfigError(resolvedConfig.serverUrl, appOrigin);
-        if (typeof serverUrlConfigError === 'string') {
-            return reply.redirect(
-                buildLoginRedirectUrl(request, returnUrl, {
-                    message: serverUrlConfigError,
-                    status: 'error',
-                }),
-            );
+        const configError = readSignInConfigError(resolvedConfig.serverUrl, appOrigin);
+        if (typeof configError === 'string') {
+            return redirectWith(configError);
         }
 
         try {
-            const ssoResponse = await fetch(new URL('/signin', resolvedConfig.serverUrl), {
-                method: 'POST',
-                headers: {
-                    accept: 'application/json',
-                    'content-type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email,
-                    returnUrl,
-                    verifyUrl,
-                }),
-                cache: 'no-store',
+            const failure = await postSignInRequest(request, reply, {
+                email,
+                jwtSecret: resolvedConfig.jwtSecret,
+                returnUrl,
+                serverUrl: resolvedConfig.serverUrl,
+                verifyUrl,
             });
-
-            if (!ssoResponse.ok) {
-                const payload = await readResponsePayload(ssoResponse);
-                return reply.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, {
-                        message: buildFailureResult(payload).message,
-                        status: 'error',
-                    }),
-                );
-            }
-
-            const payload: unknown = await readResponsePayload(ssoResponse);
-            if (!isSignInSuccessResponse(payload)) {
-                const contentType = ssoResponse.headers.get('content-type');
-                const responsePreview =
-                    typeof payload === 'object' &&
-                    payload !== null &&
-                    'message' in payload &&
-                    typeof payload.message === 'string'
-                        ? payload.message.slice(0, 160)
-                        : JSON.stringify(payload).slice(0, 160);
-
-                request.log.error(
-                    {
-                        contentType,
-                        payload,
-                        responsePreview,
-                        serverUrl: resolvedConfig.serverUrl,
-                        status: ssoResponse.status,
-                    },
-                    'Magic Link SSO server returned an invalid sign-in success payload',
-                );
-                return reply.redirect(
-                    buildLoginRedirectUrl(request, returnUrl, {
-                        message: buildUnexpectedUpstreamMessage(resolvedConfig.serverUrl),
-                        status: 'error',
-                    }),
-                );
-            }
-
-            const otpChallenge = readOtpChallengeMetadata(payload);
-            if (typeof otpChallenge === 'object') {
-                if (resolvedConfig.jwtSecret.length === 0) {
-                    return reply.redirect(
-                        buildLoginRedirectUrl(request, returnUrl, {
-                            message: 'MAGICSSO_JWT_SECRET is not configured.',
-                            status: 'error',
-                        }),
-                    );
-                }
-                reply.setCookie(
-                    otpChallengeCookieName,
-                    signOtpChallenge(otpChallenge, resolvedConfig.jwtSecret),
-                    buildOtpChallengeCookieOptions(request),
-                );
-            } else {
-                reply.clearCookie(otpChallengeCookieName, buildOtpChallengeCookieOptions(request));
-            }
-
-            return reply.redirect(
-                buildLoginRedirectUrl(request, returnUrl, {
-                    message: 'Verification email sent.',
-                    status: 'success',
-                }),
-            );
+            return typeof failure === 'string'
+                ? redirectWith(failure)
+                : redirectWith('Verification email sent.', 'success');
         } catch (error: unknown) {
-            return reply.redirect(
-                buildLoginRedirectUrl(request, returnUrl, {
-                    message: readMessage(error) ?? 'Failed to send verification email.',
-                    status: 'error',
-                }),
-            );
+            return redirectWith(readMessage(error) ?? 'Failed to send verification email.');
         }
     });
 

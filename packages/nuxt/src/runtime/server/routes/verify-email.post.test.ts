@@ -139,4 +139,47 @@ describe('verify-email POST route', () => {
             303,
         );
     });
+    it.each([
+        {
+            cookieCsrfToken: 'other-token',
+            name: 'the CSRF pair does not match',
+            verifiedPayload: { email: 'nuxt@example.com', scope: '*' },
+        },
+        {
+            cookieCsrfToken: 'csrf-token',
+            name: 'the returned access token fails verification',
+            verifiedPayload: null,
+        },
+    ])('redirects to login without a session cookie when $name', async (testCase) => {
+        const event = {};
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ accessToken: 'access-token' }),
+        });
+        readBodyMock.mockResolvedValue({ csrfToken: 'csrf-token', token: 'email-token' });
+        getCookieMock.mockReturnValue(testCase.cookieCsrfToken);
+        getRequestURLMock.mockReturnValue(new URL('http://app.example.com/verify-email'));
+        getJwtSecretMock.mockReturnValue(new TextEncoder().encode('jwt-secret'));
+        getMagicSsoConfigMock.mockReturnValue({
+            serverUrl: 'http://sso.example.com',
+            cookiePath: '/',
+        });
+        normaliseReturnUrlMock.mockReturnValue('/');
+        verifyAuthTokenMock.mockResolvedValue(testCase.verifiedPayload);
+        buildLoginUrlMock.mockReturnValue('/login');
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { default: verifyEmailRoute } = await import('./verify-email.post');
+        await verifyEmailRoute(event);
+
+        expect(setCookieMock).toHaveBeenCalledTimes(1);
+        expect(setCookieMock).toHaveBeenCalledWith(event, 'magic-sso-verify-csrf', '', {
+            path: '/verify-email',
+            httpOnly: true,
+            maxAge: 0,
+            secure: false,
+            sameSite: 'strict',
+        });
+        expect(sendRedirectMock).toHaveBeenCalledWith(event, '/login', 303);
+    });
 });

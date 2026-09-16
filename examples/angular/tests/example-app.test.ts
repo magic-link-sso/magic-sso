@@ -15,6 +15,7 @@ const protectedPagePath = path.join(rootDir, 'src/app/protected-page.component.t
 const loginUtilsPath = path.join(rootDir, 'src/app/login-utils.ts');
 const signinUtilsPath = path.join(rootDir, 'src/signin-utils.ts');
 const serverPath = path.join(rootDir, 'src/server.ts');
+const serverFlowsPath = path.join(rootDir, 'src/server-flows.ts');
 const envExamplePath = path.join(rootDir, '.env.example');
 const angularConfigPath = path.join(rootDir, 'angular.json');
 const packageJsonPath = path.join(rootDir, 'package.json');
@@ -38,7 +39,8 @@ describe('Angular example app', () => {
         expect(loginPage).toMatch(/sharedSigninBadgeUrl/u);
         expect(loginPage).toMatch(/ngNativeValidate/u);
         expect(loginPage).toMatch(/window\.location\.replace/u);
-        expect(loginPage).toMatch(/typeof initialError !== 'string'/u);
+        expect(loginPage).toMatch(/message: initialError,\s*\}\);\s*return;/u);
+        expect(loginPage).toMatch(/isAbsoluteHttpUrl\(this\.loginTarget\)/u);
         expect(sharedStyles).toContain('width: min(1024px, 100%);');
         expect(sharedStyles).toContain('grid-template-columns: 144px minmax(0, 1fr);');
         expect(sharedStyles).toContain('.button-submit');
@@ -63,12 +65,14 @@ describe('Angular example app', () => {
     });
 
     it('wires the SSR server routes for signin, verify-email, logout, and session', async () => {
-        const [serverSource, angularConfig, signinUtils, envExample] = await Promise.all([
-            readFile(serverPath, 'utf8'),
-            readFile(angularConfigPath, 'utf8'),
-            readFile(signinUtilsPath, 'utf8'),
-            readFile(envExamplePath, 'utf8'),
-        ]);
+        const [serverSource, serverFlows, angularConfig, signinUtils, envExample] =
+            await Promise.all([
+                readFile(serverPath, 'utf8'),
+                readFile(serverFlowsPath, 'utf8'),
+                readFile(angularConfigPath, 'utf8'),
+                readFile(signinUtilsPath, 'utf8'),
+                readFile(envExamplePath, 'utf8'),
+            ]);
 
         expect(serverSource).toMatch(/app\.post\(\s*'\/api\/signin'/u);
         expect(serverSource).toMatch(/app\.post\(\s*'\/api\/verify-email\/otp'/u);
@@ -85,12 +89,13 @@ describe('Angular example app', () => {
         expect(serverSource).toContain('magic-sso-verify-csrf');
         expect(serverSource).toContain('magic-sso-verify-token');
         expect(serverSource).toContain('MAGICSSO_PREVIEW_SECRET');
-        expect(serverSource).toContain('x-magic-sso-preview-secret');
+        expect(serverFlows).toContain('x-magic-sso-preview-secret');
         expect(serverSource).toContain('/verify-email');
-        expect(serverSource).toContain("method: 'POST'");
-        expect(serverSource).toContain("'content-type': 'application/json'");
+        expect(serverFlows).toContain("method: 'POST'");
+        expect(serverFlows).toContain("'content-type': 'application/json'");
         expect(serverSource).toContain('hasSameOriginMutationSource');
-        expect(serverSource).toContain('exchangeEmailOtp');
+        expect(serverSource).toContain('exchangeOtpCode');
+        expect(serverFlows).toContain('exchangeEmailOtp');
         expect(serverSource).not.toContain('name="token"');
         expect(serverSource).toContain('@media (prefers-color-scheme: dark)');
         expect(signinUtils).toContain('readServerUrlConfigError');

@@ -55,6 +55,27 @@ function createOtpChallenge(overrides: Partial<OtpChallenge> = {}): OtpChallenge
     };
 }
 
+type OtpScriptArgs = [string, string, string, number | string | undefined];
+
+function readOtpScriptArgs(
+    numKeys: number,
+    args: Array<number | string>,
+    operation: 'rotation' | 'verification',
+): OtpScriptArgs {
+    if (numKeys !== 2) {
+        throw new Error(`Expected exactly two Redis keys, received ${numKeys}.`);
+    }
+    const [challengeKey, activeKey, value, extra] = args;
+    if (
+        typeof challengeKey !== 'string' ||
+        typeof activeKey !== 'string' ||
+        typeof value !== 'string'
+    ) {
+        throw new Error(`Invalid OTP ${operation} arguments.`);
+    }
+    return [challengeKey, activeKey, value, extra];
+}
+
 class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
     private readonly signInAttempts = new Map<string, number[]>();
     private readonly values = new Map<string, { expiresAt: number; value: string }>();
@@ -81,97 +102,104 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
 
     async eval(script: string, numKeys: number, ...args: Array<number | string>): Promise<unknown> {
         if (script.includes('-- otp_rotate')) {
-            if (numKeys !== 2) {
-                throw new Error(`Expected exactly two Redis keys, received ${numKeys}.`);
-            }
-            const [challengeKey, activeKey, payload, expiresAtValue] = args;
-            if (
-                typeof challengeKey !== 'string' ||
-                typeof activeKey !== 'string' ||
-                typeof payload !== 'string'
-            ) {
-                throw new Error('Invalid OTP rotation arguments.');
-            }
-            if (this.readValue(challengeKey) !== null) {
-                return [0];
-            }
-            const expiresAt = Number(expiresAtValue);
-            const previousChallengeKey = this.readValue(activeKey);
-            this.values.set(challengeKey, { expiresAt, value: payload });
-            this.values.set(activeKey, { expiresAt, value: challengeKey });
-            if (previousChallengeKey !== null && previousChallengeKey !== challengeKey) {
-                this.values.delete(previousChallengeKey);
-            }
-            return [1];
+            return this.evalOtpRotate(readOtpScriptArgs(numKeys, args, 'rotation'));
         }
 
         if (script.includes('-- otp_verify')) {
-            if (numKeys !== 2) {
-                throw new Error(`Expected exactly two Redis keys, received ${numKeys}.`);
-            }
-            const [challengeKey, activeKey, submittedHash, nowValue] = args;
-            if (
-                typeof challengeKey !== 'string' ||
-                typeof activeKey !== 'string' ||
-                typeof submittedHash !== 'string'
-            ) {
-                throw new Error('Invalid OTP verification arguments.');
-            }
-            const payload = this.readValue(challengeKey);
-            if (payload === null) {
-                return ['not_found'];
-            }
-            if (this.readValue(activeKey) !== challengeKey) {
-                this.values.delete(challengeKey);
-                return ['consumed'];
-            }
-            const challenge = parseOtpChallenge(JSON.parse(payload));
-            if (challenge === null) {
-                throw new Error('Invalid stored OTP challenge.');
-            }
-            const now = Number(nowValue);
-            if (challenge.expiresAt <= now) {
-                this.values.delete(challengeKey);
-                this.values.delete(activeKey);
-                return ['expired'];
-            }
-            if (challenge.otpHash !== submittedHash) {
-                challenge.attemptsRemaining -= 1;
-                if (challenge.attemptsRemaining <= 0) {
-                    this.values.delete(challengeKey);
-                    this.values.delete(activeKey);
-                    return ['too_many_attempts'];
-                }
-                this.values.set(challengeKey, {
-                    expiresAt: challenge.expiresAt,
-                    value: JSON.stringify(challenge),
-                });
-                return ['invalid'];
-            }
-            this.values.delete(challengeKey);
-            this.values.delete(activeKey);
-            return ['valid', payload];
+            return this.evalOtpVerify(readOtpScriptArgs(numKeys, args, 'verification'));
         }
 
+        return this.evalSignInLimit(numKeys, args);
+    }
+
+    private evalOtpRotate([
+        challengeKey,
+        activeKey,
+        payload,
+        expiresAtValue,
+    ]: OtpScriptArgs): unknown {
+        if (this.readValue(challengeKey) !== null) {
+            return [0];
+        }
+        const expiresAt = Number(expiresAtValue);
+        const previousChallengeKey = this.readValue(activeKey);
+        this.values.set(challengeKey, { expiresAt, value: payload });
+        this.values.set(activeKey, { expiresAt, value: challengeKey });
+        if (previousChallengeKey !== null && previousChallengeKey !== challengeKey) {
+            this.values.delete(previousChallengeKey);
+        }
+        return [1];
+    }
+
+    private evalOtpVerify([
+        challengeKey,
+        activeKey,
+        submittedHash,
+        nowValue,
+    ]: OtpScriptArgs): unknown {
+        const payload = this.readValue(challengeKey);
+        if (payload === null) {
+            return ['not_found'];
+        }
+        if (this.readValue(activeKey) !== challengeKey) {
+            this.values.delete(challengeKey);
+            return ['consumed'];
+        }
+        const challenge = parseOtpChallenge(JSON.parse(payload));
+        if (challenge === null) {
+            throw new Error('Invalid stored OTP challenge.');
+        }
+        if (challenge.expiresAt <= Number(nowValue)) {
+            this.deleteOtpKeys(challengeKey, activeKey);
+            return ['expired'];
+        }
+        if (challenge.otpHash !== submittedHash) {
+            return this.recordFailedOtpAttempt(challenge, challengeKey, activeKey);
+        }
+        this.deleteOtpKeys(challengeKey, activeKey);
+        return ['valid', payload];
+    }
+
+    private recordFailedOtpAttempt(
+        challenge: OtpChallenge,
+        challengeKey: string,
+        activeKey: string,
+    ): unknown {
+        challenge.attemptsRemaining -= 1;
+        if (challenge.attemptsRemaining <= 0) {
+            this.deleteOtpKeys(challengeKey, activeKey);
+            return ['too_many_attempts'];
+        }
+        this.values.set(challengeKey, {
+            expiresAt: challenge.expiresAt,
+            value: JSON.stringify(challenge),
+        });
+        return ['invalid'];
+    }
+
+    private deleteOtpKeys(challengeKey: string, activeKey: string): void {
+        this.values.delete(challengeKey);
+        this.values.delete(activeKey);
+    }
+
+    private evalSignInLimit(numKeys: number, args: Array<number | string>): unknown {
         if (numKeys !== 1) {
             throw new Error(`Expected exactly one Redis key, received ${numKeys}.`);
         }
 
         const [key, nowMsValue, windowStartMsValue, limitMaxValue] = args;
         const keyName = typeof key === 'string' ? key : '';
-        const nowMs = Number(nowMsValue);
         const windowStartMs = Number(windowStartMsValue);
-        const limitMax = Number(limitMaxValue);
         const attempts = (this.signInAttempts.get(keyName) ?? []).filter(
             (attemptTimestampMs) => attemptTimestampMs > windowStartMs,
         );
         this.signInAttempts.set(keyName, attempts);
 
-        if (attempts.length >= limitMax) {
+        if (attempts.length >= Number(limitMaxValue)) {
             return [0, attempts[0] ?? 0];
         }
 
-        attempts.push(nowMs);
+        attempts.push(Number(nowMsValue));
         attempts.sort((left, right) => left - right);
         this.signInAttempts.set(keyName, attempts);
         return [1, 0];

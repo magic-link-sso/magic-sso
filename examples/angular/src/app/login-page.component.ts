@@ -16,7 +16,9 @@ import {
     buildVerifyUrl,
     getAppOrigin,
     getLoginErrorMessage,
+    isAbsoluteHttpUrl,
     normaliseReturnUrl,
+    readSignInOutcome,
     type SignInResult,
 } from './login-utils';
 import { MAGIC_SSO_CONFIG } from './magic-sso';
@@ -201,13 +203,10 @@ export class LoginPageComponent {
                 success: false,
                 message: initialError,
             });
+            return;
         }
 
-        if (
-            typeof initialError !== 'string' &&
-            typeof window === 'object' &&
-            (this.loginTarget.startsWith('http://') || this.loginTarget.startsWith('https://'))
-        ) {
+        if (typeof window === 'object' && isAbsoluteHttpUrl(this.loginTarget)) {
             window.location.replace(this.loginTarget);
         }
     }
@@ -230,41 +229,12 @@ export class LoginPageComponent {
             });
 
             const payload: unknown = await response.json().catch(() => null);
-            const message =
-                typeof payload === 'object' &&
-                payload !== null &&
-                'message' in payload &&
-                typeof payload.message === 'string'
-                    ? payload.message
-                    : undefined;
-            if (!response.ok) {
-                this.result.set({
-                    success: false,
-                    message: message ?? 'Failed to send verification email.',
-                });
-                return;
+            const outcome = readSignInOutcome(response.ok, payload);
+            this.result.set(outcome.result);
+            if (outcome.result.success) {
+                this.otpChallengeId.set(outcome.otpChallengeId);
+                this.otpLength.set(outcome.otpLength);
             }
-
-            this.result.set({
-                success: true,
-                message: message ?? 'Verification email sent.',
-            });
-            const otpChallengeId =
-                typeof payload === 'object' &&
-                payload !== null &&
-                'otpChallengeId' in payload &&
-                typeof payload.otpChallengeId === 'string'
-                    ? payload.otpChallengeId
-                    : null;
-            const otpLength =
-                typeof payload === 'object' &&
-                payload !== null &&
-                'otpLength' in payload &&
-                typeof payload.otpLength === 'number'
-                    ? payload.otpLength
-                    : 6;
-            this.otpChallengeId.set(otpChallengeId);
-            this.otpLength.set(otpLength);
         } catch {
             this.result.set({
                 success: false,

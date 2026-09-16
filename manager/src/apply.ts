@@ -370,6 +370,66 @@ function createUpdatedState(
     };
 }
 
+function readOptionalTextFile(filePath: string): string | undefined {
+    return existsSync(filePath) ? readFileSync(filePath, 'utf8') : undefined;
+}
+
+function restoreRuntimeConfig(
+    settings: ManagerRuntimeSettings,
+    rollbackRuntimeToml: string | undefined,
+): void {
+    if (typeof rollbackRuntimeToml === 'string') {
+        writeTextFileAtomically(settings.paths.runtimeConfigFile, rollbackRuntimeToml);
+    } else {
+        removeFileIfExists(settings.paths.runtimeConfigFile);
+    }
+}
+
+interface ApplyAttempt {
+    actor: ManagerAuditActor;
+    driftStatus: ConfigDriftStatus | undefined;
+    runtimePlan: RuntimePlan;
+    settings: ManagerRuntimeSettings;
+    stateHash: string;
+    timestamp: string;
+}
+
+function recordApplyFailure(attempt: ApplyAttempt, message: string, rolledBack: boolean): Error {
+    appendManagerAuditEvent(
+        attempt.settings,
+        createFailureAuditEvent(
+            attempt.actor,
+            attempt.runtimePlan,
+            attempt.stateHash,
+            attempt.timestamp,
+            message,
+            rolledBack,
+            attempt.driftStatus,
+        ),
+    );
+    return new Error(message);
+}
+
+async function reloadServerOrRollBack(
+    attempt: ApplyAttempt,
+    rollbackRuntimeToml: string | undefined,
+    fetchImplementation: typeof fetch,
+): Promise<ManagerReloadResult | undefined> {
+    const { settings } = attempt;
+    if (typeof settings.reload === 'undefined') {
+        return undefined;
+    }
+
+    try {
+        return await requestServerReload(settings.reload, fetchImplementation);
+    } catch (error) {
+        restoreRuntimeConfig(settings, rollbackRuntimeToml);
+        const message =
+            error instanceof Error ? error.message : 'Server reload failed after apply.';
+        throw recordApplyFailure(attempt, message, true);
+    }
+}
+
 export async function applyManagerState(
     state: ManagerState,
     settings: ManagerRuntimeSettings,
@@ -377,34 +437,22 @@ export async function applyManagerState(
 ): Promise<ApplyManagerStateResult> {
     const lockHandle = acquireApplyLock(settings.paths.lockFile);
     try {
-        const actor = options.actor ?? getCurrentActorIdentity();
-        const timestamp = (options.now ?? new Date()).toISOString();
-        const stateHash = hashManagerStateForApply(state);
-        const runtimePlan = buildRuntimePlan(state, settings);
-        const driftStatus = getDriftStatus(state, settings);
+        const attempt: ApplyAttempt = {
+            actor: options.actor ?? getCurrentActorIdentity(),
+            driftStatus: getDriftStatus(state, settings),
+            runtimePlan: buildRuntimePlan(state, settings),
+            settings,
+            stateHash: hashManagerStateForApply(state),
+            timestamp: (options.now ?? new Date()).toISOString(),
+        };
+        const { driftStatus, runtimePlan, stateHash, timestamp } = attempt;
         if (driftStatus?.baseConfigDrifted) {
-            const auditEvent = createFailureAuditEvent(
-                actor,
-                runtimePlan,
-                stateHash,
-                timestamp,
-                createBaseDriftError().message,
-                false,
-                driftStatus,
-            );
-            appendManagerAuditEvent(settings, auditEvent);
-            throw createBaseDriftError();
+            throw recordApplyFailure(attempt, createBaseDriftError().message, false);
         }
 
-        const hadRuntimeConfig = existsSync(settings.paths.runtimeConfigFile);
-        const previousRuntimeToml = hadRuntimeConfig
-            ? readFileSync(settings.paths.runtimeConfigFile, 'utf8')
-            : undefined;
-        const hadLastKnownGoodRuntime = existsSync(settings.paths.lastGoodRuntimeConfigFile);
-        const previousLastKnownGoodRuntimeToml = hadLastKnownGoodRuntime
-            ? readFileSync(settings.paths.lastGoodRuntimeConfigFile, 'utf8')
-            : undefined;
-        const rollbackRuntimeToml = previousRuntimeToml ?? previousLastKnownGoodRuntimeToml;
+        const rollbackRuntimeToml =
+            readOptionalTextFile(settings.paths.runtimeConfigFile) ??
+            readOptionalTextFile(settings.paths.lastGoodRuntimeConfigFile);
 
         if (typeof rollbackRuntimeToml === 'string') {
             writeTextFileAtomically(settings.paths.lastGoodRuntimeConfigFile, rollbackRuntimeToml);
@@ -412,49 +460,23 @@ export async function applyManagerState(
 
         writeTextFileAtomically(settings.paths.runtimeConfigFile, runtimePlan.runtimeToml);
 
-        let reloadResult: ManagerReloadResult | undefined;
-        if (typeof settings.reload !== 'undefined') {
-            try {
-                reloadResult = await requestServerReload(
-                    settings.reload,
-                    options.fetchImplementation ?? fetch,
-                );
-            } catch (error) {
-                if (typeof rollbackRuntimeToml === 'string') {
-                    writeTextFileAtomically(settings.paths.runtimeConfigFile, rollbackRuntimeToml);
-                } else {
-                    removeFileIfExists(settings.paths.runtimeConfigFile);
-                }
-
-                const message =
-                    error instanceof Error ? error.message : 'Server reload failed after apply.';
-                const auditEvent = createFailureAuditEvent(
-                    actor,
-                    runtimePlan,
-                    stateHash,
-                    timestamp,
-                    message,
-                    true,
-                    driftStatus,
-                );
-                appendManagerAuditEvent(settings, auditEvent);
-                throw new Error(message);
-            }
-        }
+        const reloadResult = await reloadServerOrRollBack(
+            attempt,
+            rollbackRuntimeToml,
+            options.fetchImplementation ?? fetch,
+        );
 
         writeTextFileAtomically(settings.paths.lastGoodRuntimeConfigFile, runtimePlan.runtimeToml);
 
         const updatedState = createUpdatedState(state, timestamp, runtimePlan, stateHash);
         writeTextFileAtomically(settings.paths.stateFile, stringifyManagerState(updatedState));
 
-        const changedSiteIds =
-            typeof reloadResult === 'undefined' ? [] : reloadResult.changedSiteIds;
         const auditEvent = createSuccessAuditEvent(
-            actor,
+            attempt.actor,
             runtimePlan,
             stateHash,
             timestamp,
-            changedSiteIds,
+            reloadResult?.changedSiteIds ?? [],
             typeof reloadResult !== 'undefined',
             driftStatus,
         );

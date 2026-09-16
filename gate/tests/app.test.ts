@@ -144,6 +144,97 @@ async function createAccessToken(options: {
         .sign(secret);
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+        headers: {
+            'content-type': 'application/json',
+        },
+        status,
+    });
+}
+
+interface SsoFetchRoute {
+    matches(url: string, method: string | undefined): boolean;
+    respond(init: RequestInit | undefined): Promise<Response>;
+}
+
+function readRevocationCheckJti(init: RequestInit | undefined): unknown {
+    if (typeof init?.body !== 'string') {
+        throw new Error('Expected the revocation check request body to be JSON text.');
+    }
+
+    const body: unknown = JSON.parse(init.body);
+    return typeof body === 'object' && body !== null ? Reflect.get(body, 'jti') : null;
+}
+
+function createSsoFetchRoutes(options: {
+    invalidAudience?: boolean;
+    otpChallengeId?: string;
+    otpVerifyStatus?: number;
+    publicOrigin: string;
+    revokedSessionJtis?: readonly string[];
+}): SsoFetchRoute[] {
+    const audience = options.invalidAudience ? 'http://wrong.example.com' : options.publicOrigin;
+    const post = (path: string) => (url: string, method: string | undefined) =>
+        url === `${ssoOrigin}${path}` && method === 'POST';
+
+    return [
+        {
+            matches: (url) => url === `${ssoOrigin}/signin`,
+            respond: async () =>
+                jsonResponse({
+                    message: 'Verification email sent',
+                    ...(typeof options.otpChallengeId === 'string'
+                        ? { otpChallengeId: options.otpChallengeId, otpLength: 6 }
+                        : {}),
+                }),
+        },
+        {
+            matches: (url) => url.startsWith(`${ssoOrigin}/verify-email?`),
+            respond: async () => jsonResponse({ email: 'gate@example.com' }),
+        },
+        {
+            matches: post('/verify-email'),
+            respond: async () =>
+                jsonResponse({
+                    accessToken: await createAccessToken({ audience, issuer: ssoOrigin }),
+                }),
+        },
+        {
+            matches: post('/verify-email/otp'),
+            respond: async () => {
+                const status = options.otpVerifyStatus ?? 200;
+                return status === 200
+                    ? jsonResponse({
+                          accessToken: await createAccessToken({ audience, issuer: ssoOrigin }),
+                      })
+                    : jsonResponse({ message: 'Invalid or expired code.' }, status);
+            },
+        },
+        {
+            matches: post('/logout'),
+            respond: async () => jsonResponse({ message: 'Signed out' }),
+        },
+        {
+            matches: post('/session-revocations/check'),
+            respond: async (init) => {
+                const previewSecretHeader = new Headers(init?.headers).get(
+                    'x-magic-sso-preview-secret',
+                );
+                if (previewSecretHeader !== testPreviewSecret) {
+                    return jsonResponse({ message: 'Forbidden' }, 403);
+                }
+
+                const jti = readRevocationCheckJti(init);
+                return jsonResponse({
+                    revoked:
+                        typeof jti === 'string' && (options.revokedSessionJtis ?? []).includes(jti),
+                });
+            },
+        },
+    ];
+}
+
 async function createGateApp(
     options: {
         directUse?: boolean;
@@ -160,106 +251,15 @@ async function createGateApp(
     } = {},
 ) {
     const publicOrigin = options.publicOrigin ?? gateOrigin;
+    const ssoRoutes = createSsoFetchRoutes({ ...options, publicOrigin });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const url = typeof input === 'string' ? input : input.toString();
-        if (url === `${ssoOrigin}/signin`) {
-            return new Response(
-                JSON.stringify({
-                    message: 'Verification email sent',
-                    ...(typeof options.otpChallengeId === 'string'
-                        ? { otpChallengeId: options.otpChallengeId, otpLength: 6 }
-                        : {}),
-                }),
-                {
-                    headers: {
-                        'content-type': 'application/json',
-                    },
-                    status: 200,
-                },
-            );
+        const route = ssoRoutes.find((candidate) => candidate.matches(url, init?.method));
+        if (typeof route === 'undefined') {
+            throw new Error(`Unexpected fetch: ${url}`);
         }
 
-        if (url.startsWith(`${ssoOrigin}/verify-email?`)) {
-            return new Response(JSON.stringify({ email: 'gate@example.com' }), {
-                headers: {
-                    'content-type': 'application/json',
-                },
-                status: 200,
-            });
-        }
-
-        if (url === `${ssoOrigin}/verify-email` && init?.method === 'POST') {
-            const audience = options.invalidAudience ? 'http://wrong.example.com' : publicOrigin;
-            return new Response(
-                JSON.stringify({
-                    accessToken: await createAccessToken({
-                        audience,
-                        issuer: ssoOrigin,
-                    }),
-                }),
-                {
-                    headers: {
-                        'content-type': 'application/json',
-                    },
-                    status: 200,
-                },
-            );
-        }
-
-        if (url === `${ssoOrigin}/verify-email/otp` && init?.method === 'POST') {
-            const status = options.otpVerifyStatus ?? 200;
-            const audience = options.invalidAudience ? 'http://wrong.example.com' : publicOrigin;
-            return new Response(
-                JSON.stringify(
-                    status === 200
-                        ? { accessToken: await createAccessToken({ audience, issuer: ssoOrigin }) }
-                        : { message: 'Invalid or expired code.' },
-                ),
-                { headers: { 'content-type': 'application/json' }, status },
-            );
-        }
-
-        if (url === `${ssoOrigin}/logout` && init?.method === 'POST') {
-            return new Response(JSON.stringify({ message: 'Signed out' }), {
-                headers: {
-                    'content-type': 'application/json',
-                },
-                status: 200,
-            });
-        }
-
-        if (url === `${ssoOrigin}/session-revocations/check` && init?.method === 'POST') {
-            const previewSecretHeader = new Headers(init.headers).get('x-magic-sso-preview-secret');
-            if (previewSecretHeader !== testPreviewSecret) {
-                return new Response(JSON.stringify({ message: 'Forbidden' }), {
-                    headers: {
-                        'content-type': 'application/json',
-                    },
-                    status: 403,
-                });
-            }
-
-            if (typeof init.body !== 'string') {
-                throw new Error('Expected the revocation check request body to be JSON text.');
-            }
-
-            const body: unknown = JSON.parse(init.body);
-            const jti = typeof body === 'object' && body !== null ? Reflect.get(body, 'jti') : null;
-            return new Response(
-                JSON.stringify({
-                    revoked:
-                        typeof jti === 'string' && (options.revokedSessionJtis ?? []).includes(jti),
-                }),
-                {
-                    headers: {
-                        'content-type': 'application/json',
-                    },
-                    status: 200,
-                },
-            );
-        }
-
-        throw new Error(`Unexpected fetch: ${url}`);
+        return route.respond(init);
     });
 
     const proxyStub = options.proxyStub ?? createProxyStub();

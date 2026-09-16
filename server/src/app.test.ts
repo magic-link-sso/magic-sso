@@ -266,6 +266,36 @@ async function getVerifyEmailFormSecurityContext(
     };
 }
 
+function createTemporaryStoreDirectory(prefix: string, createdDirectories: string[]): string {
+    const directory = mkdtempSync(join(tmpdir(), prefix));
+    createdDirectories.push(directory);
+    return directory;
+}
+
+function resolveTestSites(
+    baseSites: AppConfig['sites'],
+    overrides: Partial<AppConfig> | undefined,
+): AppConfig['sites'] {
+    if (typeof overrides?.sites !== 'undefined') {
+        return overrides.sites;
+    }
+
+    return baseSites.map((site) => ({
+        ...site,
+        hostedAuthBranding: overrides?.hostedAuthBranding ?? site.hostedAuthBranding,
+        hostedAuthPageCopy: overrides?.hostedAuthPageCopy ?? site.hostedAuthPageCopy,
+    }));
+}
+
+function definedEntries<T extends Record<string, unknown>>(
+    entries: T,
+): { [K in keyof T]?: Exclude<T[K], undefined> } {
+    // Every undefined value is filtered out, so the remaining entries match the narrowed type.
+    return Object.fromEntries(
+        Object.entries(entries).filter(([, value]) => typeof value !== 'undefined'),
+    ) as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
 async function createTestApp(
     options: {
         config?: Partial<AppConfig>;
@@ -278,37 +308,18 @@ async function createTestApp(
     } = {},
 ): Promise<FastifyInstance> {
     const baseConfig = createTestConfig();
-    const createdVerifyTokenStoreDir =
-        options.config?.verifyTokenStoreDir ??
-        mkdtempSync(join(tmpdir(), 'magic-sso-verify-store-'));
-    const createdSignInEmailRateLimitStoreDir =
-        options.config?.signInEmailRateLimitStoreDir ??
-        mkdtempSync(join(tmpdir(), 'magic-sso-email-limit-store-'));
+    const temporaryDirectories: string[] = [];
     const config: AppConfig = {
         ...baseConfig,
-        verifyTokenStoreDir: createdVerifyTokenStoreDir,
-        signInEmailRateLimitStoreDir: createdSignInEmailRateLimitStoreDir,
         ...options.config,
-        sites: options.config?.sites ?? baseConfig.sites,
+        verifyTokenStoreDir:
+            options.config?.verifyTokenStoreDir ??
+            createTemporaryStoreDirectory('magic-sso-verify-store-', temporaryDirectories),
+        signInEmailRateLimitStoreDir:
+            options.config?.signInEmailRateLimitStoreDir ??
+            createTemporaryStoreDirectory('magic-sso-email-limit-store-', temporaryDirectories),
+        sites: resolveTestSites(baseConfig.sites, options.config),
     };
-    if (
-        typeof options.config?.hostedAuthBranding !== 'undefined' &&
-        typeof options.config.sites === 'undefined'
-    ) {
-        config.sites = config.sites.map((site) => ({
-            ...site,
-            hostedAuthBranding: options.config?.hostedAuthBranding ?? site.hostedAuthBranding,
-        }));
-    }
-    if (
-        typeof options.config?.hostedAuthPageCopy !== 'undefined' &&
-        typeof options.config.sites === 'undefined'
-    ) {
-        config.sites = config.sites.map((site) => ({
-            ...site,
-            hostedAuthPageCopy: options.config?.hostedAuthPageCopy ?? site.hostedAuthPageCopy,
-        }));
-    }
     const sentEmails = options.sentEmails ?? [];
     const mailer =
         options.mailer ??
@@ -318,35 +329,21 @@ async function createTestApp(
             },
         } satisfies VerificationEmailSender);
 
-    const buildAppOptions: Parameters<typeof buildApp>[0] = {
+    const app = await buildApp({
         config,
         logger: options.logger ?? false,
         mailer,
-    };
-
-    if (typeof options.replayStore !== 'undefined') {
-        buildAppOptions.verificationTokenReplayStore = options.replayStore;
-    }
-
-    if (typeof options.sessionRevocationStore !== 'undefined') {
-        buildAppOptions.sessionRevocationStore = options.sessionRevocationStore;
-    }
-
-    if (typeof options.startupProbeToken === 'string') {
-        buildAppOptions.startupProbeToken = options.startupProbeToken;
-    }
-
-    const app = await buildApp(buildAppOptions);
-    if (typeof options.config?.verifyTokenStoreDir === 'undefined') {
-        app.addHook('onClose', async (): Promise<void> => {
-            rmSync(createdVerifyTokenStoreDir, { recursive: true, force: true });
-        });
-    }
-    if (typeof options.config?.signInEmailRateLimitStoreDir === 'undefined') {
-        app.addHook('onClose', async (): Promise<void> => {
-            rmSync(createdSignInEmailRateLimitStoreDir, { recursive: true, force: true });
-        });
-    }
+        ...definedEntries({
+            sessionRevocationStore: options.sessionRevocationStore,
+            startupProbeToken: options.startupProbeToken,
+            verificationTokenReplayStore: options.replayStore,
+        }),
+    });
+    app.addHook('onClose', async (): Promise<void> => {
+        for (const directory of temporaryDirectories) {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
 
     return app;
 }

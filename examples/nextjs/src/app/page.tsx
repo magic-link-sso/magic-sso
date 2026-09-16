@@ -12,9 +12,7 @@ import { buildLoginTarget, getAppOrigin } from './login/url';
 
 export default async function HomePage(): Promise<React.JSX.Element> {
   const auth = await verifyToken();
-  const headerStore = await headers();
-  const host = headerStore.get('x-forwarded-host') ?? headerStore.get('host') ?? 'localhost:3001';
-  const loginTarget = buildLoginTarget(getAppOrigin(host, headerStore.get('x-forwarded-proto')));
+  const loginTarget = buildLoginTarget(getAppOrigin(await headers()));
 
   return (
     <main className="shell">

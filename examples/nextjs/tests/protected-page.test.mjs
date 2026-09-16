@@ -84,7 +84,8 @@ test('login flow sends sign-in requests with a client verify callback', async ()
     assert.match(loginSignin, /requestMagicLink\(email, returnUrl, scope, \{ verifyUrl \}\)/u);
     assert.match(signInRoute, /buildLoginRedirect/u);
     assert.match(signInRoute, /success: 'verification-email-sent'/u);
-    assert.match(signInRoute, /otpChallengeId/u);
+    assert.match(signInRoute, /readOtpMetadata/u);
+    assert.match(loginSignin, /otpChallengeId/u);
     assert.match(loginForm, /one-time-code/u);
     assert.match(loginForm, /api\/verify-email\/otp/u);
     assert.match(loginForm, /form\.hidden = true/u);

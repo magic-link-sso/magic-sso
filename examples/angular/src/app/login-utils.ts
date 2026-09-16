@@ -14,6 +14,38 @@ export interface SignInResult {
     success: boolean;
 }
 
+export interface SignInOutcome {
+    otpChallengeId: string | null;
+    otpLength: number;
+    result: SignInResult;
+}
+
+function readPayloadField(payload: unknown, field: string): unknown {
+    return typeof payload === 'object' && payload !== null
+        ? Reflect.get(payload, field)
+        : undefined;
+}
+
+/** Interpret the `/api/signin` response, including any OTP challenge it started. */
+export function readSignInOutcome(ok: boolean, payload: unknown): SignInOutcome {
+    const message = readPayloadField(payload, 'message');
+    const serverMessage = typeof message === 'string' ? message : undefined;
+    const otpChallengeId = readPayloadField(payload, 'otpChallengeId');
+    const otpLength = readPayloadField(payload, 'otpLength');
+
+    return {
+        otpChallengeId: ok && typeof otpChallengeId === 'string' ? otpChallengeId : null,
+        otpLength: typeof otpLength === 'number' ? otpLength : 6,
+        result: ok
+            ? { success: true, message: serverMessage ?? 'Verification email sent.' }
+            : { success: false, message: serverMessage ?? 'Failed to send verification email.' },
+    };
+}
+
+export function isAbsoluteHttpUrl(value: string): boolean {
+    return value.startsWith('http://') || value.startsWith('https://');
+}
+
 export function getAppOrigin(request: Request | null | undefined): string {
     if (request instanceof Request) {
         return new URL(request.url).origin;
@@ -50,7 +82,7 @@ export function buildVerifyUrl(appOrigin: string, returnUrl: string): string {
 }
 
 function isReturnTarget(value: string): boolean {
-    return value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://');
+    return value.startsWith('/') || isAbsoluteHttpUrl(value);
 }
 
 export function buildLoginTarget(

@@ -49,5 +49,15 @@
     "duplicates": {
         "minOccurrences": 3
     },
+    "health": {
+        "coverage": "coverage/coverage-final.json",
+        "thresholdOverrides": [
+            {
+                "files": ["**/*.test.ts", "**/tests/**", "**/test/**", "tests/e2e/**"],
+                "maxCrap": 1000000,
+                "reason": "Test code is excluded from coverage by design, so CRAP scores there only measure missing self-coverage. Cyclomatic and cognitive limits still apply."
+            }
+        ]
+    },
     "rules": {}
 }

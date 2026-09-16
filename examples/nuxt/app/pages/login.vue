@@ -35,6 +35,18 @@ const emailDescription = computed(() =>
     hasError.value ? 'signin-help signin-feedback' : 'signin-help',
 );
 const verifyUrl = computed(() => buildVerifyUrl(requestUrl.origin, returnUrl.value));
+const loginCopy = computed(() =>
+    isConfirmation.value
+        ? {
+              help: 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.',
+              title: 'Check your email',
+          }
+        : { help: "We'll email you a sign-in link.", title: 'Sign in' },
+);
+const submitLabel = computed(() => (pending.value ? 'Sending magic link...' : 'Send magic link'));
+const otpSubmitLabel = computed(() => (otpPending.value ? 'Signing in…' : 'Sign in with code'));
+const otpLength = computed(() => result.value?.otpLength);
+const otpPlaceholder = computed(() => (otpLength.value === 6 ? '123456' : undefined));
 
 useHead({
     title: 'Sign In | Magic Link SSO Nuxt',
@@ -105,14 +117,10 @@ function useDifferentEmail(): void {
             />
             <p class="eyebrow">Sign In</p>
             <h1 id="login-title" class="login-title">
-                {{ isConfirmation ? 'Check your email' : 'Sign in' }}
+                {{ loginCopy.title }}
             </h1>
             <p id="signin-help" class="login-copy">
-                {{
-                    isConfirmation
-                        ? 'If your email can sign in, you will receive a link shortly. Open the email and click the link to continue.'
-                        : "We'll email you a sign-in link."
-                }}
+                {{ loginCopy.help }}
             </p>
 
             <form
@@ -147,7 +155,7 @@ function useDifferentEmail(): void {
                             :class="{ 'button-spinner-visible': pending }"
                             aria-hidden="true"
                         />
-                        <span>{{ pending ? 'Sending magic link...' : 'Send magic link' }}</span>
+                        <span>{{ submitLabel }}</span>
                     </button>
                     <NuxtLink to="/" class="button button-secondary">Back Home</NuxtLink>
                 </div>
@@ -168,9 +176,9 @@ function useDifferentEmail(): void {
                         autocomplete="one-time-code"
                         inputmode="numeric"
                         pattern="[0-9]*"
-                        :minlength="result?.otpLength"
-                        :maxlength="result?.otpLength"
-                        :placeholder="result?.otpLength === 6 ? '123456' : undefined"
+                        :minlength="otpLength"
+                        :maxlength="otpLength"
+                        :placeholder="otpPlaceholder"
                         aria-describedby="otp-help"
                         required
                     />
@@ -183,7 +191,7 @@ function useDifferentEmail(): void {
                             type="submit"
                             :disabled="otpPending"
                         >
-                            {{ otpPending ? 'Signing in…' : 'Sign in with code' }}
+                            {{ otpSubmitLabel }}
                         </button>
                         <button
                             class="button button-secondary"
