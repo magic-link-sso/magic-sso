@@ -55,11 +55,11 @@
         "@magic-link-sso/core": "workspace:*"
     },
     "devDependencies": {
-        "@types/node": "^25.9.5",
-        "@types/react": "^19.2.18",
-        "jose": "^6.2.8",
+        "@types/node": "^25.9.7",
+        "@types/react": "^19.3.0",
+        "jose": "^6.2.12",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.10"
+        "vitest": "^4.1.11"
     },
     "peerDependencies": {
         "next": "^16.2.11",

@@ -63,11 +63,11 @@
     },
     "devDependencies": {
         "@nuxt/schema": "^4.5.2",
-        "@types/node": "^25.9.5",
-        "jose": "^6.2.8",
+        "@types/node": "^25.9.7",
+        "jose": "^6.2.12",
         "nuxt": "^4.5.2",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.10"
+        "vitest": "^4.1.11"
     },
     "peerDependencies": {
         "nuxt": "^4.2.0"

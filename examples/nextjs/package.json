@@ -19,15 +19,15 @@
         "@magic-link-sso/nextjs": "workspace:*",
         "magic-sso-example-ui": "workspace:*",
         "next": "^16.3.5",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8"
+        "react": "^19.3.0",
+        "react-dom": "^19.3.0"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.3.3",
-        "@types/node": "^25.9.5",
-        "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.4",
-        "postcss": "^8.5.26",
+        "@types/node": "^25.9.7",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "postcss": "^8.5.28",
         "tailwindcss": "^4.3.3",
         "typescript": "^6.0.3"
     },
