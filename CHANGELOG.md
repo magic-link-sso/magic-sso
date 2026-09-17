@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases.
 
+## [1.4.3] - 2026-09-17
+
+### Changed
+
+- Pass fallow health with real coverage data
+
+### Chore
+
+- Upgrade dependencies
+
 ## [1.4.2] - 2026-09-14
 
 ### Changed
