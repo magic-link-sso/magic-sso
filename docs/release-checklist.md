@@ -9,8 +9,8 @@ release.
   `https://github.com/magic-link-sso/magic-sso`.
 - The default branch is `main`.
 - `README.md`, package metadata, and workflow links all resolve against `main`.
-- Community files are present and current: `LICENSE`, `SECURITY.md`,
-  `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, and
+- Community files are present and current: `LICENSE-MIT`, `LICENSE-GPL`,
+  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, and
   `.github/CODEOWNERS`.
 
 ## Release automation prerequisites

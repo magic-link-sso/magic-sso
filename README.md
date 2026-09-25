@@ -615,4 +615,7 @@ always wins over the repository default.
   [@magic-link-sso/nuxt](./packages/nuxt/LICENSE),
   [magic-link-sso-django](./packages/django/LICENSE)
 - Everything else, the Gate service, examples, docs, and tooling included:
-  [MIT](./LICENSE) as the repository default
+  [MIT](./LICENSE-MIT) as the repository default
+
+The root [`LICENSE-GPL`](./LICENSE-GPL) is a copy of the GPLv3 text used by the
+server and manager. It does not apply to anything outside those components.
