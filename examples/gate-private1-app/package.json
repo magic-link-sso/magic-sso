@@ -14,13 +14,13 @@
         "typecheck": "tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
-        "@fastify/websocket": "^11.3.0",
+        "@fastify/websocket": "^11.3.4",
         "dotenv": "^17.4.2",
         "fastify": "^5.12.5"
     },
     "devDependencies": {
-        "@types/node": "^25.9.7",
-        "tsx": "^4.23.13",
+        "@types/node": "^25.9.9",
+        "tsx": "^4.23.15",
         "typescript": "^5.9.3",
         "vitest": "^4.1.11"
     },

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 export type { AuthPayload, MagicSsoResolvedConfig } from '../../types';
-export type { VerifyAuthTokenOptions } from './utils/auth';
+export type { AuthRequestEvent, VerifyAuthTokenOptions } from './utils/auth';
 export {
     DEFAULT_EXCLUDED_PATHS,
     buildLoginUrl,

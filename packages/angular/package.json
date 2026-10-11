@@ -60,7 +60,7 @@
         "@magic-link-sso/core": "workspace:*"
     },
     "devDependencies": {
-        "@types/node": "^25.9.7",
+        "@types/node": "^25.9.9",
         "jose": "^6.2.12",
         "typescript": "~5.9.3",
         "vitest": "^4.1.11"

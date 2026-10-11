@@ -52,7 +52,7 @@
         "jose": "^6.2.12"
     },
     "devDependencies": {
-        "@types/node": "^25.9.7",
+        "@types/node": "^25.9.9",
         "esbuild": "0.28.2",
         "miniflare": "4.20260730.0",
         "typescript": "^6.0.3",

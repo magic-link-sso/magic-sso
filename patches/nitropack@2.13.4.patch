@@ -1,0 +1,39 @@
+diff --git a/dist/core/index.mjs b/dist/core/index.mjs
+index 8a601e0360c576d1e1c0e73da413d2393b8beb26..83124fa0c94bcd8572af71cde63fe9e09fb1371a 100644
+--- a/dist/core/index.mjs
++++ b/dist/core/index.mjs
+@@ -20,7 +20,7 @@ import { resolveNitroPath, isDirectory, writeFile, prettyPath } from 'nitropack/
+ export { defineNitroPreset } from 'nitropack/kit';
+ import { findWorkspaceDir } from 'pkg-types';
+ import { createJiti } from 'jiti';
+-import { globby } from 'globby';
++import { glob as globby } from 'tinyglobby';
+ import fsp, { readFile, rm, writeFile as writeFile$1 } from 'node:fs/promises';
+ import { ofetch } from 'ofetch';
+ import { klona as klona$1 } from 'klona';
+diff --git a/dist/presets/cloudflare/utils.mjs b/dist/presets/cloudflare/utils.mjs
+index 68de76acbf568c69fa2254c57ac74451075fbb17..851f4d10bb023e1d1d4720d4edda120264f88b00 100644
+--- a/dist/presets/cloudflare/utils.mjs
++++ b/dist/presets/cloudflare/utils.mjs
+@@ -5,7 +5,7 @@ import { writeFile } from "nitropack/kit";
+ import { parseTOML, parseJSONC } from "confbox";
+ import { readGitConfig, readPackageJSON, findNearestFile } from "pkg-types";
+ import { defu } from "defu";
+-import { globby } from "globby";
++import { glob as globby } from "tinyglobby";
+ import { provider } from "std-env";
+ import { join, resolve } from "pathe";
+ import {
+diff --git a/dist/rollup/index.mjs b/dist/rollup/index.mjs
+index 9aadcbc7925e965062670f1d86436f8e0830b200..80f622cf2ddea822a16d34b585c15dfb11e24b13 100644
+--- a/dist/rollup/index.mjs
++++ b/dist/rollup/index.mjs
+@@ -20,7 +20,7 @@ import { rollup } from 'unwasm/plugin';
+ import { genImport, genSafeVariableName } from 'knitwork';
+ import { connectors } from 'db0';
+ import { camelCase } from 'scule';
+-import { globby } from 'globby';
++import { glob as globby } from 'tinyglobby';
+ import { createFilter } from 'unplugin-utils';
+ import { transform } from 'esbuild';
+ import { existsSync, promises } from 'node:fs';

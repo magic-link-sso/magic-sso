@@ -1,0 +1,578 @@
+diff --git a/dist/cli.cjs b/dist/cli.cjs
+index 0dfdec388feb897cb14c6bd4f1d26b47c0f1e4e5..e8f3b97da5c32746126e1a05b1e767021a42450c 100644
+--- a/dist/cli.cjs
++++ b/dist/cli.cjs
+@@ -17,7 +17,6 @@ require('node:child_process');
+ require('node:fs');
+ require('node:os');
+ require('std-env');
+-require('node-forge');
+ require('node:fs/promises');
+ require('node:url');
+ 
+diff --git a/dist/cli.mjs b/dist/cli.mjs
+index 225e481f61d80b548147029ac4c75aa15b3d7888..d29cf222a241472d58bd0212069c0ed1e5a06b2d 100644
+--- a/dist/cli.mjs
++++ b/dist/cli.mjs
+@@ -15,7 +15,6 @@ import 'node:child_process';
+ import 'node:fs';
+ import 'node:os';
+ import 'std-env';
+-import 'node-forge';
+ import 'node:fs/promises';
+ import 'node:url';
+ 
+diff --git a/dist/index.cjs b/dist/index.cjs
+index f94a607b9498ba70e2e4e06a92d81f0a94daa25a..0972f9251645e03192d3022716b74ea1db841ec4 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -16,7 +16,6 @@ require('node:fs');
+ require('node:os');
+ require('pathe');
+ require('std-env');
+-require('node-forge');
+ require('node:fs/promises');
+ require('node:url');
+ 
+diff --git a/dist/index.mjs b/dist/index.mjs
+index e9f82210d182608918b6ab9375420ee11a678d7c..f62e17f2c190d5c2797b91206a71147734c23994 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -14,6 +14,5 @@ import 'node:fs';
+ import 'node:os';
+ import 'pathe';
+ import 'std-env';
+-import 'node-forge';
+ import 'node:fs/promises';
+ import 'node:url';
+diff --git a/dist/shared/listhen.DAqrw83w.cjs b/dist/shared/listhen.DAqrw83w.cjs
+index 0930a15839093dd60357d5829e692205a40df07a..f98d6f600a073b7ef8bb7216c8634fbf14c737e0 100644
+--- a/dist/shared/listhen.DAqrw83w.cjs
++++ b/dist/shared/listhen.DAqrw83w.cjs
+@@ -15,7 +15,9 @@ const fs = require('node:fs');
+ const os = require('node:os');
+ const pathe = require('pathe');
+ const stdEnv = require('std-env');
+-const forge = require('node-forge');
++const { generate } = require('selfsigned');
++const { createPrivateKey } = require('node:crypto');
++const { createSecureContext } = require('node:tls');
+ const promises = require('node:fs/promises');
+ const node_url = require('node:url');
+ 
+@@ -27,7 +29,6 @@ const addShutdown__default = /*#__PURE__*/_interopDefaultCompat(addShutdown);
+ const childProcess__default = /*#__PURE__*/_interopDefaultCompat(childProcess);
+ const fs__default = /*#__PURE__*/_interopDefaultCompat(fs);
+ const os__default = /*#__PURE__*/_interopDefaultCompat(os);
+-const forge__default = /*#__PURE__*/_interopDefaultCompat(forge);
+ 
+ let isDockerCached;
+ function isDocker() {
+@@ -311,16 +312,7 @@ async function resolveCertificate(options) {
+       https.passphrase = options.passphrase;
+     }
+   } else if (typeof options === "object" && options.pfx) {
+-    const pfx = await resolvePfx(options);
+-    if (!pfx.safeContents || pfx.safeContents.length < 2 || pfx.safeContents[0].safeBags.length === 0 || pfx.safeContents[1].safeBags.length === 0) {
+-      throw new Error("keystore not containing a cert AND a key");
+-    }
+-    const _cert = pfx.safeContents[0].safeBags[0].cert;
+-    const _key = pfx.safeContents[1].safeBags[0].key;
+-    https = {
+-      key: forge__default.pki.privateKeyToPem(_key),
+-      cert: forge__default.pki.certificateToPem(_cert)
+-    };
++    https = await resolvePfx(options);
+   } else {
+     const { cert } = await generateCertificates(options);
+     https = cert;
+@@ -365,12 +357,31 @@ async function resolveCert(options) {
+ }
+ async function resolvePfx(options) {
+   if (options && options.pfx) {
+-    const pfx = await fs.promises.readFile(options.pfx, "binary");
+-    const p12Asn1 = forge__default.asn1.fromDer(pfx);
+-    if (options.passphrase) {
+-      return forge__default.pkcs12.pkcs12FromAsn1(p12Asn1, options.passphrase);
++    const https = {
++      pfx: await fs.promises.readFile(options.pfx),
++      passphrase: options.passphrase || ""
++    };
++    try {
++      createSecureContext(https);
++      return https;
++    } catch (error) {
++      if (error.code !== "ERR_CRYPTO_UNSUPPORTED_OPERATION") {
++        throw error;
++      }
++      // OpenSSL 3 requires its legacy provider for RC2 PKCS#12 stores.
++      // Keep the passphrase out of command arguments and never invoke a shell.
++      const { stdout } = await node_util.promisify(childProcess__default.execFile)("openssl", [
++        "pkcs12", "-legacy", "-in", options.pfx, "-nodes",
++        "-passin", "env:LISTHEN_PFX_PASSPHRASE"
++      ], {
++        env: { ...process.env, LISTHEN_PFX_PASSPHRASE: https.passphrase },
++        maxBuffer: 1024 * 1024,
++        timeout: 10000
++      });
++      const certificate = { key: stdout, cert: stdout };
++      createSecureContext(certificate);
++      return certificate;
+     }
+-    return forge__default.pkcs12.pkcs12FromAsn1(p12Asn1, "");
+   }
+   throw new Error("Error resolving the pfx store");
+ }
+@@ -378,18 +389,18 @@ function createAttributes(options) {
+   return [
+     options.commonName && { name: "commonName", value: options.commonName },
+     options.countryCode && { name: "countryName", value: options.countryCode },
+-    options.state && { name: "stateOrProvinceName", value: options.state },
++    options.state && { shortName: "ST", value: options.state },
+     options.locality && { name: "localityName", value: options.locality },
+     options.organization && {
+       name: "organizationName",
+       value: options.organization
+     },
+     options.organizationalUnit && {
+-      name: "organizationalUnitName",
++      shortName: "OU",
+       value: options.organizationalUnit
+     },
+     options.emailAddress && {
+-      name: "emailAddress",
++      shortName: "E",
+       value: options.emailAddress
+     }
+   ].filter(Boolean);
+@@ -433,14 +444,13 @@ function createCaInfo(options) {
+ }
+ async function generateTLSCert(options) {
+   const { attributes, extensions } = createCertificateInfo(options);
+-  const ca = forge__default.pki.certificateFromPem(options.signingKeyCert);
+   return await generateCert({
+     bits: options.bits,
+     subject: attributes,
+-    issuer: ca.subject.attributes,
+     extensions,
+     validityDays: options.validityDays || 1,
+     signingKey: options.signingKey,
++    signingKeyCert: options.signingKeyCert,
+     signingKeyPassphrase: options.signingKeyPassphrase,
+     passphrase: options.passphrase
+   });
+@@ -456,84 +466,44 @@ async function generateCACert(options = {}) {
+     validityDays: options.validityDays || 1
+   });
+ }
+-function signCertificate(options, cert) {
+-  if (options.signingKey) {
+-    if (isValidPassphrase(options.signingKeyPassphrase)) {
+-      const encryptedPrivateKey = forge__default.pki.encryptedPrivateKeyFromPem(options.signingKey);
+-      const decryptedPrivateKey = forge__default.pki.decryptPrivateKeyInfo(
+-        encryptedPrivateKey,
+-        options.signingKeyPassphrase
+-      );
+-      cert.sign(forge__default.pki.privateKeyFromAsn1(decryptedPrivateKey), forge__default.md.sha256.create());
+-    } else {
+-      cert.sign(forge__default.pki.privateKeyFromPem(options.signingKey), forge__default.md.sha256.create());
+-    }
+-  } else {
+-    cert.sign(cert.privateKey, forge__default.md.sha256.create());
+-  }
+-}
+-function createCertificateFromKeyPair(keyPair, options) {
+-  const serial = Math.floor(Math.random() * 95e3 + 5e4).toString();
+-  const cert = forge__default.pki.createCertificate();
+-  cert.publicKey = keyPair.publicKey;
+-  cert.privateKey = keyPair.privateKey;
+-  cert.serialNumber = Buffer.from(serial).toString("hex");
+-  cert.validity.notBefore = /* @__PURE__ */ new Date();
+-  cert.validity.notAfter = /* @__PURE__ */ new Date();
+-  cert.validity.notAfter.setDate(cert.validity.notAfter.getDate() + options.validityDays);
+-  cert.setSubject(options.subject);
+-  cert.setIssuer(options.issuer);
+-  cert.setExtensions(options.extensions);
+-  return cert;
+-}
+-async function generateKeyPair(bits = 2048) {
+-  const _generateKeyPair = node_util.promisify(forge__default.pki.rsa.generateKeyPair.bind(forge__default.pki.rsa));
+-  return await _generateKeyPair({
+-    bits,
+-    workers: os__default.availableParallelism ? os__default.availableParallelism() : os__default.cpus().length
+-  });
+-}
+ function isValidPassphrase(passphrase) {
+   return typeof passphrase === "string" && passphrase.length < 2e3;
+ }
+ async function generateCert(options) {
+-  const keyPair = await generateKeyPair(options.bits);
+-  const cert = createCertificateFromKeyPair(keyPair, options);
+-  if (isValidPassphrase(options.passphrase)) {
+-    const asn1PrivateKey = forge__default.pki.privateKeyToAsn1(keyPair.privateKey);
+-    const privateKeyInfo = forge__default.pki.wrapRsaPrivateKey(asn1PrivateKey);
+-    const encryptedPrivateKeyInfo = forge__default.pki.encryptPrivateKeyInfo(
+-      privateKeyInfo,
+-      options.passphrase,
+-      {
+-        algorithm: "aes256"
+-      }
+-    );
+-    signCertificate(
+-      {
+-        signingKey: options.signingKey,
+-        signingKeyPassphrase: options.signingKeyPassphrase
+-      },
+-      cert
+-    );
+-    return {
+-      key: forge__default.pki.encryptedPrivateKeyToPem(encryptedPrivateKeyInfo),
+-      cert: forge__default.pki.certificateToPem(cert),
+-      passphrase: options.passphrase
+-    };
+-  } else {
+-    signCertificate(
+-      {
+-        signingKey: options.signingKey,
+-        signingKeyPassphrase: options.signingKeyPassphrase
+-      },
+-      cert
+-    );
+-    return {
+-      key: forge__default.pki.privateKeyToPem(keyPair.privateKey),
+-      cert: forge__default.pki.certificateToPem(cert)
+-    };
+-  }
++  const notBeforeDate = new Date();
++  const notAfterDate = new Date(notBeforeDate);
++  notAfterDate.setDate(notAfterDate.getDate() + options.validityDays);
++  const ca = options.signingKey ? {
++    key: createPrivateKey({
++      key: options.signingKey,
++      ...(isValidPassphrase(options.signingKeyPassphrase)
++        ? { passphrase: options.signingKeyPassphrase } : {})
++    }).export({ type: "pkcs8", format: "pem" }).toString(),
++    cert: options.signingKeyCert
++  } : undefined;
++  // selfsigned serializes attributes into a distinguished-name string.
++  const subject = options.subject.map((attribute) => ({
++    ...attribute,
++    value: String(attribute.value)
++      .replace(/([,+"\\<>;])/g, "\\$1")
++      .replace(/^([ #])/, "\\$1")
++      .replace(/([ ]$)/, "\\$1")
++      .replace(/[\r\n\t]/g, (character) => "\\" + Buffer.from(character).toString("hex"))
++  }));
++  const pems = await generate(subject, {
++    keySize: options.bits,
++    algorithm: "sha256",
++    notBeforeDate,
++    notAfterDate,
++    extensions: options.extensions,
++    ...(ca ? { ca } : {}),
++    ...(isValidPassphrase(options.passphrase) ? { passphrase: options.passphrase } : {})
++  });
++  return {
++    key: pems.private.toString(),
++    cert: pems.cert,
++    ...(isValidPassphrase(options.passphrase) ? { passphrase: options.passphrase } : {})
++  };
+ }
+ 
+ async function listen(handle, _options = {}) {
+diff --git a/dist/shared/listhen.Dh3trXcM.d.cts b/dist/shared/listhen.Dh3trXcM.d.cts
+index 0a8b118469bfff6f522bcd24c3edbbf5f48c85a6..04be59b7115b5d72b568bbbfbaaf2c5e11427a5a 100644
+--- a/dist/shared/listhen.Dh3trXcM.d.cts
++++ b/dist/shared/listhen.Dh3trXcM.d.cts
+@@ -6,14 +6,16 @@ import { NodeOptions } from 'crossws/adapters/node';
+ 
+ type CrossWSOptions = NodeOptions;
+ interface Certificate {
++    /** PKCS#12 keystore passed to Node.js TLS without JavaScript parsing. */
++    pfx?: Buffer;
+     /**
+      * Private key for HTTPS encryption.
+      */
+-    key: string;
++    key?: string;
+     /**
+      * Certificate for HTTPS encryption.
+      */
+-    cert: string;
++    cert?: string;
+     /**
+      * Passphrase for accessing the private key, if required.
+      * @optional
+diff --git a/dist/shared/listhen.Dh3trXcM.d.mts b/dist/shared/listhen.Dh3trXcM.d.mts
+index 0a8b118469bfff6f522bcd24c3edbbf5f48c85a6..04be59b7115b5d72b568bbbfbaaf2c5e11427a5a 100644
+--- a/dist/shared/listhen.Dh3trXcM.d.mts
++++ b/dist/shared/listhen.Dh3trXcM.d.mts
+@@ -6,14 +6,16 @@ import { NodeOptions } from 'crossws/adapters/node';
+ 
+ type CrossWSOptions = NodeOptions;
+ interface Certificate {
++    /** PKCS#12 keystore passed to Node.js TLS without JavaScript parsing. */
++    pfx?: Buffer;
+     /**
+      * Private key for HTTPS encryption.
+      */
+-    key: string;
++    key?: string;
+     /**
+      * Certificate for HTTPS encryption.
+      */
+-    cert: string;
++    cert?: string;
+     /**
+      * Passphrase for accessing the private key, if required.
+      * @optional
+diff --git a/dist/shared/listhen.Dh3trXcM.d.ts b/dist/shared/listhen.Dh3trXcM.d.ts
+index 0a8b118469bfff6f522bcd24c3edbbf5f48c85a6..04be59b7115b5d72b568bbbfbaaf2c5e11427a5a 100644
+--- a/dist/shared/listhen.Dh3trXcM.d.ts
++++ b/dist/shared/listhen.Dh3trXcM.d.ts
+@@ -6,14 +6,16 @@ import { NodeOptions } from 'crossws/adapters/node';
+ 
+ type CrossWSOptions = NodeOptions;
+ interface Certificate {
++    /** PKCS#12 keystore passed to Node.js TLS without JavaScript parsing. */
++    pfx?: Buffer;
+     /**
+      * Private key for HTTPS encryption.
+      */
+-    key: string;
++    key?: string;
+     /**
+      * Certificate for HTTPS encryption.
+      */
+-    cert: string;
++    cert?: string;
+     /**
+      * Passphrase for accessing the private key, if required.
+      * @optional
+diff --git a/dist/shared/listhen.tqe5I1Rl.mjs b/dist/shared/listhen.tqe5I1Rl.mjs
+index fddc8e7fbcb3f1d997df302cb05b978e6fc883d2..7f6798c6edf30fb4131ca422d7b52d3de190dfa0 100644
+--- a/dist/shared/listhen.tqe5I1Rl.mjs
++++ b/dist/shared/listhen.tqe5I1Rl.mjs
+@@ -13,7 +13,9 @@ import fs, { statSync, readFileSync, accessSync, constants, promises, existsSync
+ import os, { networkInterfaces } from 'node:os';
+ import { relative, join as join$1, dirname, resolve } from 'pathe';
+ import { provider } from 'std-env';
+-import forge from 'node-forge';
++import { generate } from 'selfsigned';
++import { createPrivateKey } from 'node:crypto';
++import { createSecureContext } from 'node:tls';
+ import { stat, readFile } from 'node:fs/promises';
+ import { fileURLToPath } from 'node:url';
+ 
+@@ -299,16 +301,7 @@ async function resolveCertificate(options) {
+       https.passphrase = options.passphrase;
+     }
+   } else if (typeof options === "object" && options.pfx) {
+-    const pfx = await resolvePfx(options);
+-    if (!pfx.safeContents || pfx.safeContents.length < 2 || pfx.safeContents[0].safeBags.length === 0 || pfx.safeContents[1].safeBags.length === 0) {
+-      throw new Error("keystore not containing a cert AND a key");
+-    }
+-    const _cert = pfx.safeContents[0].safeBags[0].cert;
+-    const _key = pfx.safeContents[1].safeBags[0].key;
+-    https = {
+-      key: forge.pki.privateKeyToPem(_key),
+-      cert: forge.pki.certificateToPem(_cert)
+-    };
++    https = await resolvePfx(options);
+   } else {
+     const { cert } = await generateCertificates(options);
+     https = cert;
+@@ -353,12 +346,31 @@ async function resolveCert(options) {
+ }
+ async function resolvePfx(options) {
+   if (options && options.pfx) {
+-    const pfx = await promises.readFile(options.pfx, "binary");
+-    const p12Asn1 = forge.asn1.fromDer(pfx);
+-    if (options.passphrase) {
+-      return forge.pkcs12.pkcs12FromAsn1(p12Asn1, options.passphrase);
++    const https = {
++      pfx: await promises.readFile(options.pfx),
++      passphrase: options.passphrase || ""
++    };
++    try {
++      createSecureContext(https);
++      return https;
++    } catch (error) {
++      if (error.code !== "ERR_CRYPTO_UNSUPPORTED_OPERATION") {
++        throw error;
++      }
++      // OpenSSL 3 requires its legacy provider for RC2 PKCS#12 stores.
++      // Keep the passphrase out of command arguments and never invoke a shell.
++      const { stdout } = await promisify(childProcess.execFile)("openssl", [
++        "pkcs12", "-legacy", "-in", options.pfx, "-nodes",
++        "-passin", "env:LISTHEN_PFX_PASSPHRASE"
++      ], {
++        env: { ...process.env, LISTHEN_PFX_PASSPHRASE: https.passphrase },
++        maxBuffer: 1024 * 1024,
++        timeout: 10000
++      });
++      const certificate = { key: stdout, cert: stdout };
++      createSecureContext(certificate);
++      return certificate;
+     }
+-    return forge.pkcs12.pkcs12FromAsn1(p12Asn1, "");
+   }
+   throw new Error("Error resolving the pfx store");
+ }
+@@ -366,18 +378,18 @@ function createAttributes(options) {
+   return [
+     options.commonName && { name: "commonName", value: options.commonName },
+     options.countryCode && { name: "countryName", value: options.countryCode },
+-    options.state && { name: "stateOrProvinceName", value: options.state },
++    options.state && { shortName: "ST", value: options.state },
+     options.locality && { name: "localityName", value: options.locality },
+     options.organization && {
+       name: "organizationName",
+       value: options.organization
+     },
+     options.organizationalUnit && {
+-      name: "organizationalUnitName",
++      shortName: "OU",
+       value: options.organizationalUnit
+     },
+     options.emailAddress && {
+-      name: "emailAddress",
++      shortName: "E",
+       value: options.emailAddress
+     }
+   ].filter(Boolean);
+@@ -421,14 +433,13 @@ function createCaInfo(options) {
+ }
+ async function generateTLSCert(options) {
+   const { attributes, extensions } = createCertificateInfo(options);
+-  const ca = forge.pki.certificateFromPem(options.signingKeyCert);
+   return await generateCert({
+     bits: options.bits,
+     subject: attributes,
+-    issuer: ca.subject.attributes,
+     extensions,
+     validityDays: options.validityDays || 1,
+     signingKey: options.signingKey,
++    signingKeyCert: options.signingKeyCert,
+     signingKeyPassphrase: options.signingKeyPassphrase,
+     passphrase: options.passphrase
+   });
+@@ -444,84 +455,44 @@ async function generateCACert(options = {}) {
+     validityDays: options.validityDays || 1
+   });
+ }
+-function signCertificate(options, cert) {
+-  if (options.signingKey) {
+-    if (isValidPassphrase(options.signingKeyPassphrase)) {
+-      const encryptedPrivateKey = forge.pki.encryptedPrivateKeyFromPem(options.signingKey);
+-      const decryptedPrivateKey = forge.pki.decryptPrivateKeyInfo(
+-        encryptedPrivateKey,
+-        options.signingKeyPassphrase
+-      );
+-      cert.sign(forge.pki.privateKeyFromAsn1(decryptedPrivateKey), forge.md.sha256.create());
+-    } else {
+-      cert.sign(forge.pki.privateKeyFromPem(options.signingKey), forge.md.sha256.create());
+-    }
+-  } else {
+-    cert.sign(cert.privateKey, forge.md.sha256.create());
+-  }
+-}
+-function createCertificateFromKeyPair(keyPair, options) {
+-  const serial = Math.floor(Math.random() * 95e3 + 5e4).toString();
+-  const cert = forge.pki.createCertificate();
+-  cert.publicKey = keyPair.publicKey;
+-  cert.privateKey = keyPair.privateKey;
+-  cert.serialNumber = Buffer.from(serial).toString("hex");
+-  cert.validity.notBefore = /* @__PURE__ */ new Date();
+-  cert.validity.notAfter = /* @__PURE__ */ new Date();
+-  cert.validity.notAfter.setDate(cert.validity.notAfter.getDate() + options.validityDays);
+-  cert.setSubject(options.subject);
+-  cert.setIssuer(options.issuer);
+-  cert.setExtensions(options.extensions);
+-  return cert;
+-}
+-async function generateKeyPair(bits = 2048) {
+-  const _generateKeyPair = promisify(forge.pki.rsa.generateKeyPair.bind(forge.pki.rsa));
+-  return await _generateKeyPair({
+-    bits,
+-    workers: os.availableParallelism ? os.availableParallelism() : os.cpus().length
+-  });
+-}
+ function isValidPassphrase(passphrase) {
+   return typeof passphrase === "string" && passphrase.length < 2e3;
+ }
+ async function generateCert(options) {
+-  const keyPair = await generateKeyPair(options.bits);
+-  const cert = createCertificateFromKeyPair(keyPair, options);
+-  if (isValidPassphrase(options.passphrase)) {
+-    const asn1PrivateKey = forge.pki.privateKeyToAsn1(keyPair.privateKey);
+-    const privateKeyInfo = forge.pki.wrapRsaPrivateKey(asn1PrivateKey);
+-    const encryptedPrivateKeyInfo = forge.pki.encryptPrivateKeyInfo(
+-      privateKeyInfo,
+-      options.passphrase,
+-      {
+-        algorithm: "aes256"
+-      }
+-    );
+-    signCertificate(
+-      {
+-        signingKey: options.signingKey,
+-        signingKeyPassphrase: options.signingKeyPassphrase
+-      },
+-      cert
+-    );
+-    return {
+-      key: forge.pki.encryptedPrivateKeyToPem(encryptedPrivateKeyInfo),
+-      cert: forge.pki.certificateToPem(cert),
+-      passphrase: options.passphrase
+-    };
+-  } else {
+-    signCertificate(
+-      {
+-        signingKey: options.signingKey,
+-        signingKeyPassphrase: options.signingKeyPassphrase
+-      },
+-      cert
+-    );
+-    return {
+-      key: forge.pki.privateKeyToPem(keyPair.privateKey),
+-      cert: forge.pki.certificateToPem(cert)
+-    };
+-  }
++  const notBeforeDate = new Date();
++  const notAfterDate = new Date(notBeforeDate);
++  notAfterDate.setDate(notAfterDate.getDate() + options.validityDays);
++  const ca = options.signingKey ? {
++    key: createPrivateKey({
++      key: options.signingKey,
++      ...(isValidPassphrase(options.signingKeyPassphrase)
++        ? { passphrase: options.signingKeyPassphrase } : {})
++    }).export({ type: "pkcs8", format: "pem" }).toString(),
++    cert: options.signingKeyCert
++  } : undefined;
++  // selfsigned serializes attributes into a distinguished-name string.
++  const subject = options.subject.map((attribute) => ({
++    ...attribute,
++    value: String(attribute.value)
++      .replace(/([,+"\\<>;])/g, "\\$1")
++      .replace(/^([ #])/, "\\$1")
++      .replace(/([ ]$)/, "\\$1")
++      .replace(/[\r\n\t]/g, (character) => "\\" + Buffer.from(character).toString("hex"))
++  }));
++  const pems = await generate(subject, {
++    keySize: options.bits,
++    algorithm: "sha256",
++    notBeforeDate,
++    notAfterDate,
++    extensions: options.extensions,
++    ...(ca ? { ca } : {}),
++    ...(isValidPassphrase(options.passphrase) ? { passphrase: options.passphrase } : {})
++  });
++  return {
++    key: pems.private.toString(),
++    cert: pems.cert,
++    ...(isValidPassphrase(options.passphrase) ? { passphrase: options.passphrase } : {})
++  };
+ }
+ 
+ async function listen(handle, _options = {}) {

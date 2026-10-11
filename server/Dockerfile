@@ -5,6 +5,7 @@ RUN corepack enable
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
 COPY packages/config-core/package.json packages/config-core/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY server/package.json server/package.json
@@ -19,6 +20,7 @@ RUN corepack enable
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
 COPY packages/config-core/package.json packages/config-core/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY server/package.json server/package.json

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { getCookie, getRequestURL, type H3Event } from 'h3';
+import { parse as parseCookies } from 'cookie-es';
 import {
     parseBooleanFlag,
     buildLoginTarget as buildCoreLoginTarget,
@@ -17,6 +18,29 @@ export type { AuthPayload, MagicSsoModuleOptions, MagicSsoResolvedConfig } from 
 export interface VerifyAuthTokenOptions {
     expectedAudience: string;
     expectedIssuer?: string;
+}
+
+// Structural typing also keeps the declaration usable with Nuxt versions before RequestEvent.
+export interface WebAuthRequestEvent {
+    req: Request;
+    url: URL;
+    context: unknown;
+}
+
+export type AuthRequestEvent = H3Event | WebAuthRequestEvent;
+
+function isWebRequestEvent(event: AuthRequestEvent): event is WebAuthRequestEvent {
+    return 'req' in event && event.req instanceof Request;
+}
+
+function readEventHeader(event: AuthRequestEvent, name: string): string | string[] | undefined {
+    return isWebRequestEvent(event)
+        ? (event.req.headers.get(name) ?? undefined)
+        : event.node.req.headers[name];
+}
+
+function readEventUrl(event: AuthRequestEvent): URL {
+    return isWebRequestEvent(event) ? new URL(event.url) : getRequestURL(event);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -95,7 +119,7 @@ function readStringArray(value: unknown, fallback: readonly string[]): readonly 
     return items.length > 0 ? items : fallback;
 }
 
-function isH3Event(value: unknown): value is H3Event {
+function isAuthRequestEvent(value: unknown): value is AuthRequestEvent {
     const record = asRecord(value);
     return record !== null && 'context' in record;
 }
@@ -126,7 +150,7 @@ function getEnvMagicSsoConfigValue(): MagicSsoModuleOptions {
     };
 }
 
-function getMagicSsoConfigValue(event: H3Event): unknown {
+function getMagicSsoConfigValue(event: AuthRequestEvent): unknown {
     const context = asRecord(event.context);
     const nitro = asRecord(context?.nitro);
     const runtimeConfig = asRecord(nitro?.runtimeConfig);
@@ -157,7 +181,7 @@ export function getMagicSsoConfig(source?: unknown): MagicSsoResolvedConfig {
         return resolveMagicSsoConfig(getEnvMagicSsoConfigValue());
     }
 
-    return isH3Event(source)
+    return isAuthRequestEvent(source)
         ? resolveMagicSsoConfig(getMagicSsoConfigValue(source))
         : resolveMagicSsoConfig(source);
 }
@@ -195,8 +219,8 @@ export function isPublicPath(
     );
 }
 
-export function buildLoginUrl(event: H3Event, pathname: string, scope?: string): string {
-    const requestUrl = getRequestURL(event);
+export function buildLoginUrl(event: AuthRequestEvent, pathname: string, scope?: string): string {
+    const requestUrl = readEventUrl(event);
     const config = getMagicSsoConfig(event);
     return buildCoreLoginTarget({
         appOrigin: requestUrl.origin,
@@ -229,7 +253,7 @@ function inferOriginProtocol(host: string): string {
 }
 
 export function getRequestOrigin(
-    event: H3Event,
+    event: AuthRequestEvent,
     options?: { allowRequestUrlFallback?: boolean },
 ): string | null {
     const config = getMagicSsoConfig(event);
@@ -239,21 +263,21 @@ export function getRequestOrigin(
 
     if (config.trustProxy) {
         const host =
-            readFirstHeaderValue(event.node.req.headers['x-forwarded-host']) ??
-            readFirstHeaderValue(event.node.req.headers.host);
+            readFirstHeaderValue(readEventHeader(event, 'x-forwarded-host')) ??
+            readFirstHeaderValue(readEventHeader(event, 'host'));
         if (host !== null) {
             const forwardedProtocol = readFirstHeaderValue(
-                event.node.req.headers['x-forwarded-proto'],
+                readEventHeader(event, 'x-forwarded-proto'),
             );
             const protocol = forwardedProtocol ?? inferOriginProtocol(host);
             return `${protocol}://${host}`;
         }
     }
 
-    return options?.allowRequestUrlFallback === true ? getRequestURL(event).origin : null;
+    return options?.allowRequestUrlFallback === true ? readEventUrl(event).origin : null;
 }
 
-export function hasSameOriginMutationSource(event: H3Event): boolean {
+export function hasSameOriginMutationSource(event: AuthRequestEvent): boolean {
     const expectedOrigin = getRequestOrigin(event, {
         allowRequestUrlFallback: true,
     });
@@ -261,12 +285,12 @@ export function hasSameOriginMutationSource(event: H3Event): boolean {
         return false;
     }
 
-    const originHeader = readFirstHeaderValue(event.node.req.headers.origin);
+    const originHeader = readFirstHeaderValue(readEventHeader(event, 'origin'));
     if (originHeader !== null) {
         return originHeader === expectedOrigin;
     }
 
-    const refererHeader = readFirstHeaderValue(event.node.req.headers.referer);
+    const refererHeader = readFirstHeaderValue(readEventHeader(event, 'referer'));
     if (refererHeader === null) {
         return false;
     }
@@ -278,7 +302,7 @@ export function hasSameOriginMutationSource(event: H3Event): boolean {
     }
 }
 
-function getExpectedAudience(event: H3Event): string | null {
+function getExpectedAudience(event: AuthRequestEvent): string | null {
     return getRequestOrigin(event);
 }
 
@@ -290,8 +314,11 @@ export async function verifyAuthToken(
     return verifyCoreAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
-export async function verifyRequestAuth(event: H3Event): Promise<AuthPayload | null> {
-    const token = getCookie(event, getCookieName(event));
+export async function verifyRequestAuth(event: AuthRequestEvent): Promise<AuthPayload | null> {
+    const cookieName = getCookieName(event);
+    const token = isWebRequestEvent(event)
+        ? parseCookies(event.req.headers.get('cookie') ?? '')[cookieName]
+        : getCookie(event, cookieName);
     if (typeof token !== 'string' || token.length === 0) {
         return null;
     }

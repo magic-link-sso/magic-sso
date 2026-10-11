@@ -5,6 +5,7 @@ RUN corepack enable
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
 COPY examples/gate-private1-app/package.json examples/gate-private1-app/package.json
 RUN pnpm install --ignore-scripts --filter example-app-gate-private1 --frozen-lockfile
 COPY examples/gate-private1-app examples/gate-private1-app
@@ -15,6 +16,7 @@ RUN corepack enable
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
 COPY examples/gate-private1-app/package.json examples/gate-private1-app/package.json
 RUN pnpm install --ignore-scripts --filter example-app-gate-private1 --prod --frozen-lockfile
 

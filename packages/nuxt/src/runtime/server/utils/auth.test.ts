@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { SignJWT } from 'jose';
+import type { RequestEvent } from 'nuxt/schema';
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerVerifyAuthTokenContract } from '../../../../../core/test/adapter-contract.js';
 import {
@@ -20,6 +21,80 @@ import {
 } from './auth';
 
 registerVerifyAuthTokenContract({ name: 'Nuxt', verify: verifyAuthToken });
+
+function createWebEvent(headers: HeadersInit = {}, trustProxy = false): RequestEvent {
+    const url = new URL('http://app.example.com/protected');
+    return {
+        req: new Request(url, { headers }),
+        url,
+        res: { headers: new Headers() },
+        context: {
+            nitro: {
+                runtimeConfig: {
+                    magicSso: {
+                        cookieName: 'magic-sso',
+                        jwtSecret: 'web-event-secret',
+                        publicOrigin: trustProxy ? '' : url.origin,
+                        serverUrl: 'http://sso.example.com',
+                        trustProxy,
+                    },
+                },
+            },
+        },
+    };
+}
+
+describe('Nuxt portable SSR events', () => {
+    it('authenticates the cookie using the configured audience and issuer', async () => {
+        const token = await signToken(
+            'nuxt@example.com',
+            'web-event-secret',
+            'http://app.example.com',
+            'http://sso.example.com',
+        );
+        const event = createWebEvent({ cookie: `other=ignored; magic-sso=${token}` });
+
+        await expect(verifyRequestAuth(event)).resolves.toMatchObject({
+            email: 'nuxt@example.com',
+        });
+        expect(buildLoginUrl(event, '/protected')).toBe(
+            '/login?returnUrl=http%3A%2F%2Fapp.example.com%2Fprotected',
+        );
+    });
+
+    it.each([
+        ['http://wrong.example.com', 'http://sso.example.com'],
+        ['http://app.example.com', 'http://wrong.example.com'],
+    ])('rejects a token issued for audience %s and issuer %s', async (audience, issuer) => {
+        const token = await signToken('nuxt@example.com', 'web-event-secret', audience, issuer);
+        await expect(
+            verifyRequestAuth(createWebEvent({ cookie: `magic-sso=${token}` })),
+        ).resolves.toBeNull();
+    });
+
+    it('rejects missing and invalid cookies', async () => {
+        await expect(verifyRequestAuth(createWebEvent())).resolves.toBeNull();
+        await expect(
+            verifyRequestAuth(createWebEvent({ cookie: 'magic-sso=invalid' })),
+        ).resolves.toBeNull();
+    });
+
+    it('preserves proxy-origin and cross-origin mutation checks with Web Headers', () => {
+        const event = createWebEvent(
+            {
+                host: 'internal.example.com',
+                'x-forwarded-host': 'photos.example.com',
+                'x-forwarded-proto': 'https',
+                origin: 'https://photos.example.com',
+            },
+            true,
+        );
+        expect(getRequestOrigin(event)).toBe('https://photos.example.com');
+        expect(hasSameOriginMutationSource(event)).toBe(true);
+        event.req.headers.set('origin', 'https://evil.example.com');
+        expect(hasSameOriginMutationSource(event)).toBe(false);
+    });
+});
 
 async function signToken(
     email: string,

@@ -56,8 +56,8 @@
         "prepare": "husky"
     },
     "devDependencies": {
-        "@types/node": "^25.9.7",
-        "git-cliff": "^2.13.1",
+        "@types/node": "^25.9.9",
+        "git-cliff": "^2.14.2",
         "husky": "^9.1.7",
         "lint-staged": "^16.4.0",
         "npm-check-updates": "^20.0.2",

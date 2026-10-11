@@ -76,13 +76,20 @@ describe('release security checks', () => {
         };
 
         expect(workspace).toContain('esbuild@>=0.27.3 <0.28.1:');
-        expect(workspace).toContain("nodemailer@<=9.0.0: '>=9.0.1'");
+        expect(workspace).toContain('nodemailer@<10.0.9: ^10.0.16');
+        expect(workspace).toContain('compression@<1.8.2: ^1.8.2');
+        expect(workspace).toContain('simple-git@<4.0.1: ^4.0.1');
+        expect(workspace).toContain('sharp@<0.35.5: ^0.35.5');
+        expect(workspace).toContain('miniflare>sharp: 0.35.5');
+        expect(workspace).toContain('miniflare>undici: ^7.29.1');
+        expect(workspace).toContain('undici@>=7.0.0 <7.29.1: ^7.29.1');
         expect(workspace).toContain("vite@>=8.0.0 <=8.0.15: '>=8.0.16'");
         expect(workspace).toContain('vite-node>vite: 8.0.16');
         expect(workspace).toContain('- esbuild@0.28.1');
-        expect(workspace).toContain('- nodemailer@9.0.1');
+        expect(workspace).toContain('- nodemailer@10.0.16');
+        expect(workspace).toContain('- sharp@0.35.5');
         expect(workspace).toContain('- vite@8.0.16');
-        expectMinimumVersion(serverPackage.dependencies?.nodemailer, [9, 0, 1]);
+        expectMinimumVersion(serverPackage.dependencies?.nodemailer, [10, 0, 9]);
         expectMinimumVersion(nuxtExamplePackage.devDependencies?.vite, [8, 0, 16]);
     });
 

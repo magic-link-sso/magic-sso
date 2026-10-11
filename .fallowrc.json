@@ -14,6 +14,7 @@
         "packages/core/test/fixtures/*.mjs",
         "packages/nuxt/src/runtime/app/**/*.ts",
         "packages/nuxt/src/runtime/server/routes/*.ts",
+        "scripts/fixtures/nitro-dependencies.mjs",
         "tests/e2e/src/run-web-server.mjs"
     ],
     "ignoreDependencies": [
