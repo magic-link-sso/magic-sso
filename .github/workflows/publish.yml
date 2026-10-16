@@ -54,6 +54,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Test managed reload in Docker
+        run: pnpm test:docker
+
       - name: Sync Django example dependencies for E2E
         working-directory: examples/django
         run: uv sync --all-groups

@@ -226,8 +226,14 @@ Then point both deployments at that same host directory:
     - mount `/srv/magic-link-sso/managed` to `/app/runtime`
     - set `MAGICSSO_MANAGER_CONFIG_FILE=/app/runtime/manager.toml`
 - server deployment:
-    - mount `/srv/magic-link-sso/managed/magic-sso.runtime.toml` read-only
-    - set `MAGICSSO_CONFIG_FILE=/app/server/magic-sso.runtime.toml`
+    - mount the shared directory read-only:
+      `/srv/magic-link-sso/managed:/app/runtime:ro`
+    - set `MAGICSSO_CONFIG_FILE=/app/runtime/magic-sso.runtime.toml`
+
+Mount the directory rather than the runtime file itself. Apply replaces the
+runtime file with an atomic rename; a single-file bind mount can continue to
+expose the previous file after that replacement. Generate the initial runtime
+file before starting the server.
 
 In that setup:
 

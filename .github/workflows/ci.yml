@@ -42,6 +42,9 @@ jobs:
       - name: Test
         run: pnpm test:js
 
+      - name: Test managed reload in Docker
+        run: pnpm test:docker
+
   e2e:
     runs-on: ubuntu-latest
     steps:

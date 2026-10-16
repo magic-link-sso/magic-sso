@@ -91,13 +91,19 @@ them together like this:
    `magic-sso.runtime.last-good.toml`, `manager-audit.ndjson`, and
    `manager.lock`.
 3. Mount that directory read-write into the manager container at `/app/runtime`.
-4. Mount `magic-sso.runtime.toml` read-only into the server container and point
-   `MAGICSSO_CONFIG_FILE` at the mounted path.
+4. Mount the shared directory read-only into the server container:
+   `/srv/magic-link-sso/managed:/app/runtime:ro`. Set
+   `MAGICSSO_CONFIG_FILE=/app/runtime/magic-sso.runtime.toml`. Generate the
+   initial runtime file before starting the server.
 5. Keep the SSO server public at an origin such as `https://sso.example.com`.
 6. Keep the manager service private, and expose only Gate publicly at an origin
    such as `https://manager.example.com`.
 7. Optionally configure the server reload endpoint on private networking only if
    you want restart-free applies.
+
+Use a directory bind mount, not a bind mount of the individual runtime file. The
+manager replaces that file through atomic rename; an individual file mount can
+keep exposing the previous version and prevent reload from adopting edits.
 
 The manager does not send the new TOML contents to the server over HTTP. It
 writes the runtime file to shared storage, and the server either reloads or
@@ -345,3 +351,16 @@ For deeper apply-failure, rollback, and drift-recovery procedures, see
 - The manager should trust only the `x-magic-sso-user-email`,
   `x-magic-sso-user-scope`, and `x-magic-sso-site-id` headers forwarded by Gate
   for that dedicated site.
+
+## Container reload smoke test
+
+After `pnpm build`, run `pnpm test:docker` with a local Docker daemon. The test
+runs the built server in a temporary container with a read-only runtime
+**directory** mount, applies a new grant through the manager's atomic writer,
+and verifies that reload changes live sign-in behavior without restarting the
+container. Email delivery is replaced by an in-container test sink.
+
+The test uses `node:24.15-slim`; `MAGICSSO_DOCKER_NODE_IMAGE` can select another
+compatible Node image. It creates an isolated runtime directory and container,
+then removes both. Ordinary unit tests do not require Docker; CI and release
+verification run the explicit smoke command.
