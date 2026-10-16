@@ -23,6 +23,7 @@ import {
 } from 'node:http';
 import { request as createHttpsRequest } from 'node:https';
 import { Socket } from 'node:net';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
     buildAuthCookieOptions,
@@ -101,6 +102,7 @@ interface GateProxyOptions {
     forwardedProto: string;
     headers: Record<string, string>;
     requestBody?: Buffer | undefined;
+    requestStream?: Readable | undefined;
     target: string;
     xfwd: boolean;
 }
@@ -438,7 +440,7 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
         });
 
         if (typeof options.requestBody === 'undefined') {
-            req.pipe(proxyRequest);
+            (options.requestStream ?? req).pipe(proxyRequest);
             return;
         }
 
@@ -524,6 +526,9 @@ function serializeFormBody(body: unknown): string {
 }
 
 function buildProxyRequestBody(request: FastifyRequest): Buffer | undefined {
+    if (request.body instanceof Readable) {
+        return undefined;
+    }
     if (typeof request.body === 'undefined' || request.body === null) {
         return undefined;
     }
@@ -1105,6 +1110,7 @@ async function handleProxyRequest(
         forwardedProto: request.protocol,
         headers: buildUpstreamHeaders(auth),
         requestBody,
+        requestStream: request.body instanceof Readable ? request.body : undefined,
         target: config.upstreamUrl,
         xfwd: true,
     });
@@ -1729,8 +1735,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         await handleProxyRequest(request, reply, config, proxy);
     };
 
-    app.all('/', proxyHandler);
-    app.all('/*', proxyHandler);
+    await app.register(async (upstreamApp): Promise<void> => {
+        // Gate forms keep their parsers; upstream payloads must remain byte-for-byte streams.
+        upstreamApp.removeAllContentTypeParsers();
+        upstreamApp.addContentTypeParser('*', (_request, payload, done) => {
+            done(null, payload);
+        });
+        upstreamApp.all('/', proxyHandler);
+        upstreamApp.all('/*', proxyHandler);
+    });
 
     return app;
 }

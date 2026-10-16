@@ -3,7 +3,12 @@
 
 import { SignJWT } from 'jose';
 import WebSocket, { WebSocketServer } from 'ws';
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import {
+    createServer,
+    IncomingMessage,
+    ServerResponse,
+    request as createHttpRequest,
+} from 'node:http';
 import { Socket } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp, type GateProxyServer } from '../src/app.js';
@@ -331,6 +336,102 @@ function mockSessionRevocationCheck(
 }
 
 describe('magic gate routes', () => {
+    it('streams multipart, binary, and unmodified structured bodies to a real upstream', async () => {
+        mockSessionRevocationCheck(ssoOrigin);
+        const upstream = createServer((request, response) => {
+            response.setHeader(
+                'content-type',
+                request.headers['content-type'] ?? 'application/octet-stream',
+            );
+            request.pipe(response);
+        });
+        const upstreamPort = await listenOnLocalhost(upstream);
+        const app = await createApp({
+            logger: false,
+            config: {
+                jwtSecret: testJwtSecret,
+                previewSecret: testPreviewSecret,
+                publicOrigin: gateOrigin,
+                serverUrl: ssoOrigin,
+                upstreamUrl: `http://127.0.0.1:${upstreamPort}`,
+            },
+        });
+        try {
+            const address = await app.listen({ host: '127.0.0.1', port: 0 });
+            const token = await createAccessToken({ audience: gateOrigin, issuer: ssoOrigin });
+            const cases = [
+                {
+                    contentType: 'multipart/form-data; boundary=upload-boundary',
+                    data: Buffer.concat([
+                        Buffer.from(
+                            '--upload-boundary\r\nContent-Disposition: form-data; name="file"; filename="data.bin"\r\nContent-Type: application/octet-stream\r\n\r\n',
+                        ),
+                        Buffer.from([0, 255, 128]),
+                        Buffer.from('\r\n--upload-boundary--\r\n'),
+                    ]),
+                },
+                {
+                    contentType: 'application/octet-stream',
+                    data: Buffer.alloc(2 * 1024 * 1024, 171),
+                },
+                {
+                    contentType: 'application/json',
+                    data: Buffer.from('{ "n": 9007199254740993, "unicode": "żółw", "n": 2 }\n'),
+                },
+                {
+                    contentType: 'application/x-www-form-urlencoded',
+                    data: Buffer.from('a=first&a=second&encoded=%2f%20+value'),
+                },
+            ];
+            for (const { contentType, data } of cases) {
+                for (const chunked of [false, true]) {
+                    const result = await new Promise<{
+                        status: number | undefined;
+                        body: Buffer;
+                        contentType: string | undefined;
+                    }>((resolve, reject) => {
+                        const request = createHttpRequest(
+                            `${address}/upload`,
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'content-type': contentType,
+                                    cookie: `magic-sso=${token}`,
+                                    ...(chunked
+                                        ? {}
+                                        : { 'content-length': String(data.byteLength) }),
+                                },
+                            },
+                            (response) => {
+                                const chunks: Buffer[] = [];
+                                response.on('data', (chunk: Buffer) => chunks.push(chunk));
+                                response.on('error', reject);
+                                response.on('end', () =>
+                                    resolve({
+                                        status: response.statusCode,
+                                        body: Buffer.concat(chunks),
+                                        contentType: response.headers['content-type'],
+                                    }),
+                                );
+                            },
+                        );
+                        request.on('error', reject);
+                        request.write(data.subarray(0, 13));
+                        setImmediate(() => request.end(data.subarray(13)));
+                    });
+                    expect(result.status, contentType).toBe(200);
+                    expect(result.contentType).toBe(contentType);
+                    expect(result.body).toEqual(data);
+                }
+            }
+        } finally {
+            await app.close();
+            await new Promise<void>((resolve, reject) =>
+                upstream.close((error) => (error ? reject(error) : resolve())),
+            );
+        }
+    });
+
     it('completes a real WebSocket handshake and echoes text and binary messages', async () => {
         mockSessionRevocationCheck(ssoOrigin);
         const upstream = createServer();
