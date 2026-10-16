@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { loadManagerRuntimeSettings } from '../../../manager/src/settings.js';
 import { createE2eConfig, createManagerE2eConfig } from '../playwright.base.js';
 
 function collectGateConfigFiles(config: ReturnType<typeof createE2eConfig>): readonly string[] {
@@ -146,6 +147,14 @@ describe('playwright base config', () => {
             throw new Error('Manager config files were not attached to the expected web servers.');
         }
 
+        for (const file of [bootstrapConfigFile, serviceConfigFile]) {
+            const settings = loadManagerRuntimeSettings({
+                env: { MAGICSSO_MANAGER_CONFIG_FILE: file },
+            });
+            expect(settings.audit?.integrityKey).toBe(
+                'test-manager-audit-integrity-key-1234567890',
+            );
+        }
         const bootstrapContents = readFileSync(bootstrapConfigFile, 'utf8');
         expect(bootstrapContents).toContain('managedSiteIds = ["photos"]');
         expect(bootstrapContents).not.toContain('[reload]');
@@ -160,6 +169,10 @@ describe('playwright base config', () => {
             'allowedEmails = ["owner@example.com", "friend@example.com", "family@example.com"]',
         );
 
+        expect(
+            loadManagerRuntimeSettings({ env: { MAGICSSO_MANAGER_CONFIG_FILE: serviceConfigFile } })
+                .service?.trustProxy,
+        ).toBe(true);
         const serviceContents = readFileSync(serviceConfigFile, 'utf8');
         expect(serviceContents).toContain('managedSiteIds = ["photos"]');
         expect(serviceContents).toContain('requiredSiteId = "manager-admin"');

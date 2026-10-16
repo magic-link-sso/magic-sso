@@ -296,10 +296,12 @@ pnpm dev:direct
 ```
 
 `pnpm test:e2e` runs the Playwright suite against the bundled apps in both
-app-owned and hosted direct modes. It covers the magic-link flow plus OTP
-success and invalid-code behavior for Angular, Django, Fastify, Next.js, Nuxt,
-and both Gate upstreams. The command starts an isolated SMTP sink and SSO server
-for the run.
+app-owned and hosted direct modes, followed by the managed-mode browser suite.
+It covers the magic-link flow plus OTP success and invalid-code behavior for
+Angular, Django, Fastify, Next.js, Nuxt, and both Gate upstreams. The manager
+suite covers admin sign-in, granting scoped access, publishing it, and signing
+in as the newly allowed user. The command starts isolated services and an SMTP
+sink for each suite.
 
 For manual OTP checks without changing your local server TOML, use:
 

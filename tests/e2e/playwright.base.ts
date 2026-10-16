@@ -166,6 +166,9 @@ function createEphemeralManagerSettingsPaths(): {
         `
 managedSiteIds = ["photos"]
 
+[audit]
+integrityKey = "test-manager-audit-integrity-key-1234567890"
+
 [paths]
 baseConfigFile = "${baseConfigFile}"
 stateFile = "${stateFile}"
@@ -180,6 +183,9 @@ lockFile = "${lockFile}"
         configPath,
         `
 managedSiteIds = ["photos"]
+
+[audit]
+integrityKey = "test-manager-audit-integrity-key-1234567890"
 
 [paths]
 baseConfigFile = "${baseConfigFile}"
@@ -197,6 +203,7 @@ timeoutMs = 5000
 [service]
 host = "127.0.0.1"
 port = ${managerServicePort}
+trustProxy = true
 
 [service.auth]
 mode = "gate"
