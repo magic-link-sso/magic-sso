@@ -331,7 +331,7 @@ describe('manager apply', () => {
                 ]),
                 settings,
             ),
-        ).rejects.toThrow(/Another manager apply is already in progress/u);
+        ).rejects.toThrow(/Another manager write is already in progress/u);
     });
 
     it('recovers a stale apply lock when the recorded pid is no longer alive', async () => {

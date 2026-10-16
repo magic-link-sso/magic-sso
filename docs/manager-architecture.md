@@ -63,7 +63,8 @@ Managed mode uses separate files with explicit responsibilities:
   kept for rollback.
 - `manager-audit.ndjson`: signed audit log for manager grant edits, scope edits,
   and apply results, with bounded archive rotation.
-- `manager.lock`: lock file used to keep apply operations single-writer.
+- `manager.lock`: lock file shared by CLI, API, and UI state writes, including
+  apply.
 
 The manager never rewrites `magic-sso.base.toml` in place. Operators keep
 editing the base config through their normal deployment workflow, and the

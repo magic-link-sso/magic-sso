@@ -19,6 +19,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { withManagerStateLock } from './lock.js';
 import { hostname, userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
@@ -842,28 +843,58 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
 
     try {
         const [command, ...rest] = argv;
-        switch (command) {
-            case 'sites':
-                return await handleSitesCommand(rest, output, env);
-            case 'access':
-                return await handleAccessCommand(rest, output, { ...options, env }, isInteractive);
-            case 'scopes':
-                return await handleScopesCommand(rest, output, { ...options, env }, isInteractive);
-            case 'export':
-                return await handleExportCommand(rest, output, env);
-            case 'import':
-                return await handleImportCommand(rest, output, options, isInteractive);
-            case 'reconcile':
-                return await handleReconcileCommand(rest, output, options, isInteractive);
-            case 'diff':
-                return await handleDiffCommand(rest, output, env);
-            case 'validate':
-                return await handleValidateCommand(rest, output, env);
-            case 'apply':
-                return await handleApplyCommand(rest, output, { ...options, env }, isInteractive);
-            default:
-                throw new Error(`Unknown command: ${command}`);
+        const execute = async (): Promise<number> => {
+            switch (command) {
+                case 'sites':
+                    return await handleSitesCommand(rest, output, env);
+                case 'access':
+                    return await handleAccessCommand(
+                        rest,
+                        output,
+                        { ...options, env },
+                        isInteractive,
+                    );
+                case 'scopes':
+                    return await handleScopesCommand(
+                        rest,
+                        output,
+                        { ...options, env },
+                        isInteractive,
+                    );
+                case 'export':
+                    return await handleExportCommand(rest, output, env);
+                case 'import':
+                    return await handleImportCommand(rest, output, options, isInteractive);
+                case 'reconcile':
+                    return await handleReconcileCommand(rest, output, options, isInteractive);
+                case 'diff':
+                    return await handleDiffCommand(rest, output, env);
+                case 'validate':
+                    return await handleValidateCommand(rest, output, env);
+                case 'apply':
+                    return await handleApplyCommand(
+                        rest,
+                        output,
+                        { ...options, env },
+                        isInteractive,
+                    );
+                default:
+                    throw new Error(`Unknown command: ${command}`);
+            }
+        };
+        const mutates =
+            command === 'apply' ||
+            command === 'import' ||
+            (command === 'access' && rest[0] !== 'list') ||
+            (command === 'scopes' && rest[0] !== 'list') ||
+            (command === 'reconcile' && rest[0] !== 'status');
+        if (mutates) {
+            const settings = loadManagerRuntimeSettings({ env });
+            return await withManagerStateLock(settings.paths.lockFile, execute, {
+                independent: true,
+            });
         }
+        return await execute();
     } catch (error) {
         writeLine(stderr, error instanceof Error ? error.message : String(error));
         return 1;

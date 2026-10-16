@@ -148,13 +148,20 @@ and tighten file ownership on the runtime directory.
 
 ## Lock file recovery
 
-`manager.lock` should disappear when apply exits cleanly. If apply fails because
-the lock already exists:
+`manager.lock` protects all manager state writes, including apply, CLI edits,
+and API/UI mutations. It is held from loading the state through persistence;
+interactive CLI writes also keep their preview stable during confirmation. Reads
+remain available. Concurrent API/UI writes return HTTP 409 and CLI writes fail
+with a busy message; retry after the active operation finishes.
 
-1. Make sure another manager apply is not still running.
+The lock should disappear when the operation exits. If a write fails because the
+lock already exists:
+
+1. Make sure another manager write or interactive confirmation is not still
+   running.
 2. Inspect the lock file timestamp and process context if needed.
-3. Remove the stale lock only after you are confident no active apply is in
-   progress.
+3. Remove the stale lock only after you are confident no active manager write is
+   in progress.
 4. Re-run `manager validate` and then `manager apply --yes`.
 
 Treat lock removal as an operator recovery step, not part of normal workflow.

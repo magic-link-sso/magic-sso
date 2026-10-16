@@ -4,8 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { InjectOptions } from 'fastify';
 import { buildApp } from './app.js';
-import { MANAGER_STATE_VERSION } from './state.js';
+import { loadManagerState, MANAGER_STATE_VERSION } from './state.js';
 import { type ManagerRuntimeSettings } from './settings.js';
 
 const tempDirectories: string[] = [];
@@ -164,6 +165,66 @@ afterEach(() => {
 });
 
 describe('manager service pipeline endpoints', () => {
+    it('rejects concurrent writes during apply and accepts a retry without losing grants', async () => {
+        const directory = createTempDirectory('magic-sso-manager-concurrent-');
+        const settings = createFileBackedSettings(directory, {
+            secret: 'manager-reload-secret-0123456789abcdefghij',
+            timeoutMs: 5_000,
+            url: 'http://127.0.0.1:3000/internal/access-config/reload',
+        });
+        writeFileSync(settings.paths.baseConfigFile, createBaseConfigToml(), 'utf8');
+        writeValidState(settings);
+        let concurrentStatus: number | undefined;
+        let readStatus: number | undefined;
+        const grantRequest = {
+            headers: authHeader,
+            method: 'POST',
+            payload: { email: 'during@example.com', fullAccess: true },
+            url: '/api/sites/client/access/grants',
+        } satisfies InjectOptions;
+        const app = await buildApp({
+            logger: false,
+            settings,
+            fetchImplementation: async (): Promise<Response> => {
+                concurrentStatus = (await app.inject(grantRequest)).statusCode;
+                readStatus = (
+                    await app.inject({
+                        headers: authHeader,
+                        method: 'GET',
+                        url: '/api/sites/client',
+                    })
+                ).statusCode;
+                return Response.json({ changedSiteIds: ['client'], reloaded: true });
+            },
+        });
+        try {
+            const result = await app.inject({
+                headers: authHeader,
+                method: 'POST',
+                url: '/api/apply',
+            });
+            expect(result.statusCode).toBe(200);
+            expect(concurrentStatus).toBe(409);
+            expect(readStatus).toBe(200);
+            const applied = loadManagerState(settings.paths.stateFile);
+            expect(applied.managedSites.client?.grants.map((grant) => grant.email)).toEqual([
+                'reports@example.com',
+            ]);
+            expect((await app.inject(grantRequest)).statusCode).toBe(200);
+            const saved = loadManagerState(settings.paths.stateFile);
+            expect(saved.managedSites.client?.grants.map((grant) => grant.email)).toEqual([
+                'during@example.com',
+                'reports@example.com',
+            ]);
+            expect(saved.metadata.lastAppliedStateHash).toBe(applied.metadata.lastAppliedStateHash);
+            expect(readFileSync(settings.paths.runtimeConfigFile, 'utf8')).not.toContain(
+                'during@example.com',
+            );
+        } finally {
+            await app.close();
+        }
+    });
+
     it('validates the rendered runtime plan', async () => {
         const tempDirectory = createTempDirectory('magic-sso-manager-api-validate-');
         const settings = createFileBackedSettings(tempDirectory);
@@ -392,7 +453,7 @@ describe('manager service pipeline endpoints', () => {
                     url: '/api/sites/client/access',
                 },
                 {
-                    method: 'POST' as const,
+                    method: 'POST',
                     payload: {
                         email: 'viewer@example.com',
                         scopes: ['reports'],
@@ -418,7 +479,7 @@ describe('manager service pipeline endpoints', () => {
                     url: '/api/sites/client/scopes',
                 },
                 {
-                    method: 'POST' as const,
+                    method: 'POST',
                     payload: {
                         scope: 'exports',
                     },

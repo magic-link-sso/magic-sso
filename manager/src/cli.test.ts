@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from './cli.js';
+import { loadManagerState } from './state.js';
 import { MANAGER_CONFIG_FILE_ENV_VAR_NAME } from './settings.js';
 
 const tempDirectories: string[] = [];
@@ -108,6 +109,53 @@ afterEach(() => {
 });
 
 describe('manager cli', () => {
+    it('protects a confirmed state preview from concurrent CLI writes', async () => {
+        const setup = setupManagerFiles();
+        const stdout = createWriter();
+        const stderr = createWriter();
+        const grant = ['access', 'grant', 'client', 'first@example.com', '--full-access'];
+        expect(
+            await runCli({
+                argv: grant,
+                env: setup.env,
+                stdout: stdout.writer,
+                stderr: stderr.writer,
+            }),
+        ).toBe(0);
+        let concurrentResult: number | undefined;
+        const applyResult = await runCli({
+            argv: ['apply'],
+            env: setup.env,
+            isInteractive: true,
+            stdout: stdout.writer,
+            stderr: stderr.writer,
+            confirm: async (): Promise<boolean> => {
+                concurrentResult = await runCli({
+                    argv: ['access', 'grant', 'client', 'during@example.com', '--full-access'],
+                    env: setup.env,
+                    stdout: stdout.writer,
+                    stderr: stderr.writer,
+                });
+                return true;
+            },
+        });
+        expect(applyResult).toBe(0);
+        expect(concurrentResult).toBe(1);
+        expect(stderr.output).toContain('Another manager write is already in progress');
+        const state = loadManagerState(join(setup.tempDirectory, 'manager-state.json'));
+        expect(state.managedSites.client?.grants.map((grant) => grant.email)).toEqual([
+            'first@example.com',
+        ]);
+        expect(
+            await runCli({
+                argv: ['access', 'grant', 'client', 'during@example.com', '--full-access'],
+                env: setup.env,
+                stdout: stdout.writer,
+                stderr: stderr.writer,
+            }),
+        ).toBe(0);
+    });
+
     it('keeps unsupported provisioning and global-edit commands unavailable', async () => {
         const setup = setupManagerFiles();
         const siteStdout = createWriter();

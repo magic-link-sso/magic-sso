@@ -17,22 +17,13 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-    closeSync,
-    existsSync,
-    fsyncSync,
-    mkdirSync,
-    openSync,
-    readFileSync,
-    unlinkSync,
-    writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { hostname, userInfo } from 'node:os';
-import { dirname } from 'node:path';
 import { z } from 'zod';
 import { appendManagerAuditEvent } from './audit.js';
 import { writeTextFileAtomically } from './files.js';
+import { withManagerStateLock } from './lock.js';
 import {
     buildRuntimePlan,
     detectConfigDrift,
@@ -106,10 +97,6 @@ export interface ApplyManagerStateResult {
     updatedState: ManagerState;
 }
 
-interface LockHandle {
-    release: () => void;
-}
-
 function hashContents(value: string): string {
     return createHash('sha256').update(value).digest('hex');
 }
@@ -131,88 +118,10 @@ function hashManagerStateForApply(state: ManagerState): string {
     );
 }
 
-function ensureParentDirectory(filePath: string): void {
-    mkdirSync(dirname(filePath), { recursive: true });
-}
-
 function removeFileIfExists(filePath: string): void {
     if (existsSync(filePath)) {
         unlinkSync(filePath);
     }
-}
-
-function isProcessAlive(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch (error) {
-        if (typeof error === 'object' && error !== null && Reflect.get(error, 'code') === 'EPERM') {
-            return true;
-        }
-
-        return false;
-    }
-}
-
-function shouldRecoverStaleApplyLock(lockFilePath: string): boolean {
-    if (!existsSync(lockFilePath)) {
-        return false;
-    }
-
-    let parsedLockContents: unknown;
-    try {
-        parsedLockContents = JSON.parse(readFileSync(lockFilePath, 'utf8').trim());
-    } catch {
-        return false;
-    }
-
-    if (typeof parsedLockContents !== 'object' || parsedLockContents === null) {
-        return false;
-    }
-
-    const pid = Reflect.get(parsedLockContents, 'pid');
-    return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 && !isProcessAlive(pid);
-}
-
-function acquireApplyLock(lockFilePath: string): LockHandle {
-    ensureParentDirectory(lockFilePath);
-
-    let fileDescriptor: number;
-    try {
-        fileDescriptor = openSync(lockFilePath, 'wx');
-    } catch (error) {
-        if (
-            typeof error === 'object' &&
-            error !== null &&
-            Reflect.get(error, 'code') === 'EEXIST'
-        ) {
-            if (shouldRecoverStaleApplyLock(lockFilePath)) {
-                removeFileIfExists(lockFilePath);
-                return acquireApplyLock(lockFilePath);
-            }
-
-            throw new Error(`Another manager apply is already in progress: ${lockFilePath}`);
-        }
-
-        throw error;
-    }
-
-    try {
-        writeFileSync(
-            fileDescriptor,
-            `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
-            'utf8',
-        );
-        fsyncSync(fileDescriptor);
-    } finally {
-        closeSync(fileDescriptor);
-    }
-
-    return {
-        release: () => {
-            removeFileIfExists(lockFilePath);
-        },
-    };
 }
 
 async function requestServerReload(
@@ -431,12 +340,12 @@ async function reloadServerOrRollBack(
 }
 
 export async function applyManagerState(
-    state: ManagerState,
+    input: ManagerState | (() => ManagerState),
     settings: ManagerRuntimeSettings,
     options: ApplyManagerStateOptions = {},
 ): Promise<ApplyManagerStateResult> {
-    const lockHandle = acquireApplyLock(settings.paths.lockFile);
-    try {
+    return withManagerStateLock(settings.paths.lockFile, async () => {
+        const state = typeof input === 'function' ? input() : input;
         const attempt: ApplyAttempt = {
             actor: options.actor ?? getCurrentActorIdentity(),
             driftStatus: getDriftStatus(state, settings),
@@ -490,7 +399,5 @@ export async function applyManagerState(
             runtimePlan,
             updatedState,
         };
-    } finally {
-        lockHandle.release();
-    }
+    });
 }

@@ -17,6 +17,7 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { withManagerStateLock } from './lock.js';
 import { readCookieValue } from '@magic-link-sso/config-core/runtime';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, {
@@ -644,7 +645,7 @@ function classifyApplyFailure(message: string): {
         return { kind: 'warning', statusCode: 409 };
     }
 
-    if (message.startsWith('Another manager apply is already in progress:')) {
+    if (message.startsWith('Another manager write is already in progress:')) {
         return { kind: 'error', statusCode: 409 };
     }
 
@@ -830,6 +831,29 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         },
     );
     app.addHook('onRoute', (routeOptions) => {
+        const methods = Array.isArray(routeOptions.method)
+            ? routeOptions.method
+            : [routeOptions.method];
+        if (
+            methods.some((method) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) &&
+            ![
+                '/login',
+                '/logout',
+                '/diff/validate',
+                '/api/validate',
+                '/diff/apply',
+                '/api/apply',
+            ].includes(routeOptions.url)
+        ) {
+            const handler = routeOptions.handler;
+            routeOptions.handler = async function (request, reply): Promise<unknown> {
+                return withManagerStateLock(
+                    settings.paths.lockFile,
+                    async () => handler.call(this, request, reply),
+                    { independent: true },
+                );
+            };
+        }
         const rateLimitConfig = getManagerRouteRateLimitConfig(routeOptions);
         if (typeof rateLimitConfig === 'undefined') {
             return;
@@ -1360,11 +1384,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
         const state = loadManagerStateOrEmpty(settings);
         try {
-            const result = await applyManagerState(state, settings, {
-                actor: createRequestAuditActor(request),
-                fetchImplementation: options.fetchImplementation,
-                now: options.now,
-            });
+            const result = await applyManagerState(
+                () => loadManagerStateOrEmpty(settings),
+                settings,
+                {
+                    actor: createRequestAuditActor(request),
+                    fetchImplementation: options.fetchImplementation,
+                    now: options.now,
+                },
+            );
 
             const noticeText = result.reloadResult?.reloaded
                 ? 'Applied runtime config and reloaded the server.'
@@ -1907,11 +1935,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }> => {
             const state = loadManagerStateOrEmpty(settings);
             try {
-                const result = await applyManagerState(state, settings, {
-                    actor: createRequestAuditActor(request),
-                    fetchImplementation: options.fetchImplementation,
-                    now: options.now,
-                });
+                const result = await applyManagerState(
+                    () => loadManagerStateOrEmpty(settings),
+                    settings,
+                    {
+                        actor: createRequestAuditActor(request),
+                        fetchImplementation: options.fetchImplementation,
+                        now: options.now,
+                    },
+                );
                 return {
                     apply: {
                         auditEvent: result.auditEvent,
@@ -1933,7 +1965,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     });
                 }
 
-                if (message.startsWith('Another manager apply is already in progress:')) {
+                if (message.startsWith('Another manager write is already in progress:')) {
                     throw createStatusError(409, message, 'apply_in_progress');
                 }
 

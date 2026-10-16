@@ -37,6 +37,7 @@ import {
     type RuntimePlan,
 } from './runtime.js';
 import { type ManagerRuntimeSettings } from './settings.js';
+import { withManagerStateLockSync } from './lock.js';
 import {
     createManagerStateFromPortableSnapshot,
     createPortableManagerStateSnapshot,
@@ -243,9 +244,11 @@ export function persistManagerState(
     settings: ManagerRuntimeSettings,
     state: ManagerState,
 ): ManagerState {
-    const normalizedState = createSeededState(settings, state);
-    saveManagerState(settings.paths.stateFile, normalizedState);
-    return normalizedState;
+    return withManagerStateLockSync(settings.paths.lockFile, () => {
+        const normalizedState = createSeededState(settings, state);
+        saveManagerState(settings.paths.stateFile, normalizedState);
+        return normalizedState;
+    });
 }
 
 export function listManagedSites(
