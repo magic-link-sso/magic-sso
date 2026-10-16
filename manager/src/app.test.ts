@@ -226,9 +226,10 @@ describe('manager service app', () => {
     });
 
     it('rate limits repeated authenticated mutation requests from the same client IP', async () => {
+        const tempDirectory = createTempDirectory('magic-sso-manager-rate-limit-');
         const app = await buildApp({
             logger: false,
-            settings: createSettings(),
+            settings: createFileBackedSettings(tempDirectory),
         });
 
         try {
