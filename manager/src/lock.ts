@@ -23,7 +23,7 @@ interface LockContext {
 }
 const context = new AsyncLocalStorage<LockContext>();
 
-export class ManagerStateBusyError extends Error {
+class ManagerStateBusyError extends Error {
     readonly statusCode = 409;
     readonly code = 'manager_busy';
 
