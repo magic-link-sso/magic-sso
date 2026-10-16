@@ -379,6 +379,14 @@ describe('magic gate routes', () => {
                     data: Buffer.from('{ "n": 9007199254740993, "unicode": "żółw", "n": 2 }\n'),
                 },
                 {
+                    contentType: 'application/vnd.api+json; charset=utf-8',
+                    data: Buffer.from(' { "data": null, "data": { "id": "żółw" } }\n'),
+                },
+                {
+                    contentType: 'text/plain',
+                    data: Buffer.from('raw body\r\nżółw\n'),
+                },
+                {
                     contentType: 'application/x-www-form-urlencoded',
                     data: Buffer.from('a=first&a=second&encoded=%2f%20+value'),
                 },
@@ -421,7 +429,7 @@ describe('magic gate routes', () => {
                     });
                     expect(result.status, contentType).toBe(200);
                     expect(result.contentType).toBe(contentType);
-                    expect(result.body).toEqual(data);
+                    expect(result.body.equals(data), contentType).toBe(true);
                 }
             }
         } finally {

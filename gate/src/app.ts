@@ -101,7 +101,6 @@ interface GateProxyOptions {
     changeOrigin: boolean;
     forwardedProto: string;
     headers: Record<string, string>;
-    requestBody?: Buffer | undefined;
     requestStream?: Readable | undefined;
     target: string;
     xfwd: boolean;
@@ -290,10 +289,6 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
             applyForwardedHeaders(headers, req, targetUrl, forwardedProto);
         }
 
-        if (typeof options.requestBody !== 'undefined') {
-            headers['content-length'] = String(options.requestBody.byteLength);
-        }
-
         return headers;
     }
 
@@ -439,12 +434,7 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
             emitProxyError(error, req, resolveProxyErrorTarget(response, socket));
         });
 
-        if (typeof options.requestBody === 'undefined') {
-            (options.requestStream ?? req).pipe(proxyRequest);
-            return;
-        }
-
-        proxyRequest.end(options.requestBody);
+        (options.requestStream ?? req).pipe(proxyRequest);
     }
 
     return {
@@ -489,72 +479,6 @@ const verifyEmailPreviewSecretHeaderName = 'x-magic-sso-preview-secret';
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function isJsonContentType(contentType: string): boolean {
-    return contentType === 'application/json' || contentType.endsWith('+json');
-}
-
-function appendFormValue(searchParams: URLSearchParams, key: string, value: unknown): void {
-    if (Array.isArray(value)) {
-        for (const entry of value) {
-            appendFormValue(searchParams, key, entry);
-        }
-        return;
-    }
-
-    if (
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        typeof value === 'boolean' ||
-        typeof value === 'bigint'
-    ) {
-        searchParams.append(key, String(value));
-    }
-}
-
-function serializeFormBody(body: unknown): string {
-    if (typeof body !== 'object' || body === null) {
-        return '';
-    }
-
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(body)) {
-        appendFormValue(searchParams, key, value);
-    }
-    return searchParams.toString();
-}
-
-function buildProxyRequestBody(request: FastifyRequest): Buffer | undefined {
-    if (request.body instanceof Readable) {
-        return undefined;
-    }
-    if (typeof request.body === 'undefined' || request.body === null) {
-        return undefined;
-    }
-
-    if (Buffer.isBuffer(request.body)) {
-        return request.body;
-    }
-
-    if (typeof request.body === 'string') {
-        return Buffer.from(request.body, 'utf8');
-    }
-
-    const contentType = readString(request.headers['content-type'])
-        ?.split(';', 1)[0]
-        ?.trim()
-        .toLowerCase();
-
-    if (typeof contentType === 'string' && contentType === 'application/x-www-form-urlencoded') {
-        return Buffer.from(serializeFormBody(request.body), 'utf8');
-    }
-
-    if (typeof contentType === 'string' && isJsonContentType(contentType)) {
-        return Buffer.from(JSON.stringify(request.body), 'utf8');
-    }
-
-    return Buffer.from(JSON.stringify(request.body), 'utf8');
 }
 
 function buildGateContentSecurityPolicy(): string {
@@ -1098,7 +1022,6 @@ async function handleProxyRequest(
     }
 
     const isHttpsRequest = request.protocol === 'https';
-    const requestBody = buildProxyRequestBody(request);
     decorateProxyRequest(request.raw, upstreamUrl);
     stripTrustedUpstreamHeaders(request.raw);
     stripGateAuthCookie(request.raw, config.cookieName);
@@ -1109,7 +1032,6 @@ async function handleProxyRequest(
         changeOrigin: true,
         forwardedProto: request.protocol,
         headers: buildUpstreamHeaders(auth),
-        requestBody,
         requestStream: request.body instanceof Readable ? request.body : undefined,
         target: config.upstreamUrl,
         xfwd: true,
