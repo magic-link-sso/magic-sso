@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { SignJWT } from 'jose';
+import WebSocket, { WebSocketServer } from 'ws';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -330,6 +331,79 @@ function mockSessionRevocationCheck(
 }
 
 describe('magic gate routes', () => {
+    it('completes a real WebSocket handshake and echoes text and binary messages', async () => {
+        mockSessionRevocationCheck(ssoOrigin);
+        const upstream = createServer();
+        const websocketServer = new WebSocketServer({ server: upstream });
+        websocketServer.on('connection', (socket) => {
+            socket.on('message', (data, isBinary) => socket.send(data, { binary: isBinary }));
+        });
+        websocketServer.on('headers', (headers) => {
+            headers.push('Set-Cookie: upstream-session=kept; Path=/');
+            headers.push('Set-Cookie: magic-sso=blocked; Path=/');
+        });
+        const port = await listenOnLocalhost(upstream);
+        const app = await createApp({
+            logger: false,
+            config: {
+                jwtSecret: testJwtSecret,
+                previewSecret: testPreviewSecret,
+                publicOrigin: gateOrigin,
+                serverUrl: ssoOrigin,
+                upstreamUrl: `http://127.0.0.1:${port}`,
+            },
+        });
+        let client: WebSocket | undefined;
+        try {
+            const address = await app.listen({ host: '127.0.0.1', port: 0 });
+            const token = await createAccessToken({ audience: gateOrigin, issuer: ssoOrigin });
+            const connection = new WebSocket(`${address.replace('http:', 'ws:')}/echo`, {
+                headers: { cookie: `magic-sso=${token}`, origin: gateOrigin },
+            });
+            client = connection;
+            const handshake = await new Promise<IncomingMessage>((resolve, reject) => {
+                connection.once('upgrade', (response) => {
+                    connection.once('open', () => resolve(response));
+                });
+                connection.once('error', reject);
+            });
+            expect(handshake.headers.upgrade).toBe('websocket');
+            expect(handshake.headers.connection?.toLowerCase()).toBe('upgrade');
+            expect(handshake.headers['set-cookie']).toEqual(['upstream-session=kept; Path=/']);
+            for (const payload of ['hello through Gate', Buffer.from([0, 255, 128, 1])]) {
+                const echo = new Promise<{ data: Buffer; binary: boolean }>((resolve, reject) => {
+                    connection.once('message', (data, binary) =>
+                        resolve({
+                            data: Array.isArray(data)
+                                ? Buffer.concat(data)
+                                : data instanceof ArrayBuffer
+                                  ? Buffer.from(data)
+                                  : data,
+                            binary,
+                        }),
+                    );
+                    connection.once('error', reject);
+                });
+                connection.send(payload);
+                const result = await echo;
+                expect(result.data).toEqual(
+                    typeof payload === 'string' ? Buffer.from(payload) : payload,
+                );
+                expect(result.binary).toBe(typeof payload !== 'string');
+            }
+        } finally {
+            client?.terminate();
+            for (const socket of websocketServer.clients) {
+                socket.terminate();
+            }
+            await new Promise<void>((resolve) => websocketServer.close(() => resolve()));
+            await app.close();
+            await new Promise<void>((resolve, reject) =>
+                upstream.close((error) => (error ? reject(error) : resolve())),
+            );
+        }
+    });
+
     it('renders the namespaced login page and does not proxy namespace conflicts', async () => {
         const { app, proxyStub } = await createGateApp();
 

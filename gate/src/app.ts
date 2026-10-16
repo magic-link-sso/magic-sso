@@ -465,14 +465,14 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
                 socket,
                 socket,
                 (upstreamResponse, upstreamSocket, upstreamHead) => {
-                    writeUpgradeResponseHead(
-                        socket,
-                        upstreamResponse,
-                        copyProxyResponseHeaders(
+                    writeUpgradeResponseHead(socket, upstreamResponse, {
+                        ...copyProxyResponseHeaders(
                             upstreamResponse.headers,
                             options.blockedResponseCookieNames,
                         ),
-                    );
+                        connection: 'Upgrade',
+                        upgrade: upstreamResponse.headers.upgrade,
+                    });
                     connectUpgradedSockets(socket, head, upstreamSocket, upstreamHead);
                 },
             );

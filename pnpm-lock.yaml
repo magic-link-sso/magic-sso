@@ -405,6 +405,9 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@25.9.9)(@vitest/coverage-v8@4.1.11)(vite@8.3.4(@types/node@25.9.9)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      ws:
+        specifier: ^8.22.0
+        version: 8.22.0
 
   manager:
     dependencies:
