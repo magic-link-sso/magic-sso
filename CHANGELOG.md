@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases.
 
+## [Unreleased]
+
+### Fixed
+
+- (manager) Serialize state changes with apply to prevent concurrent writes from
+  losing updates
+- (gate) Preserve WebSocket upgrade response headers
+- (gate) Stream upstream request bodies without parsing to preserve uploads and
+  exact payload contents
+- (django) Keep sign-in callbacks public when global authentication is enabled
+- (adapters) Preserve query strings across Next.js and Django sign-in redirects
+- (e2e) Include the manager flow in standard verification and fix its runtime
+  configuration
+- (tooling) Propagate failures from every Python project in shared checks
+
+### Documentation
+
+- Mount managed runtime directories instead of individual files so atomic
+  configuration updates remain visible inside Docker containers
+
 ## [1.4.4] - 2026-10-11
 
 ### Documentation
