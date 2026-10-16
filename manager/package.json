@@ -23,7 +23,8 @@
         "lint": "oxlint src",
         "start": "node dist/main.js",
         "test": "pnpm --filter @magic-link-sso/config-core build && vitest run --config vitest.config.ts",
-        "typecheck": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.typecheck.json"
+        "typecheck": "pnpm --filter @magic-link-sso/config-core build && tsc -p tsconfig.typecheck.json",
+        "doctor": "node dist/cli.js doctor"
     },
     "dependencies": {
         "@fastify/rate-limit": "^10.3.0",

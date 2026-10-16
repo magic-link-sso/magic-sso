@@ -1558,6 +1558,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     const reloadConfig = config.reload;
     if (typeof reloadConfig !== 'undefined') {
+        app.get('/internal/access-config/reload', async (request, reply): Promise<void> => {
+            setNoStoreHeaders(reply);
+            const submittedSecret = request.headers[accessConfigReloadSecretHeaderName];
+            if (
+                typeof submittedSecret !== 'string' ||
+                !safeCompare(submittedSecret, reloadConfig.secret)
+            ) {
+                reply.code(403).send({ message: 'Forbidden' });
+                return;
+            }
+            reply.send({ status: 'ok', reloadEnabled: true });
+        });
         app.post('/internal/access-config/reload', async (request, reply): Promise<void> => {
             setNoStoreHeaders(reply);
 

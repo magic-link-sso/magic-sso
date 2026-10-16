@@ -3,7 +3,11 @@
 
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
-import { readCookieValue, safeCompare } from '@magic-link-sso/config-core/runtime';
+import {
+    readCookieValue,
+    readResponsePayload,
+    safeCompare,
+} from '@magic-link-sso/config-core/runtime';
 import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { createHmac, randomBytes } from 'node:crypto';
@@ -366,12 +370,6 @@ function buildLoginRedirectUrl(
     }
 
     return `${loginUrl.pathname}${loginUrl.search}`;
-}
-
-async function readResponsePayload(response: Response): Promise<unknown> {
-    return response.json().catch(async () => ({
-        message: await response.text().catch(() => ''),
-    }));
 }
 
 async function serveFile(

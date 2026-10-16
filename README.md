@@ -51,6 +51,7 @@ identity platform, see
 - [Getting started](#getting-started)
 - [Deployment modes](#deployment-modes)
 - [Configuration reference](#configuration-reference)
+- [Operator diagnostics](./docs/doctor.md)
 - [Framework integrations](#framework-integrations)
 - [Magic Link SSO Gate](#magic-link-sso-gate)
 - [Security considerations](#security-considerations)

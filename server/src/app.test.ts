@@ -407,6 +407,9 @@ describe('buildApp', () => {
         });
 
         expect(response.statusCode).toBe(404);
+        expect(
+            (await app.inject({ method: 'GET', url: '/internal/access-config/reload' })).statusCode,
+        ).toBe(404);
     });
 
     it('rejects reload requests with an invalid secret', async () => {
@@ -439,6 +442,41 @@ describe('buildApp', () => {
             expect(loadConfigSpy).not.toHaveBeenCalled();
         } finally {
             await reloadApp.close();
+        }
+    });
+
+    it('probes reload readiness with authentication without reading or changing access config', async () => {
+        const probeConfig: AppConfig = {
+            ...config,
+            reload: { secret: 'doctor-reload-secret-0123456789abcdef' },
+        };
+        const probeApp = await createTestApp({ config: probeConfig });
+        const before = structuredClone(probeConfig.sites);
+        const loadConfigSpy = vi.spyOn(configModule, 'loadConfig').mockImplementation(() => {
+            throw new Error('Must not reload');
+        });
+        try {
+            for (const headers of [{}, { 'x-magic-sso-reload-secret': 'incorrect' }]) {
+                const response = await probeApp.inject({
+                    method: 'GET',
+                    url: '/internal/access-config/reload',
+                    headers,
+                });
+                expect(response.statusCode).toBe(403);
+                expect(response.headers['cache-control']).toContain('no-store');
+            }
+            const response = await probeApp.inject({
+                method: 'GET',
+                url: '/internal/access-config/reload',
+                headers: { 'x-magic-sso-reload-secret': probeConfig.reload?.secret ?? '' },
+            });
+            expect(response.statusCode).toBe(200);
+            expect(response.json()).toEqual({ status: 'ok', reloadEnabled: true });
+            expect(response.headers['cache-control']).toContain('no-store');
+            expect(loadConfigSpy).not.toHaveBeenCalled();
+            expect(probeConfig.sites).toEqual(before);
+        } finally {
+            await probeApp.close();
         }
     });
 

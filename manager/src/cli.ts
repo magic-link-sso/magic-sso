@@ -44,6 +44,7 @@ import {
     updateSiteGrant,
 } from './service.js';
 import { parsePortableManagerStateSnapshotJson } from './state.js';
+import { runManagerDoctor } from './doctor.js';
 
 interface CliWriter {
     write: (chunk: string) => unknown;
@@ -836,7 +837,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
     if (argv.length === 0) {
         writeLine(
             stderr,
-            `Usage: manager <sites|access|scopes|export|import|reconcile|diff|validate|apply> ...\nSet ${MANAGER_CONFIG_FILE_ENV_VAR_NAME} to the manager settings file.`,
+            `Usage: manager <doctor|sites|access|scopes|export|import|reconcile|diff|validate|apply> ...\nSet ${MANAGER_CONFIG_FILE_ENV_VAR_NAME} to the manager settings file.`,
         );
         return 1;
     }
@@ -845,6 +846,14 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
         const [command, ...rest] = argv;
         const execute = async (): Promise<number> => {
             switch (command) {
+                case 'doctor':
+                    return runManagerDoctor({
+                        argv: rest,
+                        env,
+                        stdout,
+                        stderr,
+                        fetchImplementation: options.fetchImplementation ?? fetch,
+                    });
                 case 'sites':
                     return await handleSitesCommand(rest, output, env);
                 case 'access':

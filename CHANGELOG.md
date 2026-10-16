@@ -8,6 +8,12 @@ and this project follows
 
 ## [Unreleased]
 
+### Added
+
+- (tooling) Add server and manager `doctor` commands with read-only deployment
+  diagnostics, optional bounded SMTP and reload probes, explicit test email, and
+  JSON reports; include the commands in production images
+
 ### Fixed
 
 - (manager) Serialize state changes with apply to prevent concurrent writes from

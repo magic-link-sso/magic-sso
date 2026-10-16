@@ -54,7 +54,8 @@
         "typecheck": "turbo run typecheck",
         "test:root": "vitest run scripts/*.test.ts",
         "version:bump": "node scripts/bump-version.mjs",
-        "prepare": "husky"
+        "prepare": "husky",
+        "doctor": "node scripts/doctor.mjs"
     },
     "devDependencies": {
         "@types/node": "^25.9.9",

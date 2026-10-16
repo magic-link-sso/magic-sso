@@ -3,7 +3,7 @@
 
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
-import { safeCompare } from '@magic-link-sso/config-core/runtime';
+import { readResponsePayload, safeCompare } from '@magic-link-sso/config-core/runtime';
 import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import Fastify, {
     type FastifyInstance,
@@ -796,12 +796,6 @@ function readOtpChallengeCookie(
         otpLength > 0
         ? { challengeId, otpLength, returnUrl: normaliseReturnUrl(returnUrl, config) }
         : null;
-}
-
-async function readResponsePayload(response: Response): Promise<unknown> {
-    return response.json().catch(async () => ({
-        message: await response.text().catch(() => ''),
-    }));
 }
 
 async function revokeGateSessionOnServer(token: string, config: GateConfig): Promise<void> {

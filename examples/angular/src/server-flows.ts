@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import type { IncomingHttpHeaders } from 'node:http';
-import { safeCompare } from '@magic-link-sso/config-core/runtime';
+import { readResponsePayload, safeCompare } from '@magic-link-sso/config-core/runtime';
 import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
 import { exchangeEmailOtp, getJwtSecret, verifyAuthToken } from '@magic-link-sso/angular';
 import { buildFailureResult, readMessage } from 'magic-sso-example-ui/signin';
@@ -129,12 +129,6 @@ function readOtpMetadata(payload: unknown): Pick<SignInResult, 'otpChallengeId' 
     return typeof otpChallengeId === 'string' && Number.isInteger(otpLength)
         ? { otpChallengeId, otpLength: Number(otpLength) }
         : {};
-}
-
-async function readResponsePayload(response: Response): Promise<unknown> {
-    return response.json().catch(async () => ({
-        message: await response.text().catch(() => ''),
-    }));
 }
 
 async function postSignIn(

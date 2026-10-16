@@ -13,6 +13,10 @@
         "./runtime": {
             "types": "./dist/runtime.d.ts",
             "default": "./dist/runtime.js"
+        },
+        "./diagnostics": {
+            "types": "./dist/diagnostics.d.ts",
+            "default": "./dist/diagnostics.js"
         }
     },
     "scripts": {

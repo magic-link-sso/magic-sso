@@ -42,6 +42,12 @@ Import does not regenerate `magic-sso.runtime.toml` on its own. Always review
 
 ## Apply failure triage
 
+Start with `manager doctor --online` (or
+`pnpm doctor manager --config /path/to/manager.toml --online` from the
+repository root) for read-only checks of configuration, paths and authenticated
+reload readiness. See [operator diagnostics](./doctor.md) for JSON reports,
+container commands and limitations. The probe does not apply changes.
+
 When `manager apply` fails, sort the failure into one of these buckets first:
 
 1. Base config drift: `magic-sso.base.toml` changed after the last managed

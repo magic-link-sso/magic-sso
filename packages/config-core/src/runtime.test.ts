@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, readCookieValue, safeCompare } from './runtime.js';
+import { escapeHtml, readCookieValue, readResponsePayload, safeCompare } from './runtime.js';
 
 describe('runtime helpers', () => {
+    it('preserves the shared JSON response and unreadable-body fallback behavior', async () => {
+        await expect(readResponsePayload(new Response('{"message":"ok"}'))).resolves.toEqual({
+            message: 'ok',
+        });
+        await expect(readResponsePayload(new Response('not JSON'))).resolves.toEqual({
+            message: '',
+        });
+    });
     it('returns the first matching cookie value by default', () => {
         expect(readCookieValue('magic-sso=first; theme=dark; magic-sso=last', 'magic-sso')).toBe(
             'first',
