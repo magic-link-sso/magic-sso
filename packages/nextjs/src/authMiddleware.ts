@@ -121,7 +121,8 @@ export async function authMiddleware(
     request: NextRequest,
     options?: AuthMiddlewareOptions,
 ): Promise<NextResponse> {
-    const { pathname } = request.nextUrl;
+    const { pathname, search } = request.nextUrl;
+    const returnUrl = `${pathname}${search}`;
 
     if (isPublicPath(pathname, options)) {
         return NextResponse.next();
@@ -130,22 +131,22 @@ export async function authMiddleware(
     const token = request.cookies.get(getCookieName())?.value;
 
     if (!token) {
-        return redirectToLogin(request, pathname);
+        return redirectToLogin(request, returnUrl);
     }
 
     const secret = getJwtSecret();
     if (secret === null) {
-        return redirectToLogin(request, pathname, 'session-verification-misconfigured');
+        return redirectToLogin(request, returnUrl, 'session-verification-misconfigured');
     }
 
     const issuer = getServerIssuer();
     if (issuer === null) {
-        return redirectToLogin(request, pathname, 'session-verification-misconfigured');
+        return redirectToLogin(request, returnUrl, 'session-verification-misconfigured');
     }
 
     const expectedAudience = getExpectedAudience(request);
     if (expectedAudience === null) {
-        return redirectToLogin(request, pathname, 'session-verification-misconfigured');
+        return redirectToLogin(request, returnUrl, 'session-verification-misconfigured');
     }
 
     const payload = await verifyAuthToken(token, secret, {
@@ -153,7 +154,7 @@ export async function authMiddleware(
         expectedIssuer: issuer,
     });
     return payload === null
-        ? redirectToLogin(request, pathname, 'invalid-session')
+        ? redirectToLogin(request, returnUrl, 'invalid-session')
         : NextResponse.next();
 }
 

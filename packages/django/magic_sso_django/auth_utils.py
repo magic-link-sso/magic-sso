@@ -143,7 +143,7 @@ def is_authenticated(request: HttpRequest) -> tuple[bool, dict[str, Any]]:
 
 
 def redirect_to_login(request: HttpRequest, scope: str | None = None) -> HttpResponseRedirect:
-    return_url = request.build_absolute_uri(request.path)
+    return_url = request.build_absolute_uri(request.get_full_path())
     params = {'returnUrl': return_url}
     if isinstance(scope, str) and scope.strip():
         params['scope'] = scope.strip()

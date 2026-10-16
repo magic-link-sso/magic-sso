@@ -141,3 +141,12 @@ def test_redirect_to_login_preserves_scope_when_provided() -> None:
         'returnUrl': ['http://testserver/protected/'],
         'scope': ['album-A'],
     }
+
+
+def test_redirect_to_login_preserves_query_string_and_repeated_encoded_values() -> None:
+    path = '/protected/?status=pending&page=3&value=a%2Fb%3Fc%3D1&tag=one&tag=two'
+    request = RequestFactory().get(path)
+    response = redirect_to_login(request, 'album-A')
+    query = parse_qs(urlparse(response.url).query)
+    assert query['returnUrl'] == [f'http://testserver{path}']
+    assert query['scope'] == ['album-A']

@@ -167,6 +167,34 @@ describe('authMiddleware', () => {
         restoreEnv('MAGICSSO_TRUST_PROXY', originalTrustProxy);
     });
 
+    it.each([
+        { directUse: 'false', token: undefined },
+        { directUse: 'true', token: undefined },
+        { directUse: 'false', token: 'invalid-token' },
+        { directUse: 'true', token: 'invalid-token' },
+    ])(
+        'preserves query parameters after login (direct=$directUse, token=$token)',
+        async ({ directUse, token }) => {
+            process.env.MAGICSSO_COOKIE_NAME = 'token';
+            process.env.MAGICSSO_JWT_SECRET = 'test-secret';
+            process.env.MAGICSSO_PUBLIC_ORIGIN = 'http://app.example.com';
+            process.env.MAGICSSO_SERVER_URL = 'http://sso.example.com';
+            process.env.MAGICSSO_DIRECT_USE = directUse;
+            const path = '/protected?status=pending&page=3&value=a%2Fb%3Fc%3D1&tag=one&tag=two';
+            const response = await authMiddleware(createRequest(path, token));
+            const location = response.headers.get('location');
+            expect(location).not.toBeNull();
+            const target = new URL(location ?? '');
+            expect(target.searchParams.get('returnUrl')).toBe(`http://app.example.com${path}`);
+            if (directUse === 'true') {
+                const callback = new URL(target.searchParams.get('verifyUrl') ?? '');
+                expect(callback.searchParams.get('returnUrl')).toBe(
+                    `http://app.example.com${path}`,
+                );
+            }
+        },
+    );
+
     it('redirects unauthenticated api requests instead of bypassing them', async () => {
         process.env.MAGICSSO_COOKIE_NAME = 'token';
         process.env.MAGICSSO_JWT_SECRET = 'test-secret';
