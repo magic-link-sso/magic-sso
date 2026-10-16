@@ -48,10 +48,15 @@ class MagicSsoMiddleware:
         magic_request.magic_sso_user_email = None
         magic_request.magic_sso_user_scope = None
 
-        # Get the current URL name
-        current_url_name = resolve(magic_request.path_info).url_name
+        resolved_url = resolve(magic_request.path_info)
+        current_url_name = resolved_url.url_name
+        is_sign_in_endpoint = 'magic_sso' in resolved_url.app_names and current_url_name in {
+            'login',
+            'verify_email',
+            'verify_email_otp',
+        }
 
-        if current_url_name in get_public_url_names():
+        if is_sign_in_endpoint or current_url_name in get_public_url_names():
             return self.get_response(magic_request)
 
         is_authed, payload = is_authenticated(magic_request)

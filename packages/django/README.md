@@ -36,6 +36,11 @@ MAGICSSO_TRUST_PROXY = False
 MAGICSSO_ALLOWED_ORIGINS = ['https://app.example.com']
 ```
 
+The integration's own login, magic-link callback, and OTP callback always remain
+public, including when `MAGICSSO_AUTH_EVERYWHERE=True` and the public URL list
+is empty. `MAGICSSO_PUBLIC_URLS` adds application routes; routes in other apps
+do not become public merely by sharing a callback name.
+
 | Setting                    | Required | Default     | Notes                                                                                                                                                        |
 | -------------------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `MAGICSSO_ALLOWED_ORIGINS` | No       | `[]`        | Optional allowlist of absolute origins accepted when deriving the current site origin dynamically, especially behind trusted proxies.                        |

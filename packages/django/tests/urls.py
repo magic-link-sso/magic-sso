@@ -16,5 +16,6 @@ def protected_view(_request: HttpRequest) -> HttpResponse:
 urlpatterns = [
     path('', home_view, name='home'),
     path('protected/', protected_view, name='protected'),
+    path('other/verify-email/', protected_view, name='verify_email'),
     path('sso/', include('magic_sso_django.urls')),
 ]
