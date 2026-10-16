@@ -296,13 +296,23 @@ win, so you can switch modes without editing files, for example:
 pnpm dev:direct
 ```
 
-`pnpm test:e2e` runs the Playwright suite against the bundled apps in both
-app-owned and hosted direct modes, followed by the managed-mode browser suite.
-It covers the magic-link flow plus OTP success and invalid-code behavior for
-Angular, Django, Fastify, Next.js, Nuxt, and both Gate upstreams. The manager
-suite covers admin sign-in, granting scoped access, publishing it, and signing
-in as the newly allowed user. The command starts isolated services and an SMTP
-sink for each suite.
+`pnpm test:e2e` runs the Playwright suite against the bundled apps in app-owned,
+hosted direct, and reverse-proxy deployments, followed by the managed-mode
+browser suite. A
+[shared sign-in contract](./packages/core/CONTRACT.md#complete-sign-in-flow-contract)
+checks magic links and OTP, callback-created sessions, preservation of query
+values and repeated parameters, session reuse, and logout for Angular, Django,
+Fastify, Next.js, Nuxt, and both Gate upstreams. OTP also covers invalid-code
+retries. Django and Nuxt run with whole-application protection enabled. The
+manager suite covers admin sign-in, granting scoped access, publishing it, and
+signing in as the newly allowed user. The command starts isolated services and
+an SMTP sink for each suite.
+
+Run just the proxy profile with `pnpm --filter magic-sso-e2e test:e2e:proxy`. It
+exercises distinct public and backend ports; Next.js and Nuxt derive their
+public origin from trusted proxy headers rather than a configured public origin.
+This profile uses HTTP; framework-specific tests cover HTTPS origin and cookie
+decisions, proxy trust, and cross-origin mutation checks.
 
 For manual OTP checks without changing your local server TOML, use:
 

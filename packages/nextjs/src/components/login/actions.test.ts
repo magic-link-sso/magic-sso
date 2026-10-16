@@ -3,11 +3,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendMagicLink, verifyEmailOtp } from './actions';
+import { SignJWT } from 'jose';
 
 const cookieSet = vi.fn();
 
 vi.mock('next/headers', () => ({
     cookies: async () => ({ set: cookieSet }),
+    headers: async () =>
+        new Headers({ 'x-forwarded-host': 'app.example.com', 'x-forwarded-proto': 'https' }),
 }));
 
 describe('sendMagicLink', () => {
@@ -142,6 +145,31 @@ describe('sendMagicLink', () => {
 });
 
 describe('verifyEmailOtp', () => {
+    it('establishes a session for a trusted forwarded audience without an explicit public origin', async () => {
+        vi.stubEnv('MAGICSSO_PUBLIC_ORIGIN', '');
+        vi.stubEnv('MAGICSSO_TRUST_PROXY', 'true');
+        try {
+            const accessToken = await new SignJWT({
+                email: 'user@example.com',
+                siteId: 'app',
+                scope: '*',
+            })
+                .setProtectedHeader({ alg: 'HS256' })
+                .setAudience('https://app.example.com')
+                .setIssuer('http://sso.example.com')
+                .setIssuedAt()
+                .setExpirationTime('1h')
+                .setJti('proxy-otp-session')
+                .sign(new TextEncoder().encode('jwt-secret-0123456789-0123456789'));
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ accessToken }));
+            expect(await verifyEmailOtp('challenge-1', '123456')).toEqual({ success: true });
+            expect(cookieSet).toHaveBeenCalledWith(
+                expect.objectContaining({ value: accessToken, httpOnly: true }),
+            );
+        } finally {
+            vi.unstubAllEnvs();
+        }
+    });
     beforeEach(() => {
         vi.restoreAllMocks();
         cookieSet.mockReset();

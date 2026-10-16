@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normaliseReturnUrl } from '@magic-link-sso/nextjs';
 import { readOtpMetadata, sendMagicLink, type SignInResult } from '../../login/signin';
+import { getAppOrigin } from '../../login/url';
 
 function acceptsJson(request: NextRequest): boolean {
     const accept = request.headers.get('accept');
@@ -27,7 +28,7 @@ function buildLoginRedirect(
     scope: string | undefined,
     result: { error?: string; success?: string },
 ): NextResponse {
-    const loginUrl = new URL('/login', request.nextUrl.origin);
+    const loginUrl = new URL('/login', getAppOrigin(request.headers));
     loginUrl.searchParams.set('returnUrl', returnUrl);
     for (const [name, value] of Object.entries({ scope, ...result })) {
         if (typeof value === 'string' && value.length > 0) {
@@ -69,7 +70,7 @@ function signInOutcomeFor(result: SignInResult): SignInOutcome {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-    const appOrigin = request.nextUrl.origin;
+    const appOrigin = getAppOrigin(request.headers);
     const formData = await request.formData();
     const email = readFormText(formData, 'email');
     const verifyUrl = readFormText(formData, 'verifyUrl');

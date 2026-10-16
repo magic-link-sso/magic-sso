@@ -2,6 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Cookie } from '@playwright/test';
 import type { ExampleAppDefinition } from './apps.js';
 import { waitForEmailOtp, waitForMagicLink } from './mail-sink.js';
+import { canonicalFlowUrl } from '../../../../packages/core/test/sign-in-contract.js';
 
 export type FlowMode = 'direct' | 'indirect';
 
@@ -147,8 +148,12 @@ export async function expectHostedSignInPage(
     const currentUrl = new URL(page.url());
     expect(currentUrl.origin).toBe(hostedAuthOrigin);
     expect(currentUrl.pathname).toBe('/signin');
-    expect(currentUrl.searchParams.get('returnUrl')).toBe(expectedReturnUrl);
-    expect(currentUrl.searchParams.get('verifyUrl')).toBe(
-        `${app.appUrl}${app.verifyPath}?returnUrl=${encodeURIComponent(expectedReturnUrl)}`,
+    expect(canonicalFlowUrl(currentUrl.searchParams.get('returnUrl') ?? '')).toBe(
+        canonicalFlowUrl(expectedReturnUrl),
+    );
+    const verifyUrl = new URL(currentUrl.searchParams.get('verifyUrl') ?? '');
+    expect(`${verifyUrl.origin}${verifyUrl.pathname}`).toBe(`${app.appUrl}${app.verifyPath}`);
+    expect(canonicalFlowUrl(verifyUrl.searchParams.get('returnUrl') ?? '')).toBe(
+        canonicalFlowUrl(expectedReturnUrl),
     );
 }

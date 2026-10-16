@@ -12,7 +12,12 @@ import {
     setHeader,
     type H3Event,
 } from 'h3';
-import { buildLoginUrl, getMagicSsoConfig, normaliseReturnUrl } from '../utils/auth';
+import {
+    buildLoginUrl,
+    getMagicSsoConfig,
+    getRequestOrigin,
+    normaliseReturnUrl,
+} from '../utils/auth';
 
 interface VerifyEmailPreviewResponse {
     email: string;
@@ -187,11 +192,12 @@ function renderConfirmationPage(
 
 export default defineEventHandler(async (event): Promise<string | void> => {
     const query = getQuery(event);
-    const requestUrl = getRequestURL(event);
+    const appOrigin =
+        getRequestOrigin(event, { allowRequestUrlFallback: true }) ?? getRequestURL(event).origin;
     const token = typeof query.token === 'string' ? query.token : undefined;
     const returnUrl = normaliseReturnUrl(
         typeof query.returnUrl === 'string' ? query.returnUrl : undefined,
-        requestUrl.origin,
+        appOrigin,
     );
 
     if (typeof token !== 'string' || token.length === 0) {

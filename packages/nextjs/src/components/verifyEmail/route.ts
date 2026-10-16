@@ -34,14 +34,20 @@ import {
     isVerifyEmailResponse,
     type VerifyEmailPreviewResponse,
 } from '@magic-link-sso/core';
-import { buildAuthCookieOptions, getJwtSecret, verifyAuthToken } from '../../lib/auth';
+import {
+    buildAuthCookieOptions,
+    getExpectedMutationOrigin,
+    getJwtSecret,
+    verifyAuthToken,
+} from '../../lib/auth';
 
 export interface VerifyEmailRouteOptions {
     /** Document title for the confirmation page this route renders. */
     pageTitle?: string;
     /**
-     * Resolve the public origin the app answers on. Defaults to the request
-     * URL's own origin; pass a resolver when the app sits behind a proxy.
+     * Resolve the public origin the app answers on. Defaults to the configured
+     * public origin, then explicitly trusted proxy headers, then the request
+     * URL's origin. A custom resolver takes precedence.
      */
     resolveAppOrigin?: (request: NextRequest) => string;
 }
@@ -518,7 +524,7 @@ export async function VerifyEmailRoute(
     request: NextRequest,
     options: VerifyEmailRouteOptions = {},
 ): Promise<NextResponse> {
-    const appOrigin = options.resolveAppOrigin?.(request) ?? request.nextUrl.origin;
+    const appOrigin = options.resolveAppOrigin?.(request) ?? getExpectedMutationOrigin(request);
     return request.method === 'POST'
         ? submitVerifyEmailPage(request, appOrigin)
         : renderVerifyEmailPage(request, appOrigin, options.pageTitle ?? DEFAULT_PAGE_TITLE);

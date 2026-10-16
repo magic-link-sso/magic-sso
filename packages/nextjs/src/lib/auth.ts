@@ -178,7 +178,7 @@ export function hasSameOriginMutationSource(request: Request): boolean {
     }
 }
 
-async function getRequestOrigin(): Promise<string | null> {
+export async function getRequestOrigin(): Promise<string | null> {
     const publicOrigin = getPublicOrigin();
     if (publicOrigin !== null) {
         return publicOrigin;

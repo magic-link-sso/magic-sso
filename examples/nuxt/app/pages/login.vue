@@ -11,13 +11,13 @@ interface SignInResult {
 }
 
 const route = useRoute();
-const requestUrl = useRequestURL();
+const appOrigin = useAppOrigin();
 const email = ref('');
 const pending = ref(false);
 const otpCode = ref('');
 const otpPending = ref(false);
 const result = ref<SignInResult | null>(null);
-const returnUrl = computed(() => normaliseReturnUrl(route.query.returnUrl, requestUrl.origin));
+const returnUrl = computed(() => normaliseReturnUrl(route.query.returnUrl, appOrigin));
 const scope = computed(() => {
     const requestedScope = Array.isArray(route.query.scope)
         ? route.query.scope[0]
@@ -34,7 +34,7 @@ const hasOtpChallenge = computed(() => typeof result.value?.otpChallengeId === '
 const emailDescription = computed(() =>
     hasError.value ? 'signin-help signin-feedback' : 'signin-help',
 );
-const verifyUrl = computed(() => buildVerifyUrl(requestUrl.origin, returnUrl.value));
+const verifyUrl = computed(() => buildVerifyUrl(appOrigin, returnUrl.value));
 const loginCopy = computed(() =>
     isConfirmation.value
         ? {

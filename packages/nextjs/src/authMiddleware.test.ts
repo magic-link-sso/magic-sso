@@ -71,6 +71,33 @@ describe('isPublicPath', () => {
 });
 
 describe('buildLoginUrl', () => {
+    it.each(['false', 'true'])(
+        'uses the trusted public origin for sign-in with directUse=%s',
+        (directUse) => {
+            process.env.MAGICSSO_PUBLIC_ORIGIN = '';
+            process.env.MAGICSSO_TRUST_PROXY = 'true';
+            process.env.MAGICSSO_DIRECT_USE = directUse;
+            process.env.MAGICSSO_SERVER_URL = 'https://sso.example.com';
+            const request = new NextRequest('http://backend.local:43201/protected?page=3', {
+                headers: {
+                    host: 'backend.local:43201',
+                    'x-forwarded-host': 'app.example.com',
+                    'x-forwarded-proto': 'https',
+                },
+            });
+            const target = buildLoginUrl(request, '/protected?page=3');
+            expect(target.searchParams.get('returnUrl')).toBe(
+                'https://app.example.com/protected?page=3',
+            );
+            expect(target.origin).toBe(
+                directUse === 'true' ? 'https://sso.example.com' : 'https://app.example.com',
+            );
+            process.env.MAGICSSO_PUBLIC_ORIGIN = 'https://configured.example.com';
+            expect(buildLoginUrl(request, '/protected').searchParams.get('returnUrl')).toBe(
+                'https://configured.example.com/protected',
+            );
+        },
+    );
     const originalDirectUse = process.env.MAGICSSO_DIRECT_USE;
     const originalPublicOrigin = process.env.MAGICSSO_PUBLIC_ORIGIN;
     const originalServerUrl = process.env.MAGICSSO_SERVER_URL;

@@ -14,6 +14,7 @@ import {
     getCookieName,
     getJwtSecret,
     getMagicSsoConfig,
+    getRequestOrigin,
     hasSameOriginMutationSource,
     readFirstHeaderValue,
 } from '../utils/auth';
@@ -70,7 +71,9 @@ export default defineEventHandler(async (event: H3Event): Promise<{ ok: true }> 
         const result = await exchangeEmailOtp({
             challengeId: body.challengeId,
             code: body.code,
-            expectedAudience: getRequestURL(event).origin,
+            expectedAudience:
+                getRequestOrigin(event, { allowRequestUrlFallback: true }) ??
+                getRequestURL(event).origin,
             expectedIssuer: new URL(config.serverUrl).origin,
             fetcher: fetch,
             secret: jwtSecret,

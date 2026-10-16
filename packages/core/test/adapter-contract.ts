@@ -6,6 +6,16 @@ import { describe, expect, it } from 'vitest';
 import type { AuthPayload } from '../src/types.js';
 import { authFixture } from './fixtures.js';
 
+// Browser suites import the runner-independent sibling directly, without Vitest.
+export {
+    canonicalFlowUrl,
+    runSignInFlowContract,
+    signInReturnPaths,
+    type SignInFlowDriver,
+    type SignInFlowScenario,
+    type SignInFlowSession,
+} from './sign-in-contract.js';
+
 export interface VerifyAuthTokenContractOptions {
     name: string;
     verify: (

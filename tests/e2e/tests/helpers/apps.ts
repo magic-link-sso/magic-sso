@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { canonicalFlowUrl } from '../../../../packages/core/test/sign-in-contract.js';
 
 export interface ExampleAppDefinition {
     readonly allowedEmail: string;
@@ -21,7 +22,9 @@ type ExampleAppSeed = Omit<ExampleAppDefinition, 'expectLoginPage'> & {
 
 function expectReturnUrl(page: Page, expectedReturnUrl: string): void {
     const currentUrl = new URL(page.url());
-    expect(currentUrl.searchParams.get('returnUrl')).toBe(expectedReturnUrl);
+    expect(canonicalFlowUrl(currentUrl.searchParams.get('returnUrl') ?? '')).toBe(
+        canonicalFlowUrl(expectedReturnUrl),
+    );
 }
 
 async function expectEmailVisible(page: Page, email: string): Promise<void> {
@@ -56,7 +59,10 @@ function createDefaultExpectAuthenticated(
         email: string,
         protectedPath: string,
     ): Promise<void> {
-        await expect(page).toHaveURL(`${appUrl}${protectedPath}`);
+        await expect(page).toHaveURL(
+            (url) =>
+                canonicalFlowUrl(url.toString()) === canonicalFlowUrl(`${appUrl}${protectedPath}`),
+        );
         await expect(page.getByRole('heading', { name: successHeading })).toBeVisible();
         if (options?.emailTarget === 'forwarded-email') {
             await expect(page.locator('#forwarded-email')).toContainText(email);
@@ -162,7 +168,11 @@ export const exampleApps: readonly ExampleAppDefinition[] = [
             _email: string,
             protectedPath: string,
         ): Promise<void> {
-            await expect(page).toHaveURL(`${buildAppUrl(43109)}${protectedPath}`);
+            await expect(page).toHaveURL(
+                (url) =>
+                    canonicalFlowUrl(url.toString()) ===
+                    canonicalFlowUrl(`${buildAppUrl(43109)}${protectedPath}`),
+            );
             await expect(
                 page.getByRole('heading', {
                     name: 'Your private2 static page is locked behind the gate.',

@@ -5,6 +5,12 @@
 This is a Nuxt 4 SSR example app that uses the reusable
 [`@magic-link-sso/nuxt`](../../packages/nuxt) module.
 
+Set `MAGICSSO_AUTH_EVERYWHERE=true` to enable global route protection while
+keeping the configured public paths accessible. Named page guards remain
+available in this mode. `MAGICSSO_TRUST_PROXY=true` enables origin resolution
+from forwarded headers; use it only behind a trusted proxy that replaces those
+headers. Both flags default to false in this example.
+
 ## Getting Started
 
 Install workspace dependencies from the repository root:

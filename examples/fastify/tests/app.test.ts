@@ -28,6 +28,33 @@ afterEach(() => {
 });
 
 describe('fastify example routes', () => {
+    it.each(['false', 'true'])(
+        'preserves full query values in sign-in redirects with directUse=%s',
+        async (directUse) => {
+            process.env.MAGICSSO_DIRECT_USE = directUse;
+            const app = await createApp({ logger: false });
+            try {
+                const response = await app.inject({
+                    method: 'GET',
+                    headers: { host: 'localhost:3005' },
+                    url: '/protected?status=pending&page=3&q=a%2Bb%20%26%20c&tag=one&tag=two',
+                });
+                const target = new URL(response.headers.location ?? '', 'http://localhost:3005');
+                const returnUrl = new URL(target.searchParams.get('returnUrl') ?? '');
+                expect(returnUrl.origin).toBe('http://localhost:3005');
+                expect(returnUrl.pathname).toBe('/protected');
+                expect([...returnUrl.searchParams]).toEqual([
+                    ['status', 'pending'],
+                    ['page', '3'],
+                    ['q', 'a+b & c'],
+                    ['tag', 'one'],
+                    ['tag', 'two'],
+                ]);
+            } finally {
+                await app.close();
+            }
+        },
+    );
     it('renders the login page with the shared layout', async () => {
         const app = await createApp({ logger: false });
 

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { exampleApps, type ExampleAppDefinition } from './helpers/apps.js';
+import { registerSignInFlowSuites } from './helpers/sign-in-contract.js';
 import { clearMailbox, expectNoMessagesForRecipient } from './helpers/mail-sink.js';
 import {
     completeMagicLinkSignIn,
@@ -13,6 +14,7 @@ import {
 } from './helpers/magic-link-flow.js';
 
 export function registerMagicLinkSuites(flowMode: FlowMode): void {
+    registerSignInFlowSuites(flowMode, 'magic-link');
     test.beforeEach(async ({ request }) => {
         await clearMailbox(request);
     });
@@ -20,14 +22,6 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
     for (const app of exampleApps) {
         test.describe(`${app.displayName} example app (${flowMode})`, () => {
             for (const protectedPath of app.protectedPaths) {
-                test(`signs in through ${protectedPath}`, async ({ page, request }) => {
-                    await signInThroughMagicLink(page, request, app, protectedPath, flowMode);
-
-                    const authCookie = await expectAuthCookie(page, app);
-                    await app.expectAuthenticated(page, app.allowedEmail, protectedPath);
-                    expect(authCookie.value.length).toBeGreaterThan(0);
-                });
-
                 test(`rejects tampered tokens for ${protectedPath}`, async ({ page, request }) => {
                     const magicLink = await requestMagicLink(
                         page,
@@ -47,20 +41,6 @@ export function registerMagicLinkSuites(flowMode: FlowMode): void {
                     await page.goto(protectedUrl);
                     await expectSignInPrompt(page, app, protectedUrl);
                 });
-
-                if (app.name === 'nextjs') {
-                    test(`logs out cleanly from ${protectedPath}`, async ({ page, request }) => {
-                        await signInThroughMagicLink(page, request, app, protectedPath, flowMode);
-                        await app.expectAuthenticated(page, app.allowedEmail, protectedPath);
-
-                        await page.getByRole('button', { name: 'Logout' }).click();
-                        await expectNoAuthCookie(page, app);
-
-                        const protectedUrl = `${app.appUrl}${protectedPath}`;
-                        await page.goto(protectedUrl);
-                        await expectSignInPrompt(page, app, protectedUrl);
-                    });
-                }
 
                 if (app.name === 'private1' || app.name === 'private2') {
                     test(`rejects replayed gate cookies after logout from ${protectedPath}`, async ({

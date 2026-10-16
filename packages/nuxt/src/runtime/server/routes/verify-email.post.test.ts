@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const getCookieMock = vi.fn();
 const getRequestURLMock = vi.fn();
+const getRequestOriginMock = vi.fn();
 const readBodyMock = vi.fn();
 const sendRedirectMock = vi.fn();
 const setCookieMock = vi.fn();
@@ -25,6 +26,7 @@ vi.mock('h3', () => ({
 }));
 
 vi.mock('../utils/auth', () => ({
+    getRequestOrigin: getRequestOriginMock,
     buildLoginUrl: buildLoginUrlMock,
     getCookieName: getCookieNameMock,
     getJwtSecret: getJwtSecretMock,
@@ -37,6 +39,7 @@ describe('verify-email POST route', () => {
     afterEach(() => {
         getCookieMock.mockReset();
         getRequestURLMock.mockReset();
+        getRequestOriginMock.mockReset();
         readBodyMock.mockReset();
         sendRedirectMock.mockReset();
         setCookieMock.mockReset();
@@ -49,62 +52,74 @@ describe('verify-email POST route', () => {
         vi.unstubAllGlobals();
     });
 
-    it('sets the auth cookie with the configured path after confirmation POST', async () => {
-        const event = {};
-        const fetchMock = vi.fn().mockResolvedValue({
-            ok: true,
-            json: async () => ({ accessToken: 'access-token' }),
-        });
-        readBodyMock.mockResolvedValue({
-            csrfToken: 'csrf-token',
-            token: 'email-token',
-            returnUrl: 'http://app.example.com/protected',
-        });
-        getCookieMock.mockReturnValue('csrf-token');
-        getRequestURLMock.mockReturnValue(new URL('http://app.example.com/verify-email'));
-        getCookieNameMock.mockReturnValue('magic-sso');
-        getJwtSecretMock.mockReturnValue(new TextEncoder().encode('jwt-secret'));
-        getMagicSsoConfigMock.mockReturnValue({
-            serverUrl: 'http://sso.example.com',
-            cookiePath: '/auth',
-            cookieMaxAge: 3600,
-        });
-        normaliseReturnUrlMock.mockReturnValue('http://app.example.com/protected');
-        verifyAuthTokenMock.mockResolvedValue({ email: 'nuxt@example.com', scope: '*' });
-        vi.stubGlobal('fetch', fetchMock);
+    it.each(['app.example.com', 'backend.local'])(
+        'sets a site-bound auth cookie after confirmation behind %s',
+        async (host) => {
+            const event = {};
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({ accessToken: 'access-token' }),
+            });
+            readBodyMock.mockResolvedValue({
+                csrfToken: 'csrf-token',
+                token: 'email-token',
+                returnUrl: 'http://app.example.com/protected',
+            });
+            getCookieMock.mockReturnValue('csrf-token');
+            getRequestURLMock.mockReturnValue(new URL(`http://${host}/verify-email`));
+            getRequestOriginMock.mockReturnValue('http://app.example.com');
+            getCookieNameMock.mockReturnValue('magic-sso');
+            getJwtSecretMock.mockReturnValue(new TextEncoder().encode('jwt-secret'));
+            getMagicSsoConfigMock.mockReturnValue({
+                serverUrl: 'http://sso.example.com',
+                cookiePath: '/auth',
+                cookieMaxAge: 3600,
+            });
+            normaliseReturnUrlMock.mockReturnValue('http://app.example.com/protected');
+            verifyAuthTokenMock.mockResolvedValue({ email: 'nuxt@example.com', scope: '*' });
+            vi.stubGlobal('fetch', fetchMock);
 
-        const { default: verifyEmailRoute } = await import('./verify-email.post');
-        await verifyEmailRoute(event);
+            const { default: verifyEmailRoute } = await import('./verify-email.post');
+            await verifyEmailRoute(event);
+            expect(verifyAuthTokenMock).toHaveBeenCalledWith(
+                'access-token',
+                expect.any(Uint8Array),
+                {
+                    expectedAudience: 'http://app.example.com',
+                    expectedIssuer: 'http://sso.example.com',
+                },
+            );
 
-        expect(fetchMock).toHaveBeenCalledWith(new URL('http://sso.example.com/verify-email'), {
-            method: 'POST',
-            headers: {
-                accept: 'application/json',
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify({ token: 'email-token' }),
-            cache: 'no-store',
-        });
-        expect(setCookieMock).toHaveBeenNthCalledWith(1, event, 'magic-sso-verify-csrf', '', {
-            path: '/verify-email',
-            httpOnly: true,
-            maxAge: 0,
-            secure: false,
-            sameSite: 'strict',
-        });
-        expect(setCookieMock).toHaveBeenNthCalledWith(2, event, 'magic-sso', 'access-token', {
-            path: '/auth',
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 3600,
-        });
-        expect(sendRedirectMock).toHaveBeenCalledWith(
-            event,
-            'http://app.example.com/protected',
-            303,
-        );
-    });
+            expect(fetchMock).toHaveBeenCalledWith(new URL('http://sso.example.com/verify-email'), {
+                method: 'POST',
+                headers: {
+                    accept: 'application/json',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({ token: 'email-token' }),
+                cache: 'no-store',
+            });
+            expect(setCookieMock).toHaveBeenNthCalledWith(1, event, 'magic-sso-verify-csrf', '', {
+                path: '/verify-email',
+                httpOnly: true,
+                maxAge: 0,
+                secure: false,
+                sameSite: 'strict',
+            });
+            expect(setCookieMock).toHaveBeenNthCalledWith(2, event, 'magic-sso', 'access-token', {
+                path: '/auth',
+                httpOnly: true,
+                secure: false,
+                sameSite: 'lax',
+                maxAge: 3600,
+            });
+            expect(sendRedirectMock).toHaveBeenCalledWith(
+                event,
+                'http://app.example.com/protected',
+                303,
+            );
+        },
+    );
 
     it('redirects failed verification POSTs to login with See Other semantics', async () => {
         const event = {};

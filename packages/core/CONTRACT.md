@@ -50,6 +50,45 @@ The shared adapter contract suite verifies that Angular, Next.js, Nuxt and the
 Fastify example all accept the same complete token and fail closed for a wrong
 issuer, a wrong audience, or an omitted expected issuer.
 
+## Complete sign-in flow contract
+
+`test/sign-in-contract.ts` extends the verifier contract with a
+runner-independent browser lifecycle. It is test infrastructure, not a new SDK
+export. The Vitest adapter contract re-exports its driver, scenarios and runner;
+Playwright imports the runner-independent module directly and supplies
+framework-specific UI and cookie operations through the existing E2E helpers.
+
+Every adapter, Django, Fastify and both Gate upstreams run the same checks:
+
+1. Request magic-link or OTP verification for a protected URL. No application
+   session may exist before the email proof is consumed.
+2. Complete verification and its callback, then verify the resulting cookie's
+   JWT signature, issuer and audience. Assert the expected email, site and
+   session identifier, plus `HttpOnly` and `SameSite=Lax` cookie attributes.
+3. Return to the original origin and path, retaining filters, pagination,
+   encoded values and repeated query parameters. Equivalent encodings of spaces
+   (`%20` and `+`) are accepted; literal plus signs remain distinct.
+4. Reload the protected URL and reuse the same application session.
+5. Submit the application's actual logout form, remove the application cookie,
+   and require sign-in again for the original protected URL.
+
+The browser driver also submits an invalid OTP before accepting the correct
+code, asserting that the failed attempt creates no session. Existing blocked
+identity, tampered-token and Gate revocation scenarios remain in the same suite.
+Logout requires cookie removal and renewed protection; it does not impose Gate's
+online revocation guarantee on adapters that validate application JWTs locally.
+
+The standard `pnpm test:e2e` aggregate runs application-owned forms, hosted
+login, a real HTTP reverse proxy, then the manager browser scenario. All
+profiles reuse `tests/e2e/playwright.base.ts`, the app catalog and the SMTP
+sink. Django and Nuxt enable whole-application protection while preserving their
+public login and callback routes. In the proxy profile all seven clients have
+separate public and backend ports; Next.js and Nuxt replace the backend Host and
+resolve the public origin from explicitly trusted forwarded headers. Gate
+retains an explicit public origin with proxy trust enabled. This local fixture
+uses HTTP; framework-specific tests cover HTTPS origin and cookie decisions,
+proxy trust, and cross-origin mutation checks.
+
 ## Cookie migration compatibility
 
 Moving an adapter to core does not change the default session-cookie identity:

@@ -16,6 +16,7 @@ import {
     getCookieName,
     getJwtSecret,
     getMagicSsoConfig,
+    getRequestOrigin,
     normaliseReturnUrl,
     verifyAuthToken,
 } from '../utils/auth';
@@ -133,14 +134,15 @@ async function exchangeVerificationToken(
 
 export default defineEventHandler(async (event): Promise<void> => {
     const parsedBody = asVerifyEmailBody(await readBody(event));
-    const requestUrl = getRequestURL(event);
-    const returnUrl = normaliseReturnUrl(parsedBody?.returnUrl, requestUrl.origin);
+    const appOrigin =
+        getRequestOrigin(event, { allowRequestUrlFallback: true }) ?? getRequestURL(event).origin;
+    const returnUrl = normaliseReturnUrl(parsedBody?.returnUrl, appOrigin);
     const token = readConfirmedToken(event, parsedBody);
     const config = getMagicSsoConfig(event);
     const accessToken =
         token === null || config.serverUrl.length === 0
             ? null
-            : await exchangeVerificationToken(event, token, config.serverUrl, requestUrl.origin);
+            : await exchangeVerificationToken(event, token, config.serverUrl, appOrigin);
 
     clearVerifyCookie(event);
     if (accessToken === null) {
@@ -155,5 +157,5 @@ export default defineEventHandler(async (event): Promise<void> => {
         sameSite: 'lax',
         ...(typeof config.cookieMaxAge === 'number' ? { maxAge: config.cookieMaxAge } : {}),
     });
-    await sendRedirect(event, new URL(returnUrl, requestUrl.origin).toString(), 303);
+    await sendRedirect(event, new URL(returnUrl, appOrigin).toString(), 303);
 });

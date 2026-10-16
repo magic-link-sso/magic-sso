@@ -8,5 +8,5 @@
         "target": "ES2023",
         "types": ["node", "@playwright/test"]
     },
-    "include": ["playwright.config.ts", "src/**/*.ts", "src/**/*.d.mts", "tests/**/*.ts"]
+    "include": ["playwright*.ts", "src/**/*.ts", "src/**/*.d.mts", "tests/**/*.ts"]
 }

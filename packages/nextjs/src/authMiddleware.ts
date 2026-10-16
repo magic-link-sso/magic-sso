@@ -101,8 +101,9 @@ function buildLoginUrlWithError(
     error?: string,
     scope?: string,
 ): URL {
+    const appOrigin = getExpectedAudience(request) ?? request.nextUrl.origin;
     const target = buildCoreLoginTarget({
-        appOrigin: request.nextUrl.origin,
+        appOrigin,
         directUse: parseBooleanFlag(process.env.MAGICSSO_DIRECT_USE),
         returnUrl: pathname,
         ...(typeof scope === 'string' ? { scope } : {}),
@@ -110,7 +111,7 @@ function buildLoginUrlWithError(
             ? { serverUrl: process.env.MAGICSSO_SERVER_URL }
             : {}),
     });
-    const loginUrl = new URL(target, request.nextUrl.origin);
+    const loginUrl = new URL(target, appOrigin);
     if (typeof error === 'string') {
         loginUrl.searchParams.set('error', error);
     }

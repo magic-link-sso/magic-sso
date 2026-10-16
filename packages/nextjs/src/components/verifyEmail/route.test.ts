@@ -39,6 +39,30 @@ function createGetRequest(url: string): NextRequest {
 }
 
 describe('VerifyEmailRoute', () => {
+    it('uses the configured and trusted forwarded public origin for default callback handling', async () => {
+        vi.stubEnv('MAGICSSO_PUBLIC_ORIGIN', '');
+        vi.stubEnv('MAGICSSO_TRUST_PROXY', 'true');
+        const request = new NextRequest(
+            'http://backend.local/verify-email?returnUrl=https%3A%2F%2Fapp.example.com%2Fprotected%3Fpage%3D3',
+            {
+                headers: {
+                    host: 'backend.local',
+                    'x-forwarded-host': 'app.example.com',
+                    'x-forwarded-proto': 'https',
+                },
+            },
+        );
+        try {
+            const response = await VerifyEmailRoute(request);
+            const target = new URL(response.headers.get('location') ?? '');
+            expect(target.origin).toBe('https://app.example.com');
+            expect(target.searchParams.get('returnUrl')).toBe(
+                'https://app.example.com/protected?page=3',
+            );
+        } finally {
+            vi.unstubAllEnvs();
+        }
+    });
     beforeEach(() => {
         process.env.MAGICSSO_SERVER_URL = serverUrl;
         process.env.MAGICSSO_PREVIEW_SECRET = 'preview-secret';

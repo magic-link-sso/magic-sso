@@ -808,7 +808,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         const auth = await verifyRequestAuth(request.headers.cookie, appOrigin);
 
         if (auth === null) {
-            return reply.redirect(buildLoginTarget(appOrigin, `${appOrigin}/protected`));
+            const returnUrl = normaliseReturnUrl(request.url, appOrigin, `${appOrigin}/protected`);
+            return reply.redirect(buildLoginTarget(appOrigin, returnUrl));
         }
 
         reply.type('text/html; charset=utf-8');

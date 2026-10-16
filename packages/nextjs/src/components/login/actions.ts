@@ -33,7 +33,7 @@ import { exchangeEmailOtp } from '@magic-link-sso/core';
 import {
     buildAuthCookieOptions,
     getJwtSecret,
-    getPublicOrigin,
+    getRequestOrigin,
     getServerIssuer,
 } from '../../lib/auth';
 
@@ -138,7 +138,7 @@ export async function verifyEmailOtp(
 ): Promise<VerifyEmailOtpResult> {
     const serverUrl = process.env.MAGICSSO_SERVER_URL;
     const jwtSecret = getJwtSecret();
-    const audience = getPublicOrigin();
+    const audience = await getRequestOrigin();
     const issuer = getServerIssuer();
     if (
         typeof serverUrl !== 'string' ||

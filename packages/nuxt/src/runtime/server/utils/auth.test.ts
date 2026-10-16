@@ -341,6 +341,47 @@ describe('public path helpers', () => {
 });
 
 describe('buildLoginUrl', () => {
+    it.each([false, true])(
+        'uses a trusted public origin for sign-in with directUse=%s',
+        (directUse) => {
+            const event = {
+                ...createEvent('http://backend.local:43202/protected'),
+                context: {
+                    nitro: {
+                        runtimeConfig: {
+                            magicSso: {
+                                publicOrigin: '',
+                                trustProxy: true,
+                                directUse,
+                                serverUrl: 'https://sso.example.com',
+                            },
+                        },
+                    },
+                },
+            };
+            event.node.req.headers['x-forwarded-host'] = 'app.example.com';
+            event.node.req.headers['x-forwarded-proto'] = 'https';
+            const target = new URL(
+                buildLoginUrl(event, '/protected?page=3'),
+                'https://app.example.com',
+            );
+            expect(target.searchParams.get('returnUrl')).toBe(
+                'https://app.example.com/protected?page=3',
+            );
+            expect(target.origin).toBe(
+                directUse ? 'https://sso.example.com' : 'https://app.example.com',
+            );
+            event.context.nitro.runtimeConfig.magicSso.publicOrigin =
+                'https://configured.example.com';
+            const configured = new URL(
+                buildLoginUrl(event, '/protected'),
+                'https://configured.example.com',
+            );
+            expect(configured.searchParams.get('returnUrl')).toBe(
+                'https://configured.example.com/protected',
+            );
+        },
+    );
     it('builds a local login URL by default', () => {
         const event = {
             ...createEvent('http://app.example.com/protected'),

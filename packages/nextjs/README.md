@@ -70,6 +70,13 @@ Auth tokens are site-bound. This release invalidates older session cookies that
 were issued without `siteId`/`aud`/`iss`, so users need to sign in again after
 deployment.
 
+Middleware redirects, the default `VerifyEmailRoute` callback and OTP exchange
+use the same public origin policy: `MAGICSSO_PUBLIC_ORIGIN` takes precedence;
+forwarded headers are used only with `MAGICSSO_TRUST_PROXY=true`. A custom
+`VerifyEmailRoute` `resolveAppOrigin` resolver still takes precedence over the
+default callback policy. Keep form and callback URLs on that public origin when
+the backend listens on a different host or port.
+
 ## Basic Usage
 
 ### Protect routes in `proxy.ts`

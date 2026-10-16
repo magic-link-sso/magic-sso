@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { parseBooleanFlag } from '@magic-link-sso/core';
+import { defineNuxtConfig } from 'nuxt/config';
 
 function readBooleanEnv(value: string | undefined): boolean {
     return parseBooleanFlag(value);
@@ -10,7 +11,12 @@ function readBooleanEnv(value: string | undefined): boolean {
 export default defineNuxtConfig({
     compatibilityDate: '2026-03-26',
     css: ['magic-sso-example-ui/styles.css'],
-    modules: ['@magic-link-sso/nuxt'],
+    modules: [
+        [
+            '@magic-link-sso/nuxt',
+            { authEverywhere: readBooleanEnv(process.env.MAGICSSO_AUTH_EVERYWHERE) },
+        ],
+    ],
     runtimeConfig: {
         magicSso: {
             previewSecret: process.env.MAGICSSO_PREVIEW_SECRET ?? '',
@@ -34,7 +40,8 @@ export default defineNuxtConfig({
                 '/_nuxt',
                 '/favicon.ico',
             ],
-            authEverywhere: false,
+            authEverywhere: readBooleanEnv(process.env.MAGICSSO_AUTH_EVERYWHERE),
+            trustProxy: readBooleanEnv(process.env.MAGICSSO_TRUST_PROXY),
         },
         public: {
             magicSso: {
@@ -58,7 +65,8 @@ export default defineNuxtConfig({
                     '/_nuxt',
                     '/favicon.ico',
                 ],
-                authEverywhere: false,
+                authEverywhere: readBooleanEnv(process.env.MAGICSSO_AUTH_EVERYWHERE),
+                trustProxy: readBooleanEnv(process.env.MAGICSSO_TRUST_PROXY),
             },
         },
     },

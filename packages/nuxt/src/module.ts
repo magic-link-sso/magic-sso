@@ -92,8 +92,15 @@ const magicSsoModule: NuxtModule<MagicSsoModuleOptions, MagicSsoModuleOptions> =
             addRouteMiddleware({
                 name: 'magic-sso-auth',
                 path: resolver.resolve('./runtime/app/middleware/auth'),
-                global: options.authEverywhere === true,
+                global: false,
             });
+            if (options.authEverywhere === true) {
+                addRouteMiddleware({
+                    name: 'magic-sso-auth-global',
+                    path: resolver.resolve('./runtime/app/middleware/auth'),
+                    global: true,
+                });
+            }
             for (const { handler, method, route } of serverHandlers) {
                 addServerHandler({ handler: resolver.resolve(handler), method, route });
             }

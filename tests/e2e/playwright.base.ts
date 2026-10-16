@@ -1,8 +1,14 @@
 import { defineConfig } from '@playwright/test';
+
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+type TestConfigWebServer = Exclude<
+    ReturnType<typeof defineConfig>['webServer'],
+    undefined | unknown[]
+>;
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 const quietWebServerScript = resolve(packageDir, 'src/run-web-server.mjs');
@@ -26,7 +32,10 @@ const serverFixtureConfigPath = resolve(packageDir, 'fixtures/server.config.toml
 const managerReloadSecret = 'test-manager-reload-secret-1234567890';
 const sharedJwtSecret = 'test-jwt-secret-for-e2e-suite-123456';
 const sharedPreviewSecret = 'test-preview-secret-for-e2e-suite-123';
-const gracefulWebServerShutdown = { signal: 'SIGTERM', timeout: 5_000 } as const;
+const gracefulWebServerShutdown: { signal: 'SIGTERM'; timeout: number } = {
+    signal: 'SIGTERM',
+    timeout: 5_000,
+};
 
 function createEphemeralServerConfigPath(): string {
     const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-server-'));
@@ -34,7 +43,7 @@ function createEphemeralServerConfigPath(): string {
     const signInEmailRateLimitStoreDir = resolve(tempDir, 'signin-email-rate-limit');
     const configContents = `${readFileSync(serverFixtureConfigPath, 'utf8').replace(
         'logLevel = "error"',
-        `logLevel = "error"\nverifyTokenStoreDir = "${verifyTokenStoreDir}"\nsignInEmailRateLimitStoreDir = "${signInEmailRateLimitStoreDir}"\n[rateLimit]\nsignInMax = 100\nsignInEmailMax = 50\nsignInPageMax = 100\nverifyMax = 100`,
+        `logLevel = "error"\nverifyTokenStoreDir = "${verifyTokenStoreDir}"\nsignInEmailRateLimitStoreDir = "${signInEmailRateLimitStoreDir}"\n[rateLimit]\nsignInMax = 100\nsignInEmailMax = 50\nsignInPageMax = 500\nverifyMax = 100`,
     )}
 
 [auth.otp]
@@ -225,6 +234,7 @@ function createEphemeralGateConfigPath(options: {
     port: string;
     publicOrigin: string;
     upstreamUrl: string;
+    trustProxy?: boolean;
 }): string {
     const tempDir = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-gate-'));
     const configPath = resolve(tempDir, 'magic-gate.toml');
@@ -239,7 +249,7 @@ directUse = ${options.directUse ? 'true' : 'false'}
 requestTimeoutMs = 10000
 rateLimitMax = 240
 rateLimitWindowMs = 60000
-trustProxy = false
+trustProxy = ${options.trustProxy === true ? 'true' : 'false'}
 wsEnabled = true
 
 [auth]
@@ -288,9 +298,12 @@ function buildEnv(overrides: Record<string, string>): Record<string, string> {
 export function createE2eConfig(
     options: Readonly<{
         directUse: boolean;
+        behindProxy?: boolean;
         testMatch: RegExp;
     }>,
-) {
+): ReturnType<typeof defineConfig> {
+    const listenPort = (port: string): string =>
+        options.behindProxy ? String(Number(port) + 100) : port;
     const isCi = process.env.CI === 'true';
     const slowMo = parseOptionalPositiveInteger(process.env.PW_SLOWMO_MS);
     const directUse = options.directUse;
@@ -302,27 +315,31 @@ export function createE2eConfig(
     });
 
     const nextEnv = buildEnv({
+        MAGICSSO_TRUST_PROXY: options.behindProxy ? 'true' : 'false',
         MAGICSSO_COOKIE_NAME: 'magic-sso',
         MAGICSSO_COOKIE_MAX_AGE: '3600',
         MAGICSSO_DIRECT_USE: directUseEnv,
         MAGICSSO_JWT_SECRET: sharedJwtSecret,
         MAGICSSO_PREVIEW_SECRET: sharedPreviewSecret,
-        MAGICSSO_PUBLIC_ORIGIN: `http://localhost:${nextPort}`,
+        MAGICSSO_PUBLIC_ORIGIN: options.behindProxy ? '' : `http://localhost:${nextPort}`,
         MAGICSSO_SERVER_URL: `http://localhost:${serverPort}`,
     });
 
     const nuxtEnv = buildEnv({
+        MAGICSSO_TRUST_PROXY: options.behindProxy ? 'true' : 'false',
+        MAGICSSO_AUTH_EVERYWHERE: 'true',
         APP_URL: `http://localhost:${nuxtPort}`,
         MAGICSSO_COOKIE_NAME: 'magic-sso',
         MAGICSSO_COOKIE_MAX_AGE: '3600',
         MAGICSSO_DIRECT_USE: directUseEnv,
         MAGICSSO_JWT_SECRET: sharedJwtSecret,
         MAGICSSO_PREVIEW_SECRET: sharedPreviewSecret,
-        MAGICSSO_PUBLIC_ORIGIN: `http://localhost:${nuxtPort}`,
+        MAGICSSO_PUBLIC_ORIGIN: options.behindProxy ? '' : `http://localhost:${nuxtPort}`,
         MAGICSSO_SERVER_URL: `http://localhost:${serverPort}`,
     });
 
     const djangoEnv = buildEnv({
+        MAGICSSO_AUTH_EVERYWHERE: 'true',
         MAGICSSO_COOKIE_NAME: 'magic-sso',
         MAGICSSO_COOKIE_SAMESITE: 'Lax',
         MAGICSSO_COOKIE_SECURE: 'true',
@@ -340,7 +357,7 @@ export function createE2eConfig(
         MAGICSSO_JWT_SECRET: sharedJwtSecret,
         MAGICSSO_PREVIEW_SECRET: sharedPreviewSecret,
         MAGICSSO_SERVER_URL: `http://localhost:${serverPort}`,
-        PORT: angularPort,
+        PORT: listenPort(angularPort),
     });
 
     const fastifyEnv = buildEnv({
@@ -350,12 +367,13 @@ export function createE2eConfig(
         MAGICSSO_JWT_SECRET: sharedJwtSecret,
         MAGICSSO_PREVIEW_SECRET: sharedPreviewSecret,
         MAGICSSO_SERVER_URL: `http://localhost:${serverPort}`,
-        PORT: fastifyPort,
+        PORT: listenPort(fastifyPort),
     });
 
     const private1GateConfigPath = createEphemeralGateConfigPath({
         directUse,
-        port: private1GatePort,
+        port: listenPort(private1GatePort),
+        trustProxy: options.behindProxy === true,
         publicOrigin: `http://localhost:${private1GatePort}`,
         upstreamUrl: `http://localhost:${private1UpstreamPort}`,
     });
@@ -370,7 +388,8 @@ export function createE2eConfig(
 
     const private2GateConfigPath = createEphemeralGateConfigPath({
         directUse,
-        port: private2GatePort,
+        port: listenPort(private2GatePort),
+        trustProxy: options.behindProxy === true,
         publicOrigin: `http://localhost:${private2GatePort}`,
         upstreamUrl: `http://localhost:${private2UpstreamPort}`,
     });
@@ -384,6 +403,37 @@ export function createE2eConfig(
         MAIL_SINK_SMTP_USER: 'test-user',
         WEB_SERVER_COMMAND: 'pnpm mail-sink',
     });
+
+    const proxyWebServers: TestConfigWebServer[] = [
+        {
+            command: `node ${quietWebServerScript}`,
+            cwd: packageDir,
+            env: buildEnv({
+                WEB_SERVER_COMMAND: 'node src/reverse-proxy.ts',
+                MAGICSSO_E2E_PROXY_ROUTES: JSON.stringify(
+                    [
+                        nextPort,
+                        nuxtPort,
+                        angularPort,
+                        fastifyPort,
+                        djangoPort,
+                        private1GatePort,
+                        private2GatePort,
+                    ].map((port) => ({
+                        publicPort: Number(port),
+                        upstreamPort: Number(listenPort(port)),
+                        replaceHost: port === nextPort || port === nuxtPort,
+                    })),
+                ),
+            }),
+            gracefulShutdown: gracefulWebServerShutdown,
+            port: Number(nextPort),
+            reuseExistingServer: false,
+            stdout: 'ignore',
+            stderr: 'pipe',
+            timeout: 30_000,
+        },
+    ];
 
     return defineConfig({
         testDir: resolve(packageDir, 'tests'),
@@ -407,6 +457,7 @@ export function createE2eConfig(
             trace: 'retain-on-failure',
         },
         webServer: [
+            ...(options.behindProxy ? proxyWebServers : []),
             {
                 command: `node ${quietWebServerScript}`,
                 cwd: packageDir,
@@ -438,10 +489,10 @@ export function createE2eConfig(
                 cwd: repoRoot,
                 env: {
                     ...nextEnv,
-                    WEB_SERVER_COMMAND: `pnpm --filter example-app-nextjs build && pnpm --filter example-app-nextjs exec next start -p ${nextPort}`,
+                    WEB_SERVER_COMMAND: `pnpm --filter example-app-nextjs build && pnpm --filter example-app-nextjs exec next start -p ${listenPort(nextPort)}`,
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${nextPort}/login`,
+                url: `http://localhost:${listenPort(nextPort)}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -452,10 +503,10 @@ export function createE2eConfig(
                 cwd: repoRoot,
                 env: {
                     ...nuxtEnv,
-                    WEB_SERVER_COMMAND: `pnpm --filter example-app-nuxt build && pnpm --filter example-app-nuxt exec nuxt start --port ${nuxtPort}`,
+                    WEB_SERVER_COMMAND: `pnpm --filter example-app-nuxt build && pnpm --filter example-app-nuxt exec nuxt start --port ${listenPort(nuxtPort)}`,
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${nuxtPort}/login`,
+                url: `http://localhost:${listenPort(nuxtPort)}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -470,7 +521,7 @@ export function createE2eConfig(
                         'pnpm --filter example-app-angular build && pnpm --filter example-app-angular start',
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${angularPort}/login`,
+                url: `http://localhost:${listenPort(angularPort)}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -485,7 +536,7 @@ export function createE2eConfig(
                         'pnpm --filter example-app-fastify build && pnpm --filter example-app-fastify start',
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${fastifyPort}/login`,
+                url: `http://localhost:${listenPort(fastifyPort)}/login`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -515,7 +566,7 @@ export function createE2eConfig(
                         'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${private1GatePort}/_magicgate/healthz`,
+                url: `http://localhost:${listenPort(private1GatePort)}/_magicgate/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -545,7 +596,7 @@ export function createE2eConfig(
                         'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start',
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${private2GatePort}/_magicgate/healthz`,
+                url: `http://localhost:${listenPort(private2GatePort)}/_magicgate/healthz`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -556,10 +607,10 @@ export function createE2eConfig(
                 cwd: resolve(repoRoot, 'examples/django'),
                 env: {
                     ...djangoEnv,
-                    WEB_SERVER_COMMAND: `UV_CACHE_DIR=/tmp/uv-cache uv run python manage.py runserver ${djangoPort} --noreload`,
+                    WEB_SERVER_COMMAND: `UV_CACHE_DIR=/tmp/uv-cache uv run python manage.py runserver ${listenPort(djangoPort)} --noreload`,
                 },
                 gracefulShutdown: gracefulWebServerShutdown,
-                url: `http://localhost:${djangoPort}/`,
+                url: `http://localhost:${listenPort(djangoPort)}/`,
                 reuseExistingServer: false,
                 stderr: 'pipe',
                 stdout: 'ignore',
@@ -569,7 +620,7 @@ export function createE2eConfig(
     });
 }
 
-export function createManagerE2eConfig() {
+export function createManagerE2eConfig(): ReturnType<typeof defineConfig> {
     const isCi = process.env.CI === 'true';
     const slowMo = parseOptionalPositiveInteger(process.env.PW_SLOWMO_MS);
     const managerSettingsPaths = createEphemeralManagerSettingsPaths();

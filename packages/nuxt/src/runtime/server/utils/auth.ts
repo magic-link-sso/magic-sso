@@ -223,7 +223,7 @@ export function buildLoginUrl(event: AuthRequestEvent, pathname: string, scope?:
     const requestUrl = readEventUrl(event);
     const config = getMagicSsoConfig(event);
     return buildCoreLoginTarget({
-        appOrigin: requestUrl.origin,
+        appOrigin: getRequestOrigin(event, { allowRequestUrlFallback: true }) ?? requestUrl.origin,
         directUse: config.directUse,
         returnUrl: pathname,
         ...(typeof scope === 'string' ? { scope } : {}),

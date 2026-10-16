@@ -10,11 +10,20 @@ and this project follows
 
 ### Added
 
+- (tests) Extend the shared adapter contract to complete magic-link and OTP
+  sign-in, full return URLs, session reuse and logout across all integrations;
+  include reverse-proxy and whole-application protection in standard E2E checks
+
 - (tooling) Add server and manager `doctor` commands with read-only deployment
   diagnostics, optional bounded SMTP and reload probes, explicit test email, and
   JSON reports; include the commands in production images
 
 ### Fixed
+
+- (fastify) Retain query parameters when protected requests redirect to sign-in
+- (nuxt) Keep named page middleware available with whole-application protection
+- (adapters) Use configured or explicitly trusted forwarded origins for Next.js
+  and Nuxt sign-in redirects; align the examples' form and submission URLs
 
 - (manager) Serialize state changes with apply to prevent concurrent writes from
   losing updates

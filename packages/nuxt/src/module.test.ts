@@ -29,6 +29,15 @@ function createNuxt(runtimeConfig: Record<string, unknown>): Nuxt {
 }
 
 describe('Magic Link SSO Nuxt module', () => {
+    it('retains named middleware for explicit page guards when whole-app protection is enabled', async () => {
+        await magicSsoModule({ authEverywhere: true }, createNuxt({ public: {} }));
+        expect(addRouteMiddlewareMock).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'magic-sso-auth', global: false }),
+        );
+        expect(addRouteMiddlewareMock).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'magic-sso-auth-global', global: true }),
+        );
+    });
     beforeEach(() => {
         addImportsDirMock.mockReset();
         addRouteMiddlewareMock.mockReset();

@@ -26,7 +26,7 @@ function readE2eCommand(): string {
 }
 
 describe('standard E2E command', () => {
-    it.each(['', 'test:e2e:indirect', 'test:e2e:direct', 'test:e2e:manager'])(
+    it.each(['', 'test:e2e:indirect', 'test:e2e:direct', 'test:e2e:proxy', 'test:e2e:manager'])(
         'runs all suites and propagates failure from %s',
         (failingSuite) => {
             const directory = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-command-'));
@@ -47,7 +47,12 @@ describe('standard E2E command', () => {
                         MAGICSSO_TEST_FAIL_SUITE: failingSuite,
                     },
                 });
-                const suites = ['test:e2e:indirect', 'test:e2e:direct', 'test:e2e:manager'];
+                const suites = [
+                    'test:e2e:indirect',
+                    'test:e2e:direct',
+                    'test:e2e:proxy',
+                    'test:e2e:manager',
+                ];
                 expect(result.status).toBe(failingSuite === '' ? 0 : 1);
                 expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(
                     failingSuite === ''

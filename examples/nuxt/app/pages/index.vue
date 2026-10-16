@@ -5,9 +5,9 @@ import { buildLoginTarget } from '../utils/login';
 
 const authState = useState<AuthPayload | null>('home-auth', () => null);
 const config = useMagicSsoConfig();
-const requestUrl = useRequestURL();
+const appOrigin = useAppOrigin();
 const loginTarget = computed(() =>
-    buildLoginTarget(requestUrl.origin, '/', config.directUse, config.serverUrl),
+    buildLoginTarget(appOrigin, '/', config.directUse, config.serverUrl),
 );
 
 if (import.meta.server) {

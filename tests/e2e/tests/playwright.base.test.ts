@@ -70,6 +70,44 @@ function collectManagerConfigFilesByServer(config: ReturnType<typeof createManag
 }
 
 describe('playwright base config', () => {
+    it('runs the same contract through real proxies with trusted forwarded origins and whole-app protection', () => {
+        const config = createE2eConfig({
+            directUse: false,
+            behindProxy: true,
+            testMatch: /contract/u,
+        });
+        const webServers = Array.isArray(config.webServer) ? config.webServer : [];
+        const proxy = webServers.find((server) => server.env?.MAGICSSO_E2E_PROXY_ROUTES);
+        const routes: unknown = JSON.parse(proxy?.env?.MAGICSSO_E2E_PROXY_ROUTES ?? 'null');
+        expect(routes).toEqual(
+            expect.arrayContaining([
+                { publicPort: 43101, upstreamPort: 43201, replaceHost: true },
+                { publicPort: 43102, upstreamPort: 43202, replaceHost: true },
+                { publicPort: 43103, upstreamPort: 43203, replaceHost: false },
+                { publicPort: 43106, upstreamPort: 43206, replaceHost: false },
+            ]),
+        );
+        for (const port of [43201, 43202]) {
+            const server = webServers.find(
+                (entry) => entry.url === `http://localhost:${port}/login`,
+            );
+            expect(server?.env).toMatchObject({
+                MAGICSSO_PUBLIC_ORIGIN: '',
+                MAGICSSO_TRUST_PROXY: 'true',
+            });
+        }
+        for (const app of ['django', 'nuxt']) {
+            const server = webServers.find((entry) =>
+                app === 'django'
+                    ? entry.cwd?.endsWith('/django')
+                    : entry.env?.WEB_SERVER_COMMAND?.includes('nuxt'),
+            );
+            expect(server?.env?.MAGICSSO_AUTH_EVERYWHERE).toBe('true');
+        }
+        for (const path of collectGateConfigFiles(config)) {
+            expect(readFileSync(path, 'utf8')).toContain('trustProxy = true');
+        }
+    });
     it('gracefully stops every web server before a later E2E run reuses its ports', () => {
         const configs = [
             createE2eConfig({
