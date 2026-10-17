@@ -113,6 +113,29 @@ Operators reach the manager through:
 - Server-rendered admin pages.
 - Gate-protected admin access using a dedicated manager site in static config.
 
+## HTTP module boundaries
+
+[`app.ts`](../manager/src/app.ts) validates service settings and composes the
+Fastify application. Route registration lives in
+[`routes/`](../manager/src/routes): session routes, site access API and forms,
+and configuration pipeline API and pages. [`ui.ts`](../manager/src/ui.ts)
+remains responsible for HTML templates;
+[`http/ui.ts`](../manager/src/http/ui.ts) prepares page data and form drafts.
+
+All route groups register on the same Fastify instance. Shared authentication,
+same-origin checks, rate limits, HTML security headers, and error responses live
+in [`http/security.ts`](../manager/src/http/security.ts) and
+[`http/errors.ts`](../manager/src/http/errors.ts).
+
+[`http/mutations.ts`](../manager/src/http/mutations.ts) installs the shared
+write boundary before routes are registered. It holds `manager.lock` across each
+mutation handler, including state loading, drift checks, persistence, and audit
+recording. Concurrent requests use independent lock ownership even when invoked
+from inside another transaction. Read routes and validation remain available
+during writes. Apply owns its transaction in `applyManagerState`; login and
+logout do not write manager state. CLI and domain persistence continue to use
+the same lock implementation in [`lock.ts`](../manager/src/lock.ts).
+
 ## Reload model
 
 The core server change is deliberately small:
