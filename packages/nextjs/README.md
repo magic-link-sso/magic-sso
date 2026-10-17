@@ -2,6 +2,9 @@
 
 Reusable Next.js helpers for integrating with the Magic Link SSO server.
 
+For a minimal app and matching server config, start with the
+[SDK starter](../../docs/first-deployment.md#build-an-app-with-an-sdk).
+
 ## Install
 
 ```sh

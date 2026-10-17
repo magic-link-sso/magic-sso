@@ -7,6 +7,11 @@ deployments. It sends time-limited magic links, optionally includes a short
 email OTP for mobile and PWA sign-in, issues JWT session tokens, and can run
 without a database.
 
+Get started by
+[protecting an existing app with Gate](./docs/first-deployment.md#protect-an-existing-app-with-gate)
+or
+[building an app with an SDK](./docs/first-deployment.md#build-an-app-with-an-sdk).
+
 This repository contains the server, reusable framework packages, the Magic Link
 SSO Gate reverse-proxy service, and example apps for Angular, Django, Fastify,
 Next.js, Nuxt, and the managed-mode Photos demo, plus two Gate-backed private
@@ -49,6 +54,7 @@ identity platform, see
 
 - [How it works](#how-it-works)
 - [Getting started](#getting-started)
+- [First deployment guide](./docs/first-deployment.md)
 - [Deployment modes](#deployment-modes)
 - [Configuration reference](#configuration-reference)
 - [Operator diagnostics](./docs/doctor.md)
@@ -100,6 +106,20 @@ email, site, scope, return URL, and verify URL. A resend invalidates the
 previous code for that context only. Other contexts keep their own challenges.
 
 ## Getting started
+
+Choose one complete path to your first login:
+
+- **Protect an existing application:**
+  [Gate starter](./docs/first-deployment.md#protect-an-existing-app-with-gate).
+- **Build authentication into your application:**
+  [SDK starter](./docs/first-deployment.md#build-an-app-with-an-sdk), using a
+  minimal Next.js app.
+
+Both paths generate matching TOML/env files with `pnpm setup:app`, run
+diagnostics, and verify email sign-in and logout. Start with classic mode;
+introduce managed mode when you need access administration. The standalone
+server reference below is useful when you already know which integration you
+will connect.
 
 ### Try the server with Docker
 

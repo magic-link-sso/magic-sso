@@ -1,9 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeStarter } from '../../scripts/setup.mjs';
 
 type TestConfigWebServer = Exclude<
     ReturnType<typeof defineConfig>['webServer'],
@@ -753,6 +754,101 @@ export function createManagerE2eConfig(): ReturnType<typeof defineConfig> {
                 stderr: 'pipe',
                 stdout: 'ignore',
                 timeout: 120_000,
+            },
+        ],
+    });
+}
+
+/** Test the files produced by setup, using the existing SMTP and process harness. */
+export function createStarterE2eConfig(): ReturnType<typeof defineConfig> {
+    const path = process.env.MAGICSSO_STARTER_PATH;
+    if (path !== 'gate' && path !== 'sdk') {
+        throw new Error('MAGICSSO_STARTER_PATH must be gate or sdk.');
+    }
+    const appPort = path === 'gate' ? private1GatePort : nextPort;
+    const temporary = mkdtempSync(join(tmpdir(), 'magic-sso-starter-e2e-'));
+    const output = writeStarter({
+        path,
+        emails: ['owner@example.com', 'friend@example.com'],
+        output: join(temporary, 'starter'),
+        serverOrigin: `http://localhost:${serverPort}`,
+        appOrigin: `http://localhost:${appPort}`,
+        upstreamUrl: `http://127.0.0.1:${private1UpstreamPort}`,
+        smtpPort: Number(mailSinkSmtpPort),
+        smtpUser: 'test-user',
+        smtpPassword: 'test-password',
+    });
+    if (path === 'sdk') {
+        // Exercise the generated standalone app with this checkout's SDK and
+        // dependencies; the generated manifest itself uses published packages.
+        symlinkSync(
+            resolve(repoRoot, 'examples/nextjs/node_modules'),
+            join(output, 'app/node_modules'),
+            'dir',
+        );
+    }
+    const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+    const common = {
+        command: `node ${quietWebServerScript}`,
+        gracefulShutdown: gracefulWebServerShutdown,
+        reuseExistingServer: false,
+        stderr: 'pipe',
+        stdout: 'ignore',
+        timeout: 120_000,
+    } satisfies Partial<TestConfigWebServer>;
+    return defineConfig({
+        testDir: resolve(packageDir, 'tests'),
+        testMatch: /starter-onboarding\.spec\.ts/u,
+        workers: 1,
+        timeout: 60_000,
+        expect: { timeout: 15_000 },
+        forbidOnly: Boolean(process.env.CI),
+        use: { trace: 'retain-on-failure' },
+        webServer: [
+            {
+                ...common,
+                cwd: packageDir,
+                port: Number(mailSinkHttpPort),
+                env: buildEnv({
+                    MAIL_SINK_HTTP_PORT: mailSinkHttpPort,
+                    MAIL_SINK_SMTP_PORT: mailSinkSmtpPort,
+                    WEB_SERVER_COMMAND: 'pnpm mail-sink',
+                }),
+            },
+            {
+                ...common,
+                cwd: repoRoot,
+                url: `http://localhost:${serverPort}/healthz`,
+                env: buildEnv({
+                    MAGICSSO_CONFIG_FILE: join(output, 'magic-sso.toml'),
+                    WEB_SERVER_COMMAND:
+                        'pnpm --filter magic-sso-server build && pnpm --filter @magic-link-sso/nextjs build && pnpm --filter magic-sso-server start',
+                }),
+            },
+            ...(path === 'gate'
+                ? [
+                      {
+                          ...common,
+                          cwd: repoRoot,
+                          port: Number(private1UpstreamPort),
+                          env: buildEnv({
+                              PORT: private1UpstreamPort,
+                              WEB_SERVER_COMMAND: 'node starters/gate/upstream.mjs',
+                          }),
+                      },
+                  ]
+                : []),
+            {
+                ...common,
+                cwd: path === 'gate' ? repoRoot : join(output, 'app'),
+                url: `http://localhost:${appPort}${path === 'gate' ? '/_magicgate/healthz' : '/'}`,
+                env: buildEnv({
+                    MAGIC_GATE_CONFIG_FILE: join(output, 'magic-gate.toml'),
+                    WEB_SERVER_COMMAND:
+                        path === 'gate'
+                            ? 'pnpm --filter magic-sso-gate build && pnpm --filter magic-sso-gate start'
+                            : `node ${quote(resolve(repoRoot, 'examples/nextjs/node_modules/next/dist/bin/next'))} dev --webpack --hostname 127.0.0.1 --port ${appPort}`,
+                }),
             },
         ],
     });

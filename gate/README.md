@@ -1,5 +1,9 @@
 # Magic Link SSO Gate
 
+For a first deployment, use the
+[Gate starter](../docs/first-deployment.md#protect-an-existing-app-with-gate).
+It generates matching server and Gate config and walks through your first login.
+
 `magic-sso-gate` is a thin reverse-proxy layer for protecting arbitrary
 upstreams with Magic Link SSO, including CSR apps, static sites, or services in
 unknown stacks.

@@ -26,42 +26,45 @@ function readE2eCommand(): string {
 }
 
 describe('standard E2E command', () => {
-    it.each(['', 'test:e2e:indirect', 'test:e2e:direct', 'test:e2e:proxy', 'test:e2e:manager'])(
-        'runs all suites and propagates failure from %s',
-        (failingSuite) => {
-            const directory = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-command-'));
-            try {
-                const executable = join(directory, 'pnpm');
-                const log = join(directory, 'commands.log');
-                writeFileSync(
-                    executable,
-                    '#!/bin/sh\nprintf "%s\\n" "$2" >> "$MAGICSSO_TEST_COMMAND_LOG"\n[ "$2" != "$MAGICSSO_TEST_FAIL_SUITE" ]\n',
-                );
-                chmodSync(executable, 0o755);
-                const result = spawnSync('/bin/sh', ['-c', readE2eCommand()], {
-                    encoding: 'utf8',
-                    env: {
-                        ...process.env,
-                        PATH: `${directory}:${process.env.PATH ?? ''}`,
-                        MAGICSSO_TEST_COMMAND_LOG: log,
-                        MAGICSSO_TEST_FAIL_SUITE: failingSuite,
-                    },
-                });
-                const suites = [
-                    'test:e2e:indirect',
-                    'test:e2e:direct',
-                    'test:e2e:proxy',
-                    'test:e2e:manager',
-                ];
-                expect(result.status).toBe(failingSuite === '' ? 0 : 1);
-                expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(
-                    failingSuite === ''
-                        ? suites
-                        : suites.slice(0, suites.indexOf(failingSuite) + 1),
-                );
-            } finally {
-                rmSync(directory, { recursive: true, force: true });
-            }
-        },
-    );
+    it.each([
+        '',
+        'test:e2e:indirect',
+        'test:e2e:direct',
+        'test:e2e:proxy',
+        'test:e2e:manager',
+        'test:e2e:starters',
+    ])('runs all suites and propagates failure from %s', (failingSuite) => {
+        const directory = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-command-'));
+        try {
+            const executable = join(directory, 'pnpm');
+            const log = join(directory, 'commands.log');
+            writeFileSync(
+                executable,
+                '#!/bin/sh\nprintf "%s\\n" "$2" >> "$MAGICSSO_TEST_COMMAND_LOG"\n[ "$2" != "$MAGICSSO_TEST_FAIL_SUITE" ]\n',
+            );
+            chmodSync(executable, 0o755);
+            const result = spawnSync('/bin/sh', ['-c', readE2eCommand()], {
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    PATH: `${directory}:${process.env.PATH ?? ''}`,
+                    MAGICSSO_TEST_COMMAND_LOG: log,
+                    MAGICSSO_TEST_FAIL_SUITE: failingSuite,
+                },
+            });
+            const suites = [
+                'test:e2e:indirect',
+                'test:e2e:direct',
+                'test:e2e:proxy',
+                'test:e2e:manager',
+                'test:e2e:starters',
+            ];
+            expect(result.status).toBe(failingSuite === '' ? 0 : 1);
+            expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(
+                failingSuite === '' ? suites : suites.slice(0, suites.indexOf(failingSuite) + 1),
+            );
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
 });
