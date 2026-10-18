@@ -4,6 +4,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: 'standalone',
+    logging: {
+        serverFunctions: false,
+        incomingRequests: { ignore: [/^\/sso\//, /^\/verify-email(?:\?|$)/] },
+    },
 };
 
 export default nextConfig;

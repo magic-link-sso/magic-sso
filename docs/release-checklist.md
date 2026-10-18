@@ -60,15 +60,14 @@ Run these from the repository root:
 pnpm run audit
 pnpm check
 pnpm test:e2e
-pnpm test:e2e:sso:https
-pnpm test:e2e:sso:app-owned
 pnpm --filter @magic-link-sso/angular pack --dry-run
 pnpm --filter @magic-link-sso/nextjs pack --dry-run
 pnpm --filter @magic-link-sso/nuxt pack --dry-run
 cd packages/django && uv build
 ```
 
-The browser SSO suite requires Playwright Chromium, Firefox and WebKit. Follow
+The complete `pnpm test:e2e` command includes legacy and shared SSO profiles and
+requires Playwright Chromium, Firefox and WebKit. Follow
 [the opt-in deployment walkthrough](browser-sso-deployment.md) for exact
 callback registration, pilot acceptance and rollback. When enabling the optional
 launcher, verify explicit names/destinations, a scoped user's list, account

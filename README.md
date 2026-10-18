@@ -316,9 +316,95 @@ win, so you can switch modes without editing files, for example:
 pnpm dev:direct
 ```
 
+#### Shared SSO development
+
+`pnpm dev` keeps the existing independent sign-in setup. Use these separate
+profiles to test one browser identity across all applications:
+
+```sh
+pnpm dev:sso        # Central sign-in form, magic links and OTP
+pnpm dev:sso:local  # Forms inside each application, magic links and OTP
+```
+
+`dev:sso:app-owned` is an alias for `dev:sso:local`. Both profiles start the
+issuer, Angular SSR, Next.js, Nuxt, Django, Fastify, Photos, both Gate-backed
+private resources, and optionally a local SMTP inbox. Run `pnpm install` and
+`pnpm python:sync` first. Framework packages are built automatically;
+application servers run in development mode. Stop other development/test
+processes for these examples before starting a profile because they share
+framework build directories.
+
+Open the **My applications** launcher at <http://127.0.0.1:3000/sso/apps> and
+enter your own email, just as with `pnpm dev`. By default the profile reads the
+same `MAGICSSO_CONFIG_FILE` (or the path in `server/.env`), keeps its SMTP
+settings, and copies each matching site's email/scope grants. Mail arrives in
+your real inbox. The launcher shows applications that allow your address.
+
+To give your address full access to all eight examples for this development run,
+including examples missing from your normal config, use:
+
+```sh
+pnpm dev:sso --email you@example.com
+pnpm dev:sso:local --email you@example.com
+```
+
+The source config stays unchanged. Sites match by id (`nextjs`, `nextjs-local`,
+etc.) or their existing localhost port. Existing grants and scoped rules remain
+in place; `--email` explicitly adds full access for that address to each
+example.
+
+Application ports stay familiar:
+
+| Service                   | Port        |
+| ------------------------- | ----------- |
+| Magic Link SSO / launcher | 3000        |
+| Next.js                   | 3001        |
+| Nuxt                      | 3002        |
+| Angular                   | 3004        |
+| Fastify                   | 3005        |
+| Django                    | 8000        |
+| Photos                    | 5001        |
+| Gate private1 / private2  | 4000 / 4001 |
+| Gate upstreams            | 3007 / 3008 |
+
+Applications use separate `*.localhost` hostnames; the issuer uses `127.0.0.1`.
+The terminal prints every URL. Modern browsers resolve these localhost names
+without hosts-file changes. This HTTP profile is for local development; HTTPS
+cross-site behavior is covered by the browser test profiles below.
+
+If you want a local email inbox instead of real SMTP, select it explicitly:
+
+```sh
+pnpm dev:sso --inbox --email you@example.com
+```
+
+Read links and OTP at <http://127.0.0.1:8025/> (SMTP port 1025). This
+combination also works without a local server config. Without `--email`,
+`--inbox` keeps the grants from your current config and only replaces email
+delivery.
+
+Examples without a matching configured site stay outside the issuer's access
+list until you explicitly grant access with `--email`.
+
+The launcher uses the central form in both profiles. In `dev:sso:local`, start
+from an application's sign-in link in a fresh browser context to exercise its
+local form and the bootstrap into the central session. Then open other
+applications: they should need no additional email. Each application still owns
+its JWT and local sign-out. Ending browser SSO prevents future automatic
+sign-ins; existing application sessions remain valid until logout or expiry.
+
+Each run generates fresh secrets and private temporary TOML files. It does not
+rewrite your normal server TOML or application `.env` files; temporary
+authentication settings override local defaults. SSO is `required`, so
+configuration errors cannot silently fall back to independent sign-in. Ctrl+C
+stops the whole stack and deletes temporary state; old browser cookies may need
+clearing after a restart with new secrets.
+
 `pnpm test:e2e` runs the Playwright suite against the bundled apps in app-owned,
 hosted direct, and reverse-proxy deployments, followed by the managed-mode
-browser suite. A
+browser suite, Gate/SDK starters, and all shared SSO profiles (HTTP smoke, HTTPS
+central forms, and HTTPS local forms). This is the complete browser acceptance
+command. A
 [shared sign-in contract](./packages/core/CONTRACT.md#complete-sign-in-flow-contract)
 checks magic links and OTP, callback-created sessions, preservation of query
 values and repeated parameters, session reuse, and logout for Angular, Django,
@@ -327,6 +413,19 @@ retries. Django and Nuxt run with whole-application protection enabled. The
 manager suite covers admin sign-in, granting scoped access, publishing it, and
 signing in as the newly allowed user. The command starts isolated services and
 an SMTP sink for each suite.
+
+For a focused shared SSO run, use `pnpm test:e2e:sso` (HTTP, Chromium),
+`pnpm test:e2e:sso:https` (HTTPS, Chromium/Firefox/WebKit), or
+`pnpm test:e2e:sso:local` (HTTPS local forms, the same three browsers). The
+existing `test:e2e:sso:app-owned` name remains available. Shared profiles
+include launcher sign-in, account changes, and central/local sign-out.
+
+Install all three browser engines before the first complete run:
+
+```sh
+pnpm --filter magic-sso-e2e exec playwright install --with-deps chromium firefox webkit
+pnpm test:e2e
+```
 
 Run just the proxy profile with `pnpm --filter magic-sso-e2e test:e2e:proxy`. It
 exercises distinct public and backend ports; Next.js and Nuxt derive their

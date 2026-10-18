@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AlbumCard, SiteHeader, ViewerPanel } from '@/components/photos-ui';
 import { getAlbumCover, listAlbums } from '@/lib/gallery';
 import { readViewer } from '@/lib/viewer';
+import { buildLoginHref } from '@/lib/access';
 
 export default async function HomePage(): Promise<React.JSX.Element> {
   const viewer = await readViewer();
@@ -71,7 +72,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             <p className="eyebrow">Albums</p>
             <h2 className="section-title">Gallery access changes with the signed-in scope.</h2>
           </div>
-          <Link href="/login?returnUrl=%2F" className="button button-ghost">
+          <Link href={buildLoginHref('/')} className="button button-ghost">
             {viewer === null ? 'Sign in for private albums' : 'Request a different scope'}
           </Link>
         </div>

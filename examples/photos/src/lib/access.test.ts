@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     buildLoginHref,
     getAccessState,
@@ -15,6 +15,10 @@ const friendsRequirement = {
     label: 'Friends',
     scope: 'friends',
 };
+
+afterEach((): void => {
+    vi.unstubAllEnvs();
+});
 
 const fullAccessViewer: AuthPayload = {
     aud: 'http://localhost:5001',
@@ -47,6 +51,7 @@ describe('access helpers', () => {
     });
 
     it('builds login targets that preserve the requested return path and scope', () => {
+        vi.stubEnv('MAGICSSO_BROWSER_SSO_MODE', 'off');
         expect(
             buildLoginHref('/photos/red-kite-at-dusk', {
                 label: 'Special access',
@@ -54,6 +59,26 @@ describe('access helpers', () => {
             }),
         ).toBe('/login?returnUrl=%2Fphotos%2Fred-kite-at-dusk&scope=photo%3Ared-kite-at-dusk');
     });
+
+    it.each(['auto', 'required'])(
+        'enters shared sign-in from gallery links in %s mode',
+        (mode): void => {
+            vi.stubEnv('MAGICSSO_BROWSER_SSO_MODE', mode);
+            const target = new URL(
+                buildLoginHref(
+                    '/albums/friends-campfire?q=a%2Bb&tag=one&tag=two',
+                    friendsRequirement,
+                ),
+                'http://photos.localhost:46006',
+            );
+            expect(target.pathname).toBe('/sso/start');
+            expect(target.searchParams.get('returnUrl')).toBe(
+                '/albums/friends-campfire?q=a%2Bb&tag=one&tag=two',
+            );
+            expect(target.searchParams.get('scope')).toBe('friends');
+            expect(buildLoginHref('/')).toBe('/sso/start?returnUrl=%2F');
+        },
+    );
 
     it('formats special scopes for the UI', () => {
         expect(getScopeDisplayName('photo:red-kite-at-dusk')).toBe(

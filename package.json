@@ -59,7 +59,11 @@
         "doctor": "node scripts/doctor.mjs",
         "setup:app": "node scripts/setup.mjs",
         "test:e2e:sso:https": "pnpm --filter magic-sso-e2e test:e2e:sso:https",
-        "test:e2e:sso:app-owned": "pnpm --filter magic-sso-e2e test:e2e:sso:app-owned"
+        "test:e2e:sso:app-owned": "pnpm --filter magic-sso-e2e test:e2e:sso:app-owned",
+        "dev:sso": "node scripts/dev-sso.mjs",
+        "dev:sso:local": "node scripts/dev-sso.mjs --local",
+        "dev:sso:app-owned": "pnpm dev:sso:local",
+        "test:e2e:sso:local": "pnpm test:e2e:sso:app-owned"
     },
     "devDependencies": {
         "@types/node": "^25.9.9",
