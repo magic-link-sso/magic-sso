@@ -15,6 +15,11 @@
         "packages/nuxt/src/runtime/app/**/*.ts",
         "packages/nuxt/src/runtime/server/routes/*.ts",
         "scripts/fixtures/nitro-dependencies.mjs",
+        "starters/gate/upstream.mjs",
+        "tests/e2e/src/browser-sso-https-proxy.ts",
+        "tests/e2e/src/browser-sso-stack.ts",
+        "tests/e2e/src/browser-sso-teardown.ts",
+        "tests/e2e/src/browser-sso-test-network.cjs",
         "tests/e2e/src/run-web-server.mjs"
     ],
     "ignoreDependencies": [
@@ -44,6 +49,7 @@
             "packages/nextjs",
             "packages/nuxt",
             "server",
+            "starters/nextjs",
             "tests/e2e"
         ]
     },

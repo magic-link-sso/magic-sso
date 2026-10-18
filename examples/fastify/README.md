@@ -93,3 +93,50 @@ storage.
 
 This example is the recommended plain Node integration reference in this
 repository. The Angular example remains the in-repo Express-style SSR reference.
+
+## Shared browser SSO (opt-in)
+
+Hosted browser SSO reuses the issuer's identity while this application keeps its
+own JWT and permissions. The default mode is `off`. Set
+`MAGICSSO_BROWSER_SSO_MODE=auto` for capability-controlled legacy fallback, or
+`required` to reject an issuer that does not support this protocol. Set
+`MAGICSSO_PUBLIC_ORIGIN` to the exact externally visible app origin and keep
+`MAGICSSO_SERVER_URL` and `MAGICSSO_JWT_SECRET` on the backend. A distinct
+issuer hostname and HTTPS are required. Local HTTP is available only with the
+explicit `MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST=true` test/development
+exception. `MAGICSSO_BROWSER_SSO_TIMEOUT_MS` defaults to 5000 (100–30000).
+
+Register the app's exact start, callback and signed-out URLs in the issuer's
+`[[sites.sso]]` configuration. These routes stay public even when whole-app auth
+is enabled. Start/callback must use top-level document navigation; prefetch and
+client-side data requests must not create or consume transactions. Three tabs
+can sign in independently. Callback failures leave existing app sessions intact.
+Local logout clears this app's cookie and shows a public page with separate
+sign-in and central sign-out controls. Ending central SSO leaves other issued
+app JWTs subject to their existing expiry policy.
+
+See the [browser session contract](../../docs/browser-sso-contract.md) for
+registration, rollout and protocol details. Application-owned forms keep their
+existing behavior until the separate bootstrap continuation is enabled.
+
+`createBrowserSsoHandler` wraps the portable core HTTP handler. The example
+registers `/sso/start`, `/sso/callback` and `/sso/signed-out`, converts the
+Fastify request/reply at the boundary, and retains duplicate raw cookie names
+for callback validation. The configured public origin takes precedence over
+request/proxy headers. Access logs omit query strings.
+
+### Application-owned sign-in forms
+
+With issuer `[auth.sso].bootstrapEnabled = true`, set
+`MAGICSSO_BROWSER_SSO_LOGIN_UI=app-owned` alongside the browser SSO mode. The
+start route renders email and OTP forms on this application's own origin. Keep
+`MAGICSSO_PREVIEW_SECRET` on the backend for magic-link identity confirmation.
+The local JWT is verified and set before the browser visits the issuer to
+complete shared sign-in. A failed shared setup keeps any valid local session and
+offers an explicit fresh hosted sign-in. The default remains `hosted`.
+
+Custom forms can use the backend-only continuation operations documented in
+[the bootstrap contract](../../docs/browser-sso-bootstrap-contract.md). Mount
+POST as well as GET at `/sso/start`; the callback remains GET. The session
+cookie path must cover the callback. The app form uses full document navigation
+and requires neither third-party cookies nor a browser fetch to the issuer.

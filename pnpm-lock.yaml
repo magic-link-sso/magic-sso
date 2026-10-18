@@ -661,6 +661,12 @@ importers:
       mailparser:
         specifier: latest
         version: 3.9.38
+      magic-sso-gate:
+        specifier: workspace:*
+        version: link:../../gate
+      magic-sso-server:
+        specifier: workspace:*
+        version: link:../../server
       smtp-server:
         specifier: latest
         version: 3.19.20

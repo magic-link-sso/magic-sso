@@ -420,6 +420,7 @@
                     id="signinForm"
                     class="signin-form"
                     method="post"
+                    <% if (typeof browserSso !== 'undefined') { %>action="/sso/signin"<% } %>
                     aria-describedby="signin-help"
                 >
                     <div class="field-group">
@@ -441,6 +442,9 @@
                         <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
                     <% } %>
                     <input type="hidden" name="returnUrl" value="<%= returnUrl %>">
+                    <% if (typeof browserSso !== 'undefined') { %>
+                        <input type="hidden" name="requestId" value="<%= browserSso.requestId %>">
+                    <% } %>
                     <% if (scope) { %>
                         <input type="hidden" name="scope" value="<%= scope %>">
                     <% } %>
@@ -457,7 +461,7 @@
             <% } else { %>
                 <div class="confirmation-panel" role="status" aria-live="polite">
                     <% if (otpChallengeId && csrfToken) { %>
-                        <form method="post" action="/verify-email/otp" aria-describedby="otp-help">
+                        <form method="post" action="<%= typeof browserSso !== 'undefined' ? '/sso/otp' : '/verify-email/otp' %>" aria-describedby="otp-help">
                             <div class="field-group">
                                 <label class="field-label" for="otp-code"><%= copy.otpLabel %></label>
                                 <input
@@ -476,6 +480,10 @@
                                 <p class="lede" id="otp-help"><%= copy.otpHelpText %></p>
                             </div>
                             <input type="hidden" name="challengeId" value="<%= otpChallengeId %>">
+                            <% if (typeof browserSso !== 'undefined') { %>
+                                <input type="hidden" name="requestId" value="<%= browserSso.requestId %>">
+                                <input type="hidden" name="otpContext" value="<%= browserSso.otpContext %>">
+                            <% } %>
                             <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
                             <input type="hidden" name="returnUrl" value="<%= returnUrl %>">
                             <% if (scope) { %>

@@ -1,5 +1,13 @@
 import { timingSafeEqual } from 'node:crypto';
-export { escapeHtml, readCookieValue, type ReadCookieValueOptions } from '@magic-link-sso/core';
+export {
+    parseBrowserSsoCapabilities,
+    hashBrowserSsoToken,
+    createBrowserSsoBootstrapReceipt,
+    isBrowserSsoDocumentNavigation,
+    escapeHtml,
+    readCookieValue,
+    type ReadCookieValueOptions,
+} from '@magic-link-sso/core';
 
 /** Shared response handling for existing server-side sign-in and Gate callers. */
 export async function readResponsePayload(response: Response): Promise<unknown> {

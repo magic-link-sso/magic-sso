@@ -239,17 +239,30 @@
                     <p class="account-value"><%= email %></p>
                 </div>
             <% } %>
-            <form id="verifyForm" class="actions" method="post" action="/verify-email" referrerpolicy="no-referrer">
+            <% if (typeof nextHref !== 'undefined' && nextHref) { %>
+                <a href="<%= nextHref %>"><%= nextText %></a>
+            <% } else { %>
+            <form id="verifyForm" class="actions" method="post" action="<%= typeof formAction === 'undefined' ? '/verify-email' : formAction %>" referrerpolicy="no-referrer">
                 <% if (csrfToken) { %>
                     <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
                 <% } %>
+                <% if (typeof formFields !== 'undefined') { for (const [name, value] of Object.entries(formFields)) { %>
+                    <input type="hidden" name="<%= name %>" value="<%= value %>">
+                <% } } %>
                 <button type="submit"><%= copy.continueButton %></button>
             </form>
+            <% } %>
             <script nonce="<%= cspNonce %>">
                 if (window.location.pathname === '/verify-email') {
                     window.history.replaceState(null, '', '/verify-email');
                 }
+                if (window.location.pathname === '/sso/verify') {
+                    window.history.replaceState(null, '', '/sso/verify');
+                }
             </script>
+        <% } %>
+        <% if (error && typeof nextHref !== 'undefined' && nextHref) { %>
+            <a href="<%= nextHref %>"><%= nextText %></a>
         <% } %>
         <% if (branding.supportText || branding.supportLinkText) { %>
             <p class="support-copy">

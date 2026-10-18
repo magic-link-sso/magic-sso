@@ -7,7 +7,9 @@ const authState = useState<AuthPayload | null>('home-auth', () => null);
 const config = useMagicSsoConfig();
 const appOrigin = useAppOrigin();
 const loginTarget = computed(() =>
-    buildLoginTarget(appOrigin, '/', config.directUse, config.serverUrl),
+    config.browserSsoMode === 'off'
+        ? buildLoginTarget(appOrigin, '/', config.directUse, config.serverUrl)
+        : '/sso/start?returnUrl=%2F',
 );
 
 if (import.meta.server) {

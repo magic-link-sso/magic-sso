@@ -1,0 +1,26 @@
+{
+    "keyMaterial": "fixture-bootstrap-jwt-secret-0123456789abcdef",
+    "accessToken": "synthetic-app-jwt-for-bootstrap-fixture",
+    "context": {
+        "issuer": "https://sso.example.com",
+        "audience": "https://app.example.com",
+        "redirectUri": "https://app.example.com/sso/callback",
+        "state": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+        "bootstrapTicket": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+        "accessTokenHash": "n34zYNflZmIEfyCfPDsCAe0GrhIj2LTpwc4Cz5J66Jg"
+    },
+    "receipt": "tvLA94veJaBaPvyMjpp2P6gu8JbGqRnZfJJZPXnK9Qg",
+    "continuation": {
+        "cookieName": "__Host-magic-sso-continuation-AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+        "payload": {
+            "v": 1,
+            "phase": "finish",
+            "state": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+            "requestId": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ",
+            "expiresAt": 1800000990000,
+            "bootstrapTicket": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+            "accessTokenHash": "n34zYNflZmIEfyCfPDsCAe0GrhIj2LTpwc4Cz5J66Jg"
+        },
+        "sealed": "v1.BQUFBQUFBQUFBQUF4vCYjtizDj8_wsyyobtRqLDD0m5XbIqakjjsD31egF5y-MtGzdOHfDsPnWFJ42Xo6VWG1f4HkzlfJHTFrLgbsVnO5VjpjA17UItLttOGzanPcOUWQ2Lu_sASacE7oxbIzbV5wWJTfVjHrejPH1SUMTRN7_czhRT-5uMbA0DLA6xKqMMKTAnqVQkBzud0hXIVqleI8nzVZ9rNmGEmzJjqyz-CuL2q7x-4lC63aaz3ee3PyJxXoqPrbyLTliOhNfFlKo0U_9nHAilD43zT6B-LEA3Dk58UvAv_A5-kWT0CmoISBom2wWhW7B7r1FISpFck7FQhebzN1GogZZf6ZzGakIP5CzSCIw60dIwrrxCOVCeJCk10exMll5LVAizzBo76b9ll-56geFS_scp6IiST5FJq"
+    }
+}

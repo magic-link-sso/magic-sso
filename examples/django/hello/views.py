@@ -22,25 +22,28 @@
 # THE SOFTWARE.
 """
 
+from django.http import HttpResponse
 from django.shortcuts import render
 from magic_sso_django.auth_utils import is_authenticated, redirect_to_login
+from magic_sso_django.browser_sso import get_mode
 from magic_sso_django.decorators import sso_login_required
+from magic_sso_django.request_types import MagicSsoHttpRequest
 
 
-def index(request):
+def index(request: MagicSsoHttpRequest) -> HttpResponse:
     email = request.magic_sso_user_email
-    return render(request, 'home.html', {'email': email})
+    return render(request, 'home.html', {'email': email, 'browser_sso': get_mode() != 'off'})
 
 
 @sso_login_required
-def protected_by_decorator(request):
+def protected_by_decorator(request: MagicSsoHttpRequest) -> HttpResponse:
     email = request.magic_sso_user_email
-    return render(request, 'protected.html', {'email': email})
+    return render(request, 'protected.html', {'email': email, 'browser_sso': get_mode() != 'off'})
 
 
-def protected_manually(request):
+def protected_manually(request: MagicSsoHttpRequest) -> HttpResponse:
     is_auth, _payload = is_authenticated(request)
     if not is_auth:
         return redirect_to_login(request)
     email = request.magic_sso_user_email
-    return render(request, 'protected.html', {'email': email})
+    return render(request, 'protected.html', {'email': email, 'browser_sso': get_mode() != 'off'})

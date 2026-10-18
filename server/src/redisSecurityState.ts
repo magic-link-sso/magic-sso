@@ -65,6 +65,9 @@ if redis.call('GET', active_key) ~= key then
     return {'consumed'}
 end
 local challenge = cjson.decode(payload)
+if (challenge.browserSsoRequestId or '') ~= ARGV[3] then
+    return {'invalid'}
+end
 if tonumber(challenge.expiresAt) <= now_ms then
     redis.call('DEL', key)
     redis.call('DEL', active_key)
@@ -271,6 +274,7 @@ export function createRedisOtpChallengeStore(options: {
                     siteId: storedChallenge.siteId,
                 }),
                 input.now,
+                input.browserSsoRequestId ?? '',
             );
             if (!Array.isArray(result) || typeof result[0] !== 'string') {
                 return { category: 'store_error' };

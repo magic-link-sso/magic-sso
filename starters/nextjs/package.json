@@ -1,0 +1,26 @@
+{
+    "name": "magic-link-sso-starter",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "next dev --webpack --hostname 127.0.0.1",
+        "build": "next build --webpack",
+        "start": "next start --hostname 127.0.0.1",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@magic-link-sso/nextjs": "*",
+        "next": "*",
+        "react": "*",
+        "react-dom": "*"
+    },
+    "devDependencies": {
+        "@types/node": "*",
+        "@types/react": "*",
+        "@types/react-dom": "*",
+        "typescript": "*"
+    },
+    "engines": {
+        "node": ">=24.15.0"
+    }
+}

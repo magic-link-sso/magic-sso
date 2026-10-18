@@ -105,3 +105,62 @@ it from browser-only code or store the returned token client-side.
 See the bundled Angular SSR example in
 [`examples/angular/`](../../examples/angular/) for a full integration using the
 same package.
+
+## Shared browser SSO (opt-in)
+
+Hosted browser SSO reuses the issuer's identity while this application keeps its
+own JWT and permissions. The default mode is `off`. Set
+`MAGICSSO_BROWSER_SSO_MODE=auto` for capability-controlled legacy fallback, or
+`required` to reject an issuer that does not support this protocol. Set
+`MAGICSSO_PUBLIC_ORIGIN` to the exact externally visible app origin and keep
+`MAGICSSO_SERVER_URL` and `MAGICSSO_JWT_SECRET` on the backend. A distinct
+issuer hostname and HTTPS are required. Local HTTP is available only with the
+explicit `MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST=true` test/development
+exception. `MAGICSSO_BROWSER_SSO_TIMEOUT_MS` defaults to 5000 (100–30000).
+
+Register the app's exact start, callback and signed-out URLs in the issuer's
+`[[sites.sso]]` configuration. These routes stay public even when whole-app auth
+is enabled. Start/callback must use top-level document navigation; prefetch and
+client-side data requests must not create or consume transactions. Three tabs
+can sign in independently. Callback failures leave existing app sessions intact.
+Local logout clears this app's cookie and shows a public page with separate
+sign-in and central sign-out controls. Ending central SSO leaves other issued
+app JWTs subject to their existing expiry policy.
+
+See the [browser session contract](../../docs/browser-sso-contract.md) for
+registration, rollout and protocol details. Application-owned forms keep their
+existing behavior until the separate bootstrap continuation is enabled.
+
+The Angular helper exports `createBrowserSsoHandler(config)`, a server-only
+Fetch `Request` → `Response` handler for `/sso/start`, `/sso/callback` and
+`/sso/signed-out`. Create it once in the SSR server, before the Angular
+catch-all handler. `buildLoginPath` and `buildLoginTarget` select `/sso/start`
+when opted in; CSR guards must use a full document navigation for that target.
+Only public configuration belongs in Angular TransferState; never serialize
+`jwtSecret`. The Express example wires these routes and excludes the secret from
+HTML.
+
+Protect SSR document routes in the HTTP server before calling
+`AngularNodeAppEngine.handle`: verify with `verifyRequestAuth`, then issue a 307
+to `buildLoginTarget` when missing. The example does this for `/protected`.
+Angular router guards cannot navigate to a backend-only route in the Angular
+route tree, and they do not replace authorization on backend APIs.
+
+### Application-owned sign-in forms
+
+With issuer `[auth.sso].bootstrapEnabled = true`, set
+`MAGICSSO_BROWSER_SSO_LOGIN_UI=app-owned` alongside the browser SSO mode. The
+start route renders email and OTP forms on this application's own origin. Keep
+`MAGICSSO_PREVIEW_SECRET` on the backend for magic-link identity confirmation.
+The local JWT is verified and set before the browser visits the issuer to
+complete shared sign-in. A failed shared setup keeps any valid local session and
+offers an explicit fresh hosted sign-in. The default remains `hosted`.
+
+Custom forms can use the backend-only continuation operations documented in
+[the bootstrap contract](../../docs/browser-sso-bootstrap-contract.md). Mount
+POST as well as GET at `/sso/start`; the callback remains GET. The session
+cookie path must cover the callback. The app form uses full document navigation
+and requires neither third-party cookies nor a browser fetch to the issuer.
+
+The corresponding SSR config option is `browserSsoLoginUi: "app-owned"`. Keep
+the existing server handler mounted for both request methods.

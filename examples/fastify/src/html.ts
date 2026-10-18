@@ -15,6 +15,7 @@ export interface LoginPageMessage {
 }
 
 export interface HomePageOptions {
+    browserSso?: boolean;
     auth: AuthPayload | null;
     loginTarget: string;
     signinBadgePath: string;
@@ -34,6 +35,7 @@ export interface LoginPageOptions {
 }
 
 export interface ProtectedPageOptions {
+    browserSso?: boolean;
     auth: AuthPayload;
     protectedBadgePath: string;
 }
@@ -105,7 +107,7 @@ export function renderHomePage(options: HomePageOptions): string {
                <a href="/protected" class="button button-secondary">Try Protected Page</a>`
             : `<a href="/protected" class="button button-light">Open Protected Page</a>
                <form action="/logout" method="post">
-                 <button class="button button-secondary" type="submit">Logout</button>
+                 <button class="button button-secondary" type="submit">${options.browserSso ? 'Sign out of this application' : 'Logout'}</button>
                </form>`;
 
     return buildDocument({
@@ -248,7 +250,7 @@ export function renderProtectedPage(options: ProtectedPageOptions): string {
         <div class="actions">
           <a href="/" class="button button-light">Back Home</a>
           <form action="/logout" method="post">
-            <button class="button button-secondary" type="submit">Logout</button>
+            <button class="button button-secondary" type="submit">${options.browserSso ? 'Sign out of this application' : 'Logout'}</button>
           </form>
         </div>
       </section>

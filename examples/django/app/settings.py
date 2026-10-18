@@ -276,3 +276,32 @@ MAGICSSO_PREVIEW_SECRET = os.getenv(
 MAGICSSO_PUBLIC_URLS = env_list('MAGICSSO_PUBLIC_URLS', ['login'])
 MAGICSSO_REQUEST_TIMEOUT = env_int('MAGICSSO_REQUEST_TIMEOUT', 5)
 MAGICSSO_SERVER_URL = os.getenv('MAGICSSO_SERVER_URL', 'http://localhost:3000')
+
+MAGICSSO_BROWSER_SSO_LOGIN_UI = env_choice(
+    'MAGICSSO_BROWSER_SSO_LOGIN_UI', 'hosted', {'hosted', 'app-owned'}
+)
+MAGICSSO_BROWSER_SSO_MODE = env_choice(
+    'MAGICSSO_BROWSER_SSO_MODE', 'off', {'off', 'auto', 'required'}
+)
+MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST = env_bool(
+    'MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST', False
+)
+MAGICSSO_BROWSER_SSO_TIMEOUT_MS = env_int('MAGICSSO_BROWSER_SSO_TIMEOUT_MS', 5000)
+MAGICSSO_PUBLIC_ORIGIN = os.getenv('MAGICSSO_PUBLIC_ORIGIN', '')
+
+# Trust forwarded HTTPS only behind an explicitly trusted reverse proxy.
+MAGICSSO_TRUST_PROXY = env_bool('MAGICSSO_TRUST_PROXY', False)
+if MAGICSSO_TRUST_PROXY:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {'magic_sso_access': {'()': 'magic_sso_django.logging.SsoAccessLogFilter'}},
+    'handlers': {
+        'magic_sso_console': {'class': 'logging.StreamHandler', 'filters': ['magic_sso_access']}
+    },
+    'loggers': {
+        'django.server': {'handlers': ['magic_sso_console'], 'level': 'INFO', 'propagate': False}
+    },
+}

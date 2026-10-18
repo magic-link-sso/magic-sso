@@ -34,6 +34,12 @@ export type {
 } from './components/login/actions';
 export { VerifyEmailOtpRoute } from './components/login/otpRoute';
 export { LogoutRoute } from './components/logout/route';
+export {
+    BrowserSsoStartRoute,
+    BrowserSsoCallbackRoute,
+    BrowserSsoSignedOutRoute,
+} from './components/browserSso/routes';
+export { getBrowserSsoMode, getBrowserSsoLoginUi } from './lib/browserSsoConfig';
 export { VerifyEmailRoute } from './components/verifyEmail/route';
 export type { VerifyEmailRouteOptions } from './components/verifyEmail/route';
 export type { AuthPayload, VerifyAuthTokenOptions } from './lib/auth';

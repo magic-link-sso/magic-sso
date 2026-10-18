@@ -143,7 +143,126 @@ metadata. Submit the code through the server action
 validates issuer/audience, and sets the same HTTP-only auth cookie. Do not keep
 codes or returned tokens in client storage.
 
+## Shared browser SSO (opt-in)
+
+Set `MAGICSSO_BROWSER_SSO_MODE=required` to use hosted browser SSO for new
+sign-ins. The default is `off`; `auto` supports compatibility with an older or
+explicitly disabled issuer. Set the existing public origin, issuer URL and JWT
+secret. Issuer and app must use different HTTPS hostnames, including when their
+ports differ.
+
+```env
+MAGICSSO_BROWSER_SSO_MODE=required
+MAGICSSO_PUBLIC_ORIGIN=https://app.example.com
+MAGICSSO_SERVER_URL=https://sso.example.com
+MAGICSSO_BROWSER_SSO_TIMEOUT_MS=5000
+```
+
+Register these exact endpoints under the issuer's matching `[[sites]]` entry and
+enable its `[auth.sso]` policy:
+
+```toml
+[[sites.sso]]
+redirectUri = "https://app.example.com/sso/callback"
+startUri = "https://app.example.com/sso/start"
+signedOutUri = "https://app.example.com/sso/signed-out"
+```
+
+Add three route handlers:
+
+```ts
+// app/sso/start/route.ts
+export { BrowserSsoStartRoute as GET } from '@magic-link-sso/nextjs';
+
+// app/sso/callback/route.ts
+export { BrowserSsoCallbackRoute as GET } from '@magic-link-sso/nextjs';
+
+// app/sso/signed-out/route.ts
+export { BrowserSsoSignedOutRoute as GET } from '@magic-link-sso/nextjs';
+```
+
+Keep `authMiddleware` in `proxy.ts` and verify JWTs again in protected server
+components/handlers, as in the example. Its login redirect and
+`redirectToLogin()` now select `/sso/start` regardless of `MAGICSSO_DIRECT_USE`.
+These three reserved routes remain public even with custom excluded paths or
+after SSO is disabled, so an existing callback reports an explicit error rather
+than entering a legacy flow. A valid existing app JWT keeps its current identity
+until its normal expiry or local logout.
+
+Framework prefetch/RSC fetches receive a same-origin HTML continuation without
+creating cookies or calling the issuer. Next's router then uses a document
+navigation for an actual click. This prevents speculative loading from using the
+transaction limit or consuming a callback code. Plain anchors also work.
+
+Callbacks exchange codes once on the backend, validate issuer/audience, clear
+only their own transaction, and set the existing application cookie. Its
+configured maxAge is capped at JWT expiry; Secure follows the trusted public
+origin. Full return URL query values, order and repeated parameters survive
+framework URL normalization. Three concurrent transactions are supported;
+additional or oversized starts retain existing tabs and show an error.
+
+`LogoutRoute` remains POST-only and clears the existing app cookie. In SSO mode
+it lands on the public signed-out page with explicit sign-in and central
+sign-out actions. Ending browser SSO prevents new sessions; other apps' existing
+JWTs retain their normal expiry/revocation policy. The existing app-owned
+magic-link/OTP endpoints remain available for legacy clients. To establish
+browser SSO from local forms, enable the
+[application-owned sign-in flow](#application-owned-sign-in-forms).
+
+`auto` falls back before creating state only for 404 or explicit disabled or
+unsupported capabilities. Malformed replies, redirects, timeouts and 5xx errors
+do not fall back. Timeout is configurable from 100 to 30000 ms. A failed or
+ambiguous exchange clears its own transaction and offers a fresh start; it never
+retries a code or exchanges an email grant through another protocol.
+
+Keep protocol query strings and authentication arguments out of development,
+custom and ingress logs. For Next.js development logging use:
+
+```js
+export default {
+    logging: {
+        serverFunctions: false,
+        incomingRequests: { ignore: [/^\/sso\//, /^\/verify-email(?:\?|$)/] },
+    },
+};
+```
+
+See
+[Next.js logging](https://nextjs.org/docs/app/api-reference/config/next-config-js/logging).
+For local HTTP only, set `MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST=true` on
+the app and enable the issuer's corresponding local exception. Use distinct
+loopback hostnames, such as issuer `127.0.0.1` and app `next.localhost`;
+different ports on `localhost` are insufficient. `pnpm test:e2e:sso` covers Gate
+↔ Next.js after one hosted link or OTP in both directions. Run
+`pnpm test:e2e:sso:https` to verify cross-site HTTPS behavior across Chromium,
+Firefox, and WebKit. See the
+[version 1 contract](../../docs/browser-sso-contract.md) for the protocol and
+verification coverage.
+
 ## Example App
 
 See the bundled Next.js example in [`examples/nextjs/`](../../examples/nextjs/)
 for a full integration using the same package.
+
+### Application-owned sign-in forms
+
+With issuer `[auth.sso].bootstrapEnabled = true`, set
+`MAGICSSO_BROWSER_SSO_LOGIN_UI=app-owned` alongside the browser SSO mode. The
+start route renders email and OTP forms on this application's own origin. Keep
+`MAGICSSO_PREVIEW_SECRET` on the backend for magic-link identity confirmation.
+The local JWT is verified and set before the browser visits the issuer to
+complete shared sign-in. A failed shared setup keeps any valid local session and
+offers an explicit fresh hosted sign-in. The default remains `hosted`.
+
+Custom forms can use the backend-only continuation operations documented in
+[the bootstrap contract](../../docs/browser-sso-bootstrap-contract.md). Mount
+POST as well as GET at `/sso/start`; the callback remains GET. The session
+cookie path must cover the callback. The app form uses full document navigation
+and requires neither third-party cookies nor a browser fetch to the issuer.
+
+```ts
+export {
+    BrowserSsoStartRoute as GET,
+    BrowserSsoStartRoute as POST,
+} from '@magic-link-sso/nextjs';
+```

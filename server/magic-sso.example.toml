@@ -33,6 +33,12 @@ emailSecret = "replace-me-with-a-different-long-random-email-secret"
 previewSecret = "replace-me-with-a-different-long-random-preview-secret"
 emailExpiration = "15m"
 
+# Shared browser sign-in is opt-in and needs exact [[sites.sso]] registrations.
+# Applications must also select their app-owned login UI; see the deployment guide.
+# [auth.sso]
+# enabled = false
+# bootstrapEnabled = false
+
 # Optional email OTP is an alternative way to consume the same one-time
 # verification grant. Leave it disabled to keep the existing magic-link flow.
 [auth.otp]

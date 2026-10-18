@@ -31,12 +31,17 @@ interface VerifyTokenOptions {
     expectedIssuer?: string;
 }
 
+interface EmailTokenVerificationOptions extends VerifyTokenOptions {
+    allowBrowserSso?: boolean;
+}
+
 export interface AccessTokenVerificationOptions extends VerifyTokenOptions {
     expectedAudience?: string | string[];
     expectedIssuer?: string;
 }
 
 export interface VerificationTokenPayload extends JWTPayload {
+    browserSsoRequestId?: string;
     email: string;
     jti: string;
     returnUrl?: string;
@@ -62,6 +67,8 @@ function isVerificationTokenPayload(value: string | JWTPayload): value is Verifi
         typeof value.jti === 'string' &&
         typeof value.scope === 'string' &&
         typeof value.siteId === 'string' &&
+        (value.browserSsoRequestId === undefined ||
+            typeof value.browserSsoRequestId === 'string') &&
         (typeof value.aud === 'string' ||
             (Array.isArray(value.aud) && value.aud.every((entry) => typeof entry === 'string'))) &&
         typeof value.iss === 'string' &&
@@ -106,12 +113,14 @@ export async function generateEmailToken(
     issuer: string,
     secret: string,
     expiresInSeconds: number,
+    options?: { browserSsoRequestId: string },
 ): Promise<string> {
     const payload: JWTPayload = {
         email,
         jti: randomUUID(),
         scope,
         siteId,
+        ...(options === undefined ? {} : { browserSsoRequestId: options.browserSsoRequestId }),
         ...(typeof returnUrl === 'string' ? { returnUrl } : {}),
     };
 
@@ -156,7 +165,7 @@ function normaliseExpectedAudience(
 export async function verifyEmailToken(
     token: string,
     secret: string,
-    options?: VerifyTokenOptions,
+    options?: EmailTokenVerificationOptions,
 ): Promise<VerificationTokenPayload | null> {
     try {
         const verifyOptions = {
@@ -166,7 +175,10 @@ export async function verifyEmailToken(
                 : {}),
         };
         const { payload } = await jwtVerify(token, toSecretKey(secret), verifyOptions);
-        return isVerificationTokenPayload(payload) ? payload : null;
+        return isVerificationTokenPayload(payload) &&
+            (payload.browserSsoRequestId === undefined || options?.allowBrowserSso === true)
+            ? payload
+            : null;
     } catch (error) {
         return handleVerificationError(error, options);
     }

@@ -54,6 +54,27 @@ function renderMessage(message: LoginPageMessage | undefined): string {
     return `<p id="signin-feedback" class="message message-error" role="alert">${escapeHtml(message.text)}</p>`;
 }
 
+export function renderBrowserSsoPage(options: {
+    title: string;
+    message: string;
+    stylesPath: string;
+    nextHref: string;
+    nextText: string;
+    centralSignOutHref?: string;
+    isError?: boolean;
+}): string {
+    return buildDocument(
+        `${options.title} | Magic Link SSO Gate`,
+        options.stylesPath,
+        `<main class="login-shell"><section class="login-panel" aria-labelledby="sso-title">
+        <h1 id="sso-title" class="login-title">${escapeHtml(options.title)}</h1>
+        <p class="login-copy"${options.isError ? ' role="alert"' : ''}>${escapeHtml(options.message)}</p>
+        <div class="login-actions"><a class="button button-primary" href="${escapeHtml(options.nextHref)}">${escapeHtml(options.nextText)}</a>
+        ${options.centralSignOutHref ? `<a class="button button-secondary" href="${escapeHtml(options.centralSignOutHref)}">End browser SSO session</a>` : ''}
+        </div></section></main>`,
+    );
+}
+
 export function renderLoginPage(options: LoginPageOptions): string {
     const hasOtpChallenge = typeof options.otpChallengeId === 'string';
     const helpText = options.isConfirmation

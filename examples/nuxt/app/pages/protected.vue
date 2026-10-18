@@ -6,6 +6,7 @@ definePageMeta({
     middleware: ['magic-sso-auth'],
 });
 
+const config = useMagicSsoConfig();
 const authState = useState<AuthPayload | null>('protected-auth', () => null);
 
 if (import.meta.server) {
@@ -53,7 +54,13 @@ useHead({
                     <div class="actions">
                         <a href="/" class="button button-primary">Back Home</a>
                         <form action="/logout" method="post">
-                            <button type="submit" class="button button-secondary">Logout</button>
+                            <button type="submit" class="button button-secondary">
+                                {{
+                                    config.browserSsoMode === 'off'
+                                        ? 'Logout'
+                                        : 'Sign out of this application'
+                                }}
+                            </button>
                         </form>
                     </div>
                 </section>

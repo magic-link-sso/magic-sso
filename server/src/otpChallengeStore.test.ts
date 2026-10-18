@@ -42,6 +42,53 @@ function fileMode(path: string): number {
     return statSync(path).mode & 0o777;
 }
 
+describe('browser SSO OTP context isolation', () => {
+    it.each(['file', 'memory'])(
+        'validates the request before consuming or counting attempts (%s)',
+        async (adapter) => {
+            const directory = mkdtempSync(join(tmpdir(), 'magic-sso-otp-context-'));
+            try {
+                const store =
+                    adapter === 'file'
+                        ? await createFileOtpChallengeStore({ directory })
+                        : createInMemoryOtpChallengeStore();
+                const challenge = createChallenge({
+                    browserSsoRequestId: 'request-1',
+                    attemptsRemaining: 1,
+                });
+                await store.create(challenge);
+                const input = {
+                    challengeId: challenge.challengeId,
+                    code: '012345',
+                    secret: 'otp-secret',
+                    now: Date.now(),
+                };
+                expect(await store.verify(input)).toEqual({ category: 'invalid' });
+                expect(await store.verify({ ...input, browserSsoRequestId: 'request-2' })).toEqual({
+                    category: 'invalid',
+                });
+                expect(
+                    await store.verify({ ...input, browserSsoRequestId: 'request-1' }),
+                ).toMatchObject({ category: 'valid' });
+                const legacy = createChallenge({ challengeId: 'legacy', rotationKey: 'legacy' });
+                await store.create(legacy);
+                expect(
+                    await store.verify({
+                        ...input,
+                        challengeId: legacy.challengeId,
+                        browserSsoRequestId: 'request-1',
+                    }),
+                ).toEqual({ category: 'invalid' });
+                expect(
+                    await store.verify({ ...input, challengeId: legacy.challengeId }),
+                ).toMatchObject({ category: 'valid' });
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
+        },
+    );
+});
+
 describe('file OTP challenge store', () => {
     let directory: string;
 

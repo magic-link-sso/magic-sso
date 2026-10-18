@@ -652,3 +652,12 @@ always wins over the repository default.
 
 The root [`LICENSE-GPL`](./LICENSE-GPL) is a copy of the GPLv3 text used by the
 server and manager. It does not apply to anything outside those components.
+
+### Shared browser sign-in
+
+Opt-in browser SSO lets a verified browser enter another allowed application
+without another email. Applications keep separate JWTs, grants and local logout.
+Gate and all SDK examples support hosted link/OTP sign-in and opt-in
+application-owned forms through the browser-bound bootstrap extension. See the
+[deployment, diagnostics and rollback guide](docs/browser-sso-deployment.md) and
+the [versioned protocol contract](docs/browser-sso-contract.md).

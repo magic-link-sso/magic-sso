@@ -224,10 +224,16 @@
               <a class="button button--ghost" href="{% url 'protected2' %}">Manual Auth Check</a>
               <form action="{% url 'magic_sso:logout' %}" method="post">
                 {% csrf_token %}
-                <button class="button button--ghost" type="submit">Logout</button>
+                <button class="button button--ghost" type="submit">
+                  {% if browser_sso %}Sign out of this application{% else %}Logout{% endif %}
+                </button>
               </form>
               {% else %}
-              <a class="button button--solid" href="{% url 'magic_sso:login' %}">Login</a>
+              <a
+                class="button button--solid"
+                href="{% if browser_sso %}{% url 'magic_sso:sso_start' %}{% else %}{% url 'magic_sso:login' %}{% endif %}"
+                >Login</a
+              >
               <a class="button button--ghost" href="{% url 'protected1' %}">Decorator Guard</a>
               <a class="button button--ghost" href="{% url 'protected2' %}">Manual Auth Check</a>
               {% endif %}

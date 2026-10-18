@@ -20,6 +20,9 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+    buildLoginTarget,
+    createBrowserSsoHandler,
+    resolveMagicSsoConfig,
     buildAuthCookieOptions,
     normaliseReturnUrl,
     verifyRequestAuth,
@@ -49,13 +52,22 @@ type AsyncExpressHandler = (
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
 const angularNodeAppEngine = new AngularNodeAppEngine({
-    allowedHosts: ['127.0.0.1', 'localhost'],
+    allowedHosts: [
+        '127.0.0.1',
+        'localhost',
+        ...(process.env['MAGICSSO_PUBLIC_ORIGIN']
+            ? [new URL(process.env['MAGICSSO_PUBLIC_ORIGIN']).hostname]
+            : []),
+    ],
 });
 const verifyCsrfCookieName = 'magic-sso-verify-csrf';
 const verifyTokenCookieName = 'magic-sso-verify-token';
 
 function getRequestOrigin(request: ExpressRequest): string {
-    return `${request.protocol}://${request.get('host') ?? 'localhost:3004'}`;
+    return (
+        process.env['MAGICSSO_PUBLIC_ORIGIN'] ??
+        `${request.protocol}://${request.get('host') ?? 'localhost:3004'}`
+    );
 }
 
 function hasSameOriginMutationSource(request: ExpressRequest): boolean {
@@ -70,10 +82,23 @@ function buildRequestUrl(request: ExpressRequest): string {
     return `${getRequestOrigin(request)}${request.originalUrl}`;
 }
 
-function buildWebRequest(request: ExpressRequest): Request {
+function buildWebRequest(request: ExpressRequest, body?: string): Request {
+    const headers = toWebHeaders(request.headers);
+    if (process.env['MAGICSSO_PUBLIC_ORIGIN']) {
+        // The configured public origin already supplies routing and scheme; do not trust proxy input twice.
+        for (const name of [
+            'forwarded',
+            'x-forwarded-host',
+            'x-forwarded-proto',
+            'x-forwarded-prefix',
+        ]) {
+            headers.delete(name);
+        }
+    }
     return new Request(buildRequestUrl(request), {
-        headers: toWebHeaders(request.headers),
+        headers,
         method: request.method,
+        ...(body === undefined ? {} : { body }),
     });
 }
 
@@ -101,7 +126,10 @@ function setAuthCookie(response: ExpressResponse, accessToken: string): void {
                 : undefined,
         path: cookieOptions.path,
         sameSite: cookieOptions.sameSite,
-        secure: cookieOptions.secure,
+        secure:
+            resolveMagicSsoConfig().browserSsoMode === 'off'
+                ? cookieOptions.secure
+                : resolveMagicSsoConfig().publicOrigin.startsWith('https:'),
     });
 }
 
@@ -284,7 +312,10 @@ function clearAuthCookie(response: ExpressResponse): void {
         httpOnly: cookieOptions.httpOnly,
         path: cookieOptions.path,
         sameSite: cookieOptions.sameSite,
-        secure: cookieOptions.secure,
+        secure:
+            resolveMagicSsoConfig().browserSsoMode === 'off'
+                ? cookieOptions.secure
+                : resolveMagicSsoConfig().publicOrigin.startsWith('https:'),
     });
 }
 
@@ -302,9 +333,47 @@ function handleAsync(handler: AsyncExpressHandler): ExpressRequestHandler {
 function createApp(): express.Express {
     const app = express();
 
+    const ssoConfig = resolveMagicSsoConfig();
+    if (ssoConfig.publicOrigin && ssoConfig.serverUrl) {
+        const handler = createBrowserSsoHandler(ssoConfig);
+        app.all(
+            ['/sso/start', '/sso/callback', '/sso/signed-out'],
+            express.text({ type: 'application/x-www-form-urlencoded', limit: '16kb' }),
+            handleAsync(async (request, response) => {
+                await writeResponseToNodeResponse(
+                    await handler(
+                        buildWebRequest(
+                            request,
+                            typeof request.body === 'string' ? request.body : undefined,
+                        ),
+                    ),
+                    response,
+                );
+            }),
+        );
+    }
     app.disable('x-powered-by');
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
+
+    // Protect SSR documents before Angular runs; router guards also handle CSR navigation.
+    app.get(
+        '/protected',
+        handleAsync(async (request, response, next) => {
+            if (
+                ssoConfig.browserSsoMode !== 'off' &&
+                (await verifyRequestAuth(buildWebRequest(request))) === null
+            ) {
+                response.setHeader('cache-control', 'no-store');
+                response.redirect(
+                    307,
+                    buildLoginTarget(getRequestOrigin(request), request.originalUrl, ssoConfig),
+                );
+                return;
+            }
+            next();
+        }),
+    );
 
     app.get(
         '/api/session',
@@ -424,7 +493,7 @@ function createApp(): express.Express {
         }
 
         clearAuthCookie(response);
-        response.redirect('/');
+        response.redirect(ssoConfig.browserSsoMode === 'off' ? '/' : '/sso/signed-out');
     });
 
     if (existsSync(browserDistFolder)) {

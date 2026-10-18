@@ -55,7 +55,7 @@ function createOtpChallenge(overrides: Partial<OtpChallenge> = {}): OtpChallenge
     };
 }
 
-type OtpScriptArgs = [string, string, string, number | string | undefined];
+type OtpScriptArgs = [string, string, string, number | string | undefined, string | undefined];
 
 function readOtpScriptArgs(
     numKeys: number,
@@ -73,7 +73,14 @@ function readOtpScriptArgs(
     ) {
         throw new Error(`Invalid OTP ${operation} arguments.`);
     }
-    return [challengeKey, activeKey, value, extra];
+    const context = args[4];
+    return [
+        challengeKey,
+        activeKey,
+        value,
+        extra,
+        typeof context === 'string' ? context : undefined,
+    ];
 }
 
 class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
@@ -136,6 +143,7 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
         activeKey,
         submittedHash,
         nowValue,
+        browserSsoRequestId,
     ]: OtpScriptArgs): unknown {
         const payload = this.readValue(challengeKey);
         if (payload === null) {
@@ -148,6 +156,9 @@ class FakeRedisSecurityStateClient implements RedisSecurityStateClient {
         const challenge = parseOtpChallenge(JSON.parse(payload));
         if (challenge === null) {
             throw new Error('Invalid stored OTP challenge.');
+        }
+        if ((challenge.browserSsoRequestId ?? '') !== (browserSsoRequestId ?? '')) {
+            return ['invalid'];
         }
         if (challenge.expiresAt <= Number(nowValue)) {
             this.deleteOtpKeys(challengeKey, activeKey);

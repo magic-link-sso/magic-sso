@@ -3,6 +3,11 @@
 
 import {
     parseBooleanFlag,
+    parseBrowserSsoMode,
+    parseBrowserSsoLoginUi,
+    createBrowserSsoHttpHandler,
+    browserSsoPaths,
+    type BrowserSsoMode,
     type AuthPayload as CoreAuthPayload,
     buildAuthCookieOptions as buildCoreAuthCookieOptions,
     buildLoginTarget as buildCoreLoginTarget,
@@ -44,6 +49,11 @@ export interface EmailOtpExchangeResult {
 }
 
 export interface MagicSsoConfig {
+    browserSsoLoginUi?: 'hosted' | 'app-owned';
+    browserSsoMode?: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost?: boolean;
+    browserSsoTimeoutMs?: number;
+    publicOrigin?: string;
     cookieMaxAge?: number;
     cookieName?: string;
     cookiePath?: string;
@@ -55,6 +65,11 @@ export interface MagicSsoConfig {
 }
 
 export interface MagicSsoResolvedConfig {
+    browserSsoLoginUi: 'hosted' | 'app-owned';
+    browserSsoMode: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost: boolean;
+    browserSsoTimeoutMs: number;
+    publicOrigin: string;
     cookieMaxAge?: number;
     cookieName: string;
     cookiePath: string;
@@ -130,6 +145,19 @@ function readCookiePath(value: string | undefined): string {
 
 export function resolveMagicSsoConfig(config: MagicSsoConfig = {}): MagicSsoResolvedConfig {
     return {
+        browserSsoLoginUi: parseBrowserSsoLoginUi(
+            config.browserSsoLoginUi ?? readEnvString('MAGICSSO_BROWSER_SSO_LOGIN_UI'),
+        ),
+        browserSsoMode: parseBrowserSsoMode(
+            config.browserSsoMode ?? readEnvString('MAGICSSO_BROWSER_SSO_MODE'),
+        ),
+        browserSsoAllowInsecureLocalhost:
+            config.browserSsoAllowInsecureLocalhost ??
+            parseBooleanFlag(readEnvString('MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST')),
+        browserSsoTimeoutMs:
+            config.browserSsoTimeoutMs ??
+            Number(readEnvString('MAGICSSO_BROWSER_SSO_TIMEOUT_MS') ?? 5000),
+        publicOrigin: config.publicOrigin ?? readEnvString('MAGICSSO_PUBLIC_ORIGIN') ?? '',
         cookieMaxAge: readPositiveInteger(
             config.cookieMaxAge ?? readEnvString('MAGICSSO_COOKIE_MAX_AGE'),
         ),
@@ -273,7 +301,10 @@ export function buildLoginPath(
     const resolvedConfig = resolveMagicSsoConfig(config);
     return buildCoreLoginTarget({
         appOrigin,
-        loginPath: resolvedConfig.loginPath,
+        loginPath:
+            resolvedConfig.browserSsoMode === 'off'
+                ? resolvedConfig.loginPath
+                : browserSsoPaths.start,
         returnUrl: returnTarget,
         ...(typeof scope === 'string' ? { scope } : {}),
     });
@@ -288,10 +319,38 @@ export function buildLoginTarget(
     const resolvedConfig = resolveMagicSsoConfig(config);
     return buildCoreLoginTarget({
         appOrigin,
-        directUse: resolvedConfig.directUse,
-        loginPath: resolvedConfig.loginPath,
+        directUse: resolvedConfig.browserSsoMode === 'off' && resolvedConfig.directUse,
+        loginPath:
+            resolvedConfig.browserSsoMode === 'off'
+                ? resolvedConfig.loginPath
+                : browserSsoPaths.start,
         returnUrl: returnTarget,
         ...(typeof scope === 'string' ? { scope } : {}),
         serverUrl: resolvedConfig.serverUrl,
+    });
+}
+
+/** Create once on the server. A configured public origin is required for browser SSO. */
+export function createBrowserSsoHandler(
+    config?: MagicSsoConfig,
+): (request: Request) => Promise<Response> {
+    const resolved = resolveMagicSsoConfig(config);
+    if (!resolved.publicOrigin) {
+        throw new Error('Browser SSO routes require MAGICSSO_PUBLIC_ORIGIN.');
+    }
+    return createBrowserSsoHttpHandler({
+        mode: resolved.browserSsoMode,
+        loginUi: resolved.browserSsoLoginUi,
+        previewSecret: readEnvString('MAGICSSO_PREVIEW_SECRET') ?? '',
+        issuer: new URL(resolved.serverUrl).origin,
+        audience: resolved.publicOrigin,
+        redirectUri: new URL(browserSsoPaths.callback, resolved.publicOrigin).href,
+        secret: resolved.jwtSecret,
+        cookieName: resolved.cookieName,
+        cookiePath: resolved.cookiePath,
+        ...(resolved.cookieMaxAge === undefined ? {} : { cookieMaxAge: resolved.cookieMaxAge }),
+        allowInsecureLocalhost: resolved.browserSsoAllowInsecureLocalhost,
+        timeoutMs: resolved.browserSsoTimeoutMs,
+        legacyDirectUse: resolved.directUse,
     });
 }

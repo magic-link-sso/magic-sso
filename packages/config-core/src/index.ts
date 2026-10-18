@@ -20,6 +20,14 @@
 import { readFileSync } from 'node:fs';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { z } from 'zod';
+import {
+    browserSsoConfigSchema,
+    browserSsoRegistrationSchema,
+    validateBrowserSsoConfiguration,
+    type BrowserSsoConfig,
+    type BrowserSsoRegistration,
+} from './browser-sso.js';
+export type { BrowserSsoConfig, BrowserSsoRegistration } from './browser-sso.js';
 
 export const FULL_ACCESS_SCOPE = '*';
 
@@ -137,6 +145,7 @@ export interface SiteConfig extends HostedAuthConfig {
     allowedRedirectUris: RedirectUriRule[];
     id: string;
     origins: Set<string>;
+    sso?: BrowserSsoRegistration[] | undefined;
 }
 
 export interface SecurityStateConfig {
@@ -161,6 +170,7 @@ export interface ReloadConfig {
 export interface AppConfig extends HostedAuthConfig {
     appPort: number;
     appUrl: string;
+    browserSso?: BrowserSsoConfig | undefined;
     csrfSecret: string;
     cookieDomain: string | undefined;
     cookieHttpOnly: boolean;
@@ -382,6 +392,7 @@ const rawSiteSchema = z
         hostedAuth: rawHostedAuthSchema.optional(),
         id: z.string().min(1),
         origins: z.array(z.string()).min(1),
+        sso: z.array(browserSsoRegistrationSchema).min(1).optional(),
     })
     .strict()
     .superRefine((value, context) => {
@@ -431,6 +442,7 @@ const rawConfigSchema = z
                         resendStrategy: 'rotate',
                     }),
                 previewSecret: configuredSecretSchema('auth.previewSecret'),
+                sso: browserSsoConfigSchema.optional(),
             })
             .strict(),
         cookie: z
@@ -1145,6 +1157,7 @@ function buildConfiguredSite(
 ): ConfiguredSite {
     return {
         id: site.id,
+        sso: site.sso?.map((registration) => ({ ...registration })),
         origins: parseOrigins(site.origins, `sites[${site.id}].origins`),
         allowedRedirectUris: parseAllowedRedirectUris(
             site.allowedRedirectUris,
@@ -1206,6 +1219,7 @@ function resolveAuthSettings(
 ): Pick<
     AppConfig,
     | 'csrfSecret'
+    | 'browserSso'
     | 'emailExpirationSeconds'
     | 'emailSecret'
     | 'jwtExpirationSeconds'
@@ -1230,6 +1244,7 @@ function resolveAuthSettings(
 
     return {
         csrfSecret,
+        browserSso: auth.sso === undefined ? undefined : { ...auth.sso },
         emailExpirationSeconds,
         emailSecret,
         jwtExpirationSeconds: parseDurationToSeconds(auth.jwtExpiration),
@@ -1344,6 +1359,12 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         buildConfiguredSite(site, hostedAuthCopy, hostedAuthBranding),
     );
     assertSitesAreConsistent(sites);
+    validateBrowserSsoConfiguration(
+        authSettings.browserSso,
+        serverSettings.appUrl,
+        sites,
+        parsedConfig.cookie?.name ?? 'magic-sso',
+    );
 
     return {
         ...serverSettings,

@@ -24,9 +24,12 @@ export default defineEventHandler(async (event): Promise<Response | void> => {
     deleteCookie(event, getCookieName(event), {
         path: config.cookiePath,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure:
+            config.browserSsoMode === 'off'
+                ? process.env.NODE_ENV === 'production'
+                : config.publicOrigin.startsWith('https:'),
         sameSite: 'lax',
     });
 
-    await sendRedirect(event, '/', 303);
+    await sendRedirect(event, config.browserSsoMode === 'off' ? '/' : '/sso/signed-out', 303);
 });

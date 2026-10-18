@@ -104,3 +104,56 @@ cookie.
 uv sync --all-groups
 uv run pytest
 ```
+
+## Shared browser SSO (opt-in)
+
+Hosted browser SSO reuses the issuer's identity while this application keeps its
+own JWT and permissions. The default mode is `off`. Set
+`MAGICSSO_BROWSER_SSO_MODE=auto` for capability-controlled legacy fallback, or
+`required` to reject an issuer that does not support this protocol. Set
+`MAGICSSO_PUBLIC_ORIGIN` to the exact externally visible app origin and keep
+`MAGICSSO_SERVER_URL` and `MAGICSSO_JWT_SECRET` on the backend. A distinct
+issuer hostname and HTTPS are required. Local HTTP is available only with the
+explicit `MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST=true` test/development
+exception. `MAGICSSO_BROWSER_SSO_TIMEOUT_MS` defaults to 5000 (100–30000).
+
+Register the app's exact start, callback and signed-out URLs in the issuer's
+`[[sites.sso]]` configuration. These routes stay public even when whole-app auth
+is enabled. Start/callback must use top-level document navigation; prefetch and
+client-side data requests must not create or consume transactions. Three tabs
+can sign in independently. Callback failures leave existing app sessions intact.
+Local logout clears this app's cookie and shows a public page with separate
+sign-in and central sign-out controls. Ending central SSO leaves other issued
+app JWTs subject to their existing expiry policy.
+
+See the [browser session contract](../../docs/browser-sso-contract.md) for
+registration, rollout and protocol details. Application-owned forms keep their
+existing behavior until the separate bootstrap continuation is enabled.
+
+Use the equivalent Django settings (the environment variables in the example
+populate these): `MAGICSSO_BROWSER_SSO_MODE`, `MAGICSSO_PUBLIC_ORIGIN`,
+`MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST` and
+`MAGICSSO_BROWSER_SSO_TIMEOUT_MS`. With the URLconf mounted at `/sso/`, register
+`/sso/start/`, `/sso/callback/` and `/sso/signed-out/` including their trailing
+slashes. URL names are `magic_sso:sso_start`, `magic_sso:sso_callback` and
+`magic_sso:sso_signed_out`. The middleware reserves them as infrastructure
+routes. SSO transaction and new app cookies are host-only; cookie Domain is not
+used for this flow. The Python AES-GCM/HKDF implementation is checked against
+the shared TypeScript wire fixture.
+
+### Application-owned sign-in forms
+
+With issuer `[auth.sso].bootstrapEnabled = true`, set
+`MAGICSSO_BROWSER_SSO_LOGIN_UI = "app-owned"` alongside the browser SSO mode.
+The existing `/sso/start/` route accepts GET and POST and serves email and OTP
+forms on the application's own origin. Keep `MAGICSSO_PREVIEW_SECRET` on the
+backend for the explicit magic-link identity confirmation. The default remains
+`"hosted"`. No third-party cookie or browser fetch to the issuer is needed.
+
+Local verification sets the normal verified JWT before a top-level issuer visit.
+The completion callback requires that exact existing JWT and a verified issuer
+receipt; it never sets another authentication cookie. Failed shared setup keeps
+valid local sessions and offers explicit fresh hosted sign-in. The app cookie
+path must cover the callback. See the
+[bootstrap contract](../../docs/browser-sso-bootstrap-contract.md) for the
+shared wire format and backend continuation requirements.

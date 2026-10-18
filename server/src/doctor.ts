@@ -13,6 +13,7 @@ import {
     type DoctorIo,
 } from '@magic-link-sso/config-core/diagnostics';
 import { parseMagicSsoConfigToml, readConfigFilePath } from './config.js';
+import { checkDoctorBrowserSso } from './doctorBrowserSso.js';
 import { checkDoctorSmtp } from './doctorSmtp.js';
 
 async function diagnoseServer(
@@ -69,6 +70,7 @@ async function diagnoseServer(
             correction: 'Verify Redis availability separately.',
         });
     }
+    await checkDoctorBrowserSso(report, config, args.online, args.timeoutMs);
     if (args.online || args.recipient) {
         await checkDoctorSmtp(report, config, args.timeoutMs, args.recipient);
     } else {

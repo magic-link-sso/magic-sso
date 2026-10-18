@@ -172,7 +172,11 @@ function buildLoginPath(config: GateConfig, returnUrl: string, scope?: string): 
     return `${loginPath.pathname}${loginPath.search}`;
 }
 
-export function buildLoginTarget(config: GateConfig, returnUrl: string, scope?: string): string {
+export function buildLegacyLoginTarget(
+    config: GateConfig,
+    returnUrl: string,
+    scope?: string,
+): string {
     const normalisedReturnUrl = normaliseReturnUrl(returnUrl, config);
     const normalizedScope = typeof scope === 'string' ? scope.trim() : '';
 
@@ -187,6 +191,18 @@ export function buildLoginTarget(config: GateConfig, returnUrl: string, scope?: 
     }
 
     return buildLoginPath(config, normalisedReturnUrl, scope);
+}
+
+export function buildLoginTarget(config: GateConfig, returnUrl: string, scope?: string): string {
+    if (config.browserSso.mode === 'off') {
+        return buildLegacyLoginTarget(config, returnUrl, scope);
+    }
+    const target = new URL(buildGatePath(config, '/sso/start'), config.publicOrigin);
+    target.searchParams.set('returnUrl', normaliseReturnUrl(returnUrl, config));
+    if (scope?.trim()) {
+        target.searchParams.set('scope', scope.trim());
+    }
+    return `${target.pathname}${target.search}`;
 }
 
 export function getLoginErrorMessage(errorCode: string | undefined): string | undefined {

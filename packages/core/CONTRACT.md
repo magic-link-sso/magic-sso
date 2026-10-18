@@ -89,6 +89,41 @@ retains an explicit public origin with proxy trust enabled. This local fixture
 uses HTTP; framework-specific tests cover HTTPS origin and cookie decisions,
 proxy trust, and cross-origin mutation checks.
 
+## Browser SSO
+
+`browser-sso.ts` defines the version-1 lifetimes, limits, request types, and
+capability parser for the opt-in shared browser session feature. The
+[browser SSO contract](../../docs/browser-sso-contract.md) and public protocol
+fixtures under `test/fixtures/` are the cross-language reference. A malformed
+capability response is distinct from explicit disabled or unsupported support.
+`createBrowserSsoClient` implements hosted-first starts and backend callbacks.
+It discovers capabilities before creating state, seals independent transaction
+cookies using Web Crypto HKDF/AES-GCM, binds codes with S256 PKCE, and verifies
+the returned JWT against the trusted issuer and app audience. Use it only on the
+backend: its secret is the app's existing JWT secret. Gate participates through
+an explicit opt-in policy; SDK integrations follow separately.
+
+`parseBrowserSsoCookies` preserves duplicate names so callbacks can reject
+ambiguous headers. A wrong state or tampered cookie clears nothing. A valid
+terminal callback clears only its matching transaction and never an existing app
+session. Callers apply returned cookie changes and set their existing app cookie
+only for `kind: 'authenticated'`. App cookie settings retain their existing
+meaning; configured maxAge must be capped at the verified JWT expiry.
+
+Three outstanding transactions are allowed. A fourth start or an oversized
+address rejects without replacing existing transactions. Expired, valid own
+cookies are pruned. The client attempts exchange once; it offers an explicit
+fresh start after an uncertain outcome and performs no automatic retries.
+`restarts` remains bounded to 0 or 1 in the shared envelope for adapters that
+later choose to implement a single automatic fresh-transaction restart.
+
+Adapters use `isBrowserSsoDocumentNavigation` before starting or completing a
+transaction. RSC, router prefetch, browser prefetch/prerender and non-navigation
+fetches receive a same-origin continuation instead of state changes or an issuer
+redirect. A speculative request must not spend the transaction limit or consume
+a code. Caller headers stay outside the portable client's cookie/PKCE logic so
+frameworks can respond using their normal document-navigation rules.
+
 ## Cookie migration compatibility
 
 Moving an adapter to core does not change the default session-cookie identity:

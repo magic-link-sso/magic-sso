@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { protectedBadgeUrl, signinBadgeUrl } from 'magic-sso-example-ui';
 import {
+    createBrowserSsoHandler,
     buildAuthCookieOptions,
     buildLoginTarget,
     buildVerifyUrl,
@@ -88,6 +89,31 @@ const sharedProtectedBadgeRoute = '/shared/assets/protected-page-badge.svg';
 const verifyCsrfCookieName = 'magic-sso-verify-csrf';
 const verifyTokenCookieName = 'magic-sso-verify-token';
 const otpChallengeCookieName = 'magic-sso-otp-challenge';
+
+function toFetchHeaders(values: FastifyRequest['headers']): Headers {
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(values)) {
+        for (const entry of [value].flat()) {
+            if (entry !== undefined) {
+                headers.append(name, entry);
+            }
+        }
+    }
+    return headers;
+}
+function toFetchForm(method: string, body: unknown): URLSearchParams {
+    const form = new URLSearchParams();
+    if (method === 'POST' && typeof body === 'object' && body !== null) {
+        for (const [name, value] of Object.entries(body)) {
+            for (const entry of [value].flat()) {
+                if (typeof entry === 'string') {
+                    form.append(name, entry);
+                }
+            }
+        }
+    }
+    return form;
+}
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -316,6 +342,9 @@ function buildUnexpectedUpstreamMessage(serverUrl: string): string {
 }
 
 function getRequestOrigin(request: FastifyRequest): string {
+    if (process.env['MAGICSSO_PUBLIC_ORIGIN']) {
+        return process.env['MAGICSSO_PUBLIC_ORIGIN'];
+    }
     const forwardedProto = readString(request.headers['x-forwarded-proto']);
     const forwardedHost = readString(request.headers['x-forwarded-host']);
     const host = forwardedHost ?? request.headers.host ?? 'localhost:3005';
@@ -388,10 +417,46 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
             typeof options.logger === 'undefined'
                 ? {
                       level: process.env['LOG_LEVEL'] === 'debug' ? 'debug' : 'info',
+                      serializers: {
+                          req: (request: FastifyRequest): { method: string; url: string } => ({
+                              method: request.method,
+                              url: request.url.split('?')[0] ?? '/',
+                          }),
+                      },
                   }
                 : options.logger,
     });
 
+    const ssoConfig = resolveMagicSsoConfig();
+    if (ssoConfig.publicOrigin && ssoConfig.serverUrl) {
+        const handler = createBrowserSsoHandler(ssoConfig);
+        app.route({
+            method: ['GET', 'POST'],
+            url: '/sso/:action',
+            handler: async (request, reply) => {
+                const headers = toFetchHeaders(request.headers);
+                const form = toFetchForm(request.method, request.body);
+                const result = await handler(
+                    new Request(new URL(request.url, ssoConfig.publicOrigin), {
+                        method: request.method,
+                        headers,
+                        ...(request.method === 'POST' ? { body: form.toString() } : {}),
+                    }),
+                );
+                reply.code(result.status);
+                for (const [name, value] of result.headers) {
+                    if (name !== 'set-cookie') {
+                        reply.header(name, value);
+                    }
+                }
+                const cookies = result.headers.getSetCookie();
+                if (cookies.length) {
+                    reply.header('set-cookie', cookies);
+                }
+                return reply.send(await result.text());
+            },
+        });
+    }
     await app.register(cookie);
     await app.register(formbody);
 
@@ -412,6 +477,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         return reply.send(
             renderHomePage({
                 auth,
+                browserSso: ssoConfig.browserSsoMode !== 'off',
                 loginTarget: buildLoginTarget(appOrigin, appOrigin),
                 signinBadgePath: sharedSigninBadgeRoute,
             }),
@@ -773,11 +839,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
             const resolvedCookieConfig = resolveMagicSsoConfig();
             clearVerifyEmailCookies(request, reply);
-            reply.setCookie(
-                resolvedCookieConfig.cookieName,
-                payload.accessToken,
-                buildAuthCookieOptions(resolvedCookieConfig),
-            );
+            reply.setCookie(resolvedCookieConfig.cookieName, payload.accessToken, {
+                ...buildAuthCookieOptions(resolvedCookieConfig),
+                ...(ssoConfig.browserSsoMode === 'off'
+                    ? {}
+                    : { secure: ssoConfig.publicOrigin.startsWith('https:') }),
+            });
             return reply.redirect(returnUrl);
         } catch {
             clearVerifyEmailCookies(request, reply);
@@ -796,11 +863,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         }
 
         const resolvedCookieConfig = resolveMagicSsoConfig();
-        reply.clearCookie(
-            resolvedCookieConfig.cookieName,
-            buildAuthCookieOptions(resolvedCookieConfig),
-        );
-        return reply.redirect('/');
+        reply.clearCookie(resolvedCookieConfig.cookieName, {
+            ...buildAuthCookieOptions(resolvedCookieConfig),
+            ...(ssoConfig.browserSsoMode === 'off'
+                ? {}
+                : { secure: ssoConfig.publicOrigin.startsWith('https:') }),
+        });
+        return reply.redirect(ssoConfig.browserSsoMode === 'off' ? '/' : '/sso/signed-out');
     });
 
     app.get('/protected', async (request, reply) => {
@@ -816,6 +885,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         return reply.send(
             renderProtectedPage({
                 auth,
+                browserSso: ssoConfig.browserSsoMode !== 'off',
                 protectedBadgePath: sharedProtectedBadgeRoute,
             }),
         );

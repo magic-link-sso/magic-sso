@@ -5,6 +5,9 @@ import { getCookie, getRequestURL, type H3Event } from 'h3';
 import { parse as parseCookies } from 'cookie-es';
 import {
     parseBooleanFlag,
+    parseBrowserSsoMode,
+    parseBrowserSsoLoginUi,
+    browserSsoPaths,
     buildLoginTarget as buildCoreLoginTarget,
     normaliseReturnUrl as normaliseCoreReturnUrl,
     verifyAuthTokenWithOptionalIssuer as verifyCoreAuthTokenWithOptionalIssuer,
@@ -138,6 +141,12 @@ function readJwtIssuer(serverUrl: string): string | null {
 
 function getEnvMagicSsoConfigValue(): MagicSsoModuleOptions {
     return {
+        browserSsoLoginUi: parseBrowserSsoLoginUi(process.env.MAGICSSO_BROWSER_SSO_LOGIN_UI),
+        browserSsoMode: parseBrowserSsoMode(process.env.MAGICSSO_BROWSER_SSO_MODE),
+        browserSsoAllowInsecureLocalhost: parseBooleanFlag(
+            process.env.MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST,
+        ),
+        browserSsoTimeoutMs: Number(process.env.MAGICSSO_BROWSER_SSO_TIMEOUT_MS ?? 5000),
         previewSecret: process.env.MAGICSSO_PREVIEW_SECRET ?? '',
         serverUrl: process.env.MAGICSSO_SERVER_URL ?? process.env.APP_URL ?? '',
         jwtSecret: process.env.MAGICSSO_JWT_SECRET ?? process.env.JWT_SECRET ?? '',
@@ -162,6 +171,13 @@ export function resolveMagicSsoConfig(configValue?: unknown): MagicSsoResolvedCo
     const config = asRecord(configValue);
 
     return {
+        browserSsoLoginUi: parseBrowserSsoLoginUi(config?.browserSsoLoginUi),
+        browserSsoMode: parseBrowserSsoMode(config?.browserSsoMode),
+        browserSsoAllowInsecureLocalhost: readBoolean(
+            config?.browserSsoAllowInsecureLocalhost,
+            false,
+        ),
+        browserSsoTimeoutMs: Number(config?.browserSsoTimeoutMs ?? 5000),
         previewSecret: readString(config?.previewSecret, ''),
         serverUrl: readString(config?.serverUrl, ''),
         jwtSecret: readString(config?.jwtSecret, ''),
@@ -214,6 +230,9 @@ export function isPublicPath(
     pathname: string,
     options?: Pick<MagicSsoResolvedConfig, 'excludedPaths'>,
 ): boolean {
+    if (Object.values(browserSsoPaths).some((path) => pathname === path)) {
+        return true;
+    }
     return getExcludedPaths(options).some(
         (path) => pathname === path || pathname.startsWith(`${path}/`),
     );
@@ -224,7 +243,8 @@ export function buildLoginUrl(event: AuthRequestEvent, pathname: string, scope?:
     const config = getMagicSsoConfig(event);
     return buildCoreLoginTarget({
         appOrigin: getRequestOrigin(event, { allowRequestUrlFallback: true }) ?? requestUrl.origin,
-        directUse: config.directUse,
+        directUse: config.browserSsoMode === 'off' && config.directUse,
+        loginPath: config.browserSsoMode === 'off' ? '/login' : browserSsoPaths.start,
         returnUrl: pathname,
         ...(typeof scope === 'string' ? { scope } : {}),
         serverUrl: config.serverUrl,
