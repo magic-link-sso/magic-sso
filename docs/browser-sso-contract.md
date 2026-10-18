@@ -276,6 +276,37 @@ only registered app origins, because browsers also apply it to the 303 callback
 redirect after confirmation. See the browser behavior documented in
 [Referrer-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy).
 
+## My applications launcher
+
+The optional issuer-owned launcher is available at `/sso/apps`. Explicit
+`sites.launcher` metadata supplies a display name, application destination and
+scope; it never adds access. The entry list is computed from current grants
+after reading the central session, and its links use the matching registered
+application SSO start endpoint. Sites without this metadata are omitted.
+
+Launcher sign-in starts with a same-origin, CSRF-protected POST. A stored
+authorization request marked `flow: "launcher"` uses the existing bounded
+request store, grant rotation, hosted email/OTP verification and account
+confirmation. The issuer consumes the current request/grant atomically before
+establishing the session. It rechecks current launcher access after awaited
+session creation. These internal requests cannot be created by `/sso/authorize`,
+cannot issue application authorization codes and never mint application JWTs.
+Confirmation returns directly to `/sso/apps`. The launcher does not register an
+application callback on the issuer hostname.
+
+Anonymous responses contain no application list. Authenticated responses show
+the central email, permitted entries or a helpful empty state, account change
+and central sign-out controls. Pages retain no-store, no-referrer and CSP
+protections. Account changes require a new explicit email confirmation and
+preserve the old identity until successful confirmation. Central sign-out uses
+the existing CSRF-protected confirmation and permits the exact issuer launcher
+URL as an additional fixed return target. Local application sessions retain
+their existing identity and expiry.
+
+Launcher configuration is restart-invariant and preserved through managed grant
+rendering. See
+[deployment and rollback](browser-sso-deployment.md#my-applications-launcher).
+
 ## Storage and verification
 
 The issuer stores only SHA-256 digests of opaque handles, request IDs, browser

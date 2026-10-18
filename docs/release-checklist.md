@@ -70,7 +70,10 @@ cd packages/django && uv build
 
 The browser SSO suite requires Playwright Chromium, Firefox and WebKit. Follow
 [the opt-in deployment walkthrough](browser-sso-deployment.md) for exact
-callback registration, pilot acceptance and rollback.
+callback registration, pilot acceptance and rollback. When enabling the optional
+launcher, verify explicit names/destinations, a scoped user's list, account
+change and central sign-out following the
+[launcher guide](browser-sso-deployment.md#my-applications-launcher).
 
 ## Manual checks
 

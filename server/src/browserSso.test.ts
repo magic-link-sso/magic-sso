@@ -83,6 +83,7 @@ describe('browser SSO staged rollout', () => {
         'startUri',
         'signedOutUri',
         'remove-registration',
+        'launcher',
     ])(
         'requires a restart for a change to %s without adopting other candidate grants',
         async (field) => {
@@ -104,6 +105,12 @@ describe('browser SSO staged rollout', () => {
                 policy.bootstrapEnabled = true;
             } else if (field === 'remove-registration') {
                 site.sso = undefined;
+            } else if (field === 'launcher') {
+                site.launcher = {
+                    name: 'Reports',
+                    launchUrl: 'https://app.example.com/reports',
+                    scope: '*',
+                };
             } else if (field === 'redirectUri') {
                 registration.redirectUri = 'https://app.example.com/other/callback';
             } else if (field === 'startUri') {

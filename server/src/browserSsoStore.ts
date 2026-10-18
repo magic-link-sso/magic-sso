@@ -20,7 +20,7 @@ const sessionSchema = z
 const requestSchema = z
     .object({
         kind: z.literal('request'),
-        flow: z.literal('app-owned').optional(),
+        flow: z.enum(['app-owned', 'launcher']).optional(),
         id: digest,
         bindingHash: digest,
         siteId: z.string().min(1),
@@ -97,7 +97,7 @@ export interface BrowserSsoBackend {
 }
 
 export interface CreateAuthorizationRequest {
-    flow?: 'app-owned';
+    flow?: 'app-owned' | 'launcher';
     browserBinding: string;
     siteId: string;
     redirectUri: string;
@@ -117,6 +117,11 @@ export interface BootstrapRequestProof {
 }
 
 export interface BrowserSsoStore {
+    consumeLauncherRequest(input: {
+        requestId: string;
+        grantId: string;
+        now: number;
+    }): Promise<boolean>;
     endBrowserSession(input: {
         handle?: string;
         browserBinding?: string;
@@ -306,6 +311,21 @@ async function readRedeemableBootstrap(
 
 export function createBrowserSsoStore(backend: BrowserSsoBackend): BrowserSsoStore {
     return {
+        async consumeLauncherRequest(input) {
+            return backend.run(input.now, async (tx) => {
+                const requestKey = key('request', hashBrowserSsoValue(input.requestId));
+                const request = await tx.get(requestKey);
+                if (
+                    request?.kind !== 'request' ||
+                    request.flow !== 'launcher' ||
+                    request.grantHash !== hashBrowserSsoValue(input.grantId)
+                ) {
+                    return false;
+                }
+                await tx.set(requestKey, null);
+                return true;
+            });
+        },
         async endBrowserSession(input) {
             await backend.run(input.now, async (tx) => {
                 const bindings = new Set<string>();
@@ -576,6 +596,7 @@ export function createBrowserSsoStore(backend: BrowserSsoBackend): BrowserSsoSto
                     input.grantId === undefined ? null : hashBrowserSsoValue(input.grantId);
                 if (
                     request?.kind !== 'request' ||
+                    request.flow === 'launcher' ||
                     request.grantHash !== grantHash ||
                     request.bindingHash !== hashBrowserSsoValue(input.browserBinding)
                 ) {

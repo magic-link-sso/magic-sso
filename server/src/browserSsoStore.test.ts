@@ -181,6 +181,67 @@ for (const adapter of ['file', 'redis']) {
             });
         });
 
+        it('persists launcher requests without allowing application authorization codes', async () => {
+            const created = await store.createRequest({
+                flow: 'launcher',
+                browserBinding,
+                siteId: 'magic-link-sso-launcher',
+                redirectUri: 'https://sso.example.com/sso/apps',
+                state: createBrowserSsoOpaqueValue(),
+                codeChallenge: challenge,
+                scope: '*',
+                now,
+                expiresAt: now + 60_000,
+            });
+            if (created.kind !== 'created') {
+                throw new Error('Missing request');
+            }
+            expect((await (await reopen()).getRequest(created.requestId, now))?.flow).toBe(
+                'launcher',
+            );
+            const session = await store.createSession({
+                email: 'user@example.com',
+                now,
+                expiresAt: now + 300_000,
+            });
+            expect(
+                await store.issueCode({
+                    requestId: created.requestId,
+                    browserBinding,
+                    sessionHandle: session.handle,
+                    now,
+                    lifetimeSeconds: 60,
+                }),
+            ).toEqual({ kind: 'request_rejected' });
+            expect(
+                await store.bindGrant({
+                    requestId: created.requestId,
+                    browserBinding,
+                    grantId: 'new-grant',
+                    now,
+                }),
+            ).toBe(true);
+            expect(
+                await store.consumeLauncherRequest({
+                    requestId: created.requestId,
+                    grantId: 'old-grant',
+                    now,
+                }),
+            ).toBe(false);
+            expect(await store.getRequest(created.requestId, now)).not.toBeNull();
+            const completions = await Promise.all(
+                Array.from({ length: 4 }, () =>
+                    store.consumeLauncherRequest({
+                        requestId: created.requestId,
+                        grantId: 'new-grant',
+                        now,
+                    }),
+                ),
+            );
+            expect(completions.filter(Boolean)).toHaveLength(1);
+            expect(await store.getRequest(created.requestId, now)).toBeNull();
+        });
+
         it('checks the central session again after inspection', async () => {
             const { code, handle } = await issued();
             expect(await store.inspectCode(code, now)).toMatchObject({
@@ -348,7 +409,14 @@ for (const adapter of ['file', 'redis']) {
                 const ttl = await client.eval("return redis.call('PTTL', KEYS[1])", 1, codeKey);
                 expect(typeof ttl).toBe('number');
                 expect(ttl).toBeGreaterThan(0);
-                expect(ttl).toBeLessThanOrEqual(60_000);
+                // Check the absolute deadline written by PXAT: Docker and the
+                // test host need not have exactly the same wall clock.
+                const deadline = await client.eval(
+                    "return redis.call('PEXPIRETIME', KEYS[1])",
+                    1,
+                    codeKey,
+                );
+                expect(deadline).toBe(now + 60_000);
             }
         });
 

@@ -26,7 +26,8 @@ it('preserves operator-owned SSO policy and exact registrations across managed g
         readFileSync(
             new URL('../../packages/config-core/src/browser-sso.fixture.toml', import.meta.url),
             'utf8',
-        ),
+        ) +
+            '\n[sites.launcher]\nname = "Reports"\nlaunchUrl = "https://app.example.com/reports"\nscope = "reports"\n',
     );
     try {
         const plan = buildRuntimePlan(
@@ -44,6 +45,12 @@ it('preserves operator-owned SSO policy and exact registrations across managed g
         );
         expect(plan.runtimeConfig.auth.sso).toEqual(plan.baseConfig.auth.sso);
         expect(plan.runtimeConfig.sites[0]?.sso).toEqual(plan.baseConfig.sites[0]?.sso);
+        expect(plan.runtimeConfig.sites[0]?.launcher).toEqual(plan.baseConfig.sites[0]?.launcher);
+        expect(plan.validatedRuntimeConfig.sites[0]?.launcher).toEqual({
+            name: 'Reports',
+            launchUrl: 'https://app.example.com/reports',
+            scope: 'reports',
+        });
         expect(plan.validatedRuntimeConfig.sites[0]?.sso?.[0]?.signedOutUri).toBe(
             'https://app.example.com/signed-out',
         );

@@ -94,8 +94,12 @@ export default defineConfig({
     testDir: './tests',
     testMatch:
         process.env.MAGICSSO_E2E_SSO_APP_OWNED === 'true'
-            ? ['browser-sso-app-owned.spec.ts']
-            : ['browser-sso.spec.ts', ...(browserSsoHttps ? ['browser-sso-release.spec.ts'] : [])],
+            ? ['browser-sso-app-owned.spec.ts', 'browser-sso-launcher.spec.ts']
+            : [
+                  'browser-sso.spec.ts',
+                  'browser-sso-launcher.spec.ts',
+                  ...(browserSsoHttps ? ['browser-sso-release.spec.ts'] : []),
+              ],
     workers: 1,
     timeout: 60_000,
     expect: { timeout: 15_000 },

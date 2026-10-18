@@ -54,6 +54,9 @@ id = "gate-a"
 origins = ["${first}"]
 allowedRedirectUris = ["${first}/*"]
 allowedEmails = ["owner@example.com"]
+[sites.launcher]
+name = "Documents"
+launchUrl = "${first}/reports?q=a%2Bb&tag=one&tag=two"
 [[sites.sso]]
 redirectUri = "${first}/_magicgate/sso/callback"
 startUri = "${first}/_magicgate/sso/start"
@@ -67,6 +70,9 @@ allowedEmails = ["owner@example.com"]
 redirectUri = "${second}/private/_access/sso/callback"
 startUri = "${second}/private/_access/sso/start"
 signedOutUri = "${second}/private/_access/signed-out"
+[sites.launcher]
+name = "Photos"
+launchUrl = "${second}/private/reports"
 [[sites]]
 id = "next"
 origins = ["${browserSsoOrigin('next')}"]
@@ -76,6 +82,9 @@ allowedEmails = ["owner@example.com"]
 redirectUri = "${browserSsoOrigin('next')}/sso/callback"
 startUri = "${browserSsoOrigin('next')}/sso/start"
 signedOutUri = "${browserSsoOrigin('next')}/sso/signed-out"
+[sites.launcher]
+name = "Next.js application"
+launchUrl = "${browserSsoOrigin('next')}/protected"
 [[sites]]
 id = "nuxt"
 origins = ["${browserSsoOrigin('nuxt')}"]

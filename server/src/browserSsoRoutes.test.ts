@@ -684,6 +684,296 @@ describe(`browser SSO issuer HTTP flow (${process.env.MAGICSSO_TEST_REDIS_URL ? 
         expect(emails).toHaveLength(1);
     });
 
+    function configureLauncher(): void {
+        const [first, second] = config.sites;
+        if (!first || !second) {
+            throw new Error('Missing sites');
+        }
+        first.launcher = {
+            name: 'Documents & reports',
+            launchUrl: 'https://app.example.com/reports?q=a%2Bb&tag=one&tag=two',
+            scope: '*',
+        };
+        second.launcher = {
+            name: 'Private photos',
+            launchUrl: 'https://other.test/albums',
+            scope: 'photos',
+        };
+        second.accessRules.set('reader@example.com', new Set(['photos']));
+        first.accessRules.set('reader@example.com', new Set(['reports']));
+    }
+    async function startLauncher(): Promise<LightMyRequestResponse> {
+        const page = await browser.get('/sso/apps');
+        const started = await browser.post('/sso/apps/signin', {
+            csrfToken: hidden(page.body, 'csrfToken'),
+        });
+        expect(started.statusCode).toBe(303);
+        return browser.get(started.headers.location ?? '');
+    }
+    async function sendLauncher(
+        email = 'owner@example.com',
+    ): Promise<{ requestId: string; page: LightMyRequestResponse; email: VerificationEmailInput }> {
+        const started = await startLauncher();
+        expect(started.statusCode).toBe(200);
+        const requestId = hidden(started.body, 'requestId');
+        const page = await browser.post('/sso/signin', {
+            requestId,
+            email,
+            csrfToken: hidden(started.body, 'csrfToken'),
+        });
+        expect(page.statusCode).toBe(200);
+        const sent = emails.at(-1);
+        if (!sent) {
+            throw new Error('Missing launcher email');
+        }
+        return { requestId, page, email: sent };
+    }
+
+    it('offers private launcher sign-in without exposing application names or links', async () => {
+        configureLauncher();
+        const page = await browser.get('/sso/apps');
+        expect((await browser.get('/')).body).toContain('href="/sso/apps"');
+        expect(page.statusCode).toBe(200);
+        expect(page.body).toContain('My applications');
+        expect(page.body).toContain('Sign in with your email');
+        expect(page.body).not.toContain('Documents &amp; reports');
+        expect(page.body).not.toContain('https://app.example.com');
+        expect(page.headers['cache-control']).toBe('no-store');
+        expect(page.headers['referrer-policy']).toBe('no-referrer');
+        expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+        expect(page.headers['content-security-policy']).toContain("form-action 'self'");
+        expect(central()).toBeUndefined();
+    });
+
+    it.each(['link', 'otp'])(
+        'signs into the launcher with %s and reuses SSO without creating an app session',
+        async (method) => {
+            configureLauncher();
+            const sent = await sendLauncher();
+            let completed: LightMyRequestResponse;
+            if (method === 'link') {
+                completed = await confirm(sent);
+                const page = await browser.get('/sso/apps');
+                expect(
+                    (
+                        await browser.post('/sso/verify', {
+                            requestId: sent.requestId,
+                            token: sent.email.token,
+                            csrfToken: hidden(page.body, 'csrfToken'),
+                        })
+                    ).statusCode,
+                ).toBe(400);
+            } else {
+                completed = await browser.post('/sso/otp', {
+                    requestId: sent.requestId,
+                    csrfToken: hidden(sent.page.body, 'csrfToken'),
+                    challengeId: hidden(sent.page.body, 'challengeId'),
+                    otpContext: hidden(sent.page.body, 'otpContext'),
+                    code: sent.email.otpCode ?? '',
+                });
+            }
+            expect(completed.statusCode).toBe(303);
+            expect(completed.headers.location).toBe('/sso/apps');
+            expect(central()).toBeDefined();
+            expect([...browser.cookies.keys()]).not.toContain(config.cookieName);
+            const page = await browser.get('/sso/apps');
+            expect(page.body).toContain('owner@example.com');
+            expect(page.body).toContain('Documents &amp; reports');
+            expect(page.body).toContain('Private photos');
+            const href = page.body
+                .match(/class="application" href="([^"]+)"/u)?.[1]
+                ?.replaceAll('&amp;', '&');
+            const start = new URL(href ?? 'https://missing.invalid');
+            expect(start.origin + start.pathname).toBe('https://app.example.com/sso/start');
+            expect(start.searchParams.get('returnUrl')).toBe(config.sites[0]?.launcher?.launchUrl);
+            expect(start.searchParams.get('scope')).toBe('*');
+            expect((await browser.get(authorizeUrl())).statusCode).toBe(302);
+            expect(emails).toHaveLength(1);
+            expect(
+                (await browser.get(authorizeUrl('app', { redirectUri: issuer + '/sso/apps' })))
+                    .statusCode,
+            ).toBe(400);
+        },
+    );
+
+    it('filters scoped grants, ignores unlisted sites, and reflects revoked access immediately', async () => {
+        configureLauncher();
+        await confirm(await sendLauncher('reader@example.com'));
+        let page = await browser.get('/sso/apps');
+        expect(page.body).toContain('Private photos');
+        expect(page.body).not.toContain('Documents &amp; reports');
+        config.sites[1]?.accessRules.delete('reader@example.com');
+        page = await browser.get('/sso/apps');
+        expect(page.body).toContain('No applications available');
+        expect(page.body).not.toContain('Private photos');
+        const site = config.sites[0];
+        if (!site) {
+            throw new Error('Missing site');
+        }
+        site.accessRules.set('reader@example.com', new Set(['*']));
+        expect((await browser.get('/sso/apps')).body).toContain('Documents &amp; reports');
+        site.launcher = undefined;
+        expect((await browser.get('/sso/apps')).body).not.toContain('Documents &amp; reports');
+    });
+
+    it('reads live grants after awaiting the central session', async () => {
+        configureLauncher();
+        await confirm(await sendLauncher());
+        const original = state.browserSsoStore.getSession.bind(state.browserSsoStore);
+        vi.spyOn(state.browserSsoStore, 'getSession').mockImplementationOnce(
+            async (handle, now) => {
+                const session = await original(handle, now);
+                for (const site of config.sites) {
+                    site.accessRules.delete('owner@example.com');
+                }
+                return session;
+            },
+        );
+        expect((await browser.get('/sso/apps')).body).toContain('No applications available');
+    });
+
+    it('uses the explicit destination origin among several registrations and escapes display names', async () => {
+        configureLauncher();
+        const site = config.sites[0];
+        if (!site || !site.launcher || !site.sso) {
+            throw new Error('Missing launcher');
+        }
+        site.origins.add('https://alternate.test');
+        site.sso.push({
+            redirectUri: 'https://alternate.test/sso/callback',
+            startUri: 'https://alternate.test/sso/start',
+            signedOutUri: 'https://alternate.test/signed-out',
+        });
+        site.launcher = {
+            name: '<img src=x onerror=alert(1)>',
+            launchUrl: 'https://alternate.test/reports',
+            scope: '*',
+        };
+        await confirm(await sendLauncher());
+        const page = await browser.get('/sso/apps');
+        expect(page.body).toContain('https://alternate.test/sso/start?');
+        expect(page.body).not.toContain('href="https://app.example.com/sso/start');
+        expect(page.body).toContain('&lt;img src=x onerror=alert(1)&gt;');
+        expect(page.body).not.toContain('<img src=x');
+    });
+
+    it('keeps account changes explicit and rotates the central session only after confirmation', async () => {
+        configureLauncher();
+        const appToken = await accessToken(await exchange(await confirm(await send())));
+        const previous = central();
+        const sent = await sendLauncher('other@example.com');
+        expect(central()).toBe(previous);
+        expect((await browser.get('/sso/apps')).body).toContain('owner@example.com');
+        await confirm(sent);
+        expect(central()).not.toBe(previous);
+        expect(await state.browserSsoStore.getSession(previous ?? '', Date.now())).toBeNull();
+        expect((await browser.get('/sso/apps')).body).toContain('other@example.com');
+        expect(
+            await verifyAccessToken(appToken, config.jwtSecret, {
+                expectedIssuer: issuer,
+                expectedAudience: 'https://app.example.com',
+            }),
+        ).toMatchObject({ email: 'owner@example.com' });
+    });
+
+    it('requires CSRF for launcher sign-in and central logout, then returns to the signed-out launcher', async () => {
+        configureLauncher();
+        const entry = await browser.get('/sso/apps');
+        expect(
+            (
+                await browser.post(
+                    '/sso/apps/signin',
+                    { csrfToken: hidden(entry.body, 'csrfToken') },
+                    'https://evil.test',
+                )
+            ).statusCode,
+        ).toBe(403);
+        expect((await browser.post('/sso/apps/signin', {})).statusCode).toBe(403);
+        await confirm(await sendLauncher());
+        const handle = central();
+        const returnUri = issuer + '/sso/apps';
+        const confirmation = await browser.get(
+            `/sso/signout?${new URLSearchParams({ returnUri })}`,
+        );
+        expect(confirmation.statusCode).toBe(200);
+        expect(central()).toBe(handle);
+        const fields = { csrfToken: hidden(confirmation.body, 'csrfToken'), returnUri };
+        expect((await browser.post('/sso/signout', fields, 'https://evil.test')).statusCode).toBe(
+            403,
+        );
+        expect(
+            (
+                await browser.post('/sso/signout', {
+                    ...fields,
+                    returnUri: issuer + '/sso/apps?next=https://evil.test',
+                })
+            ).statusCode,
+        ).toBe(400);
+        const completed = await browser.post('/sso/signout', fields);
+        expect(completed.statusCode).toBe(303);
+        expect(completed.headers.location).toBe(returnUri);
+        expect(central()).toBeUndefined();
+        const page = await browser.get('/sso/apps');
+        expect(page.body).toContain('Sign in with your email');
+        expect(page.body).not.toContain('owner@example.com');
+        expect(await state.browserSsoStore.getSession(handle ?? '', Date.now())).toBeNull();
+    });
+
+    it('keeps the previous central identity when launcher access disappears during session creation', async () => {
+        configureLauncher();
+        await confirm(await sendLauncher());
+        const previous = central();
+        const sent = await sendLauncher('other@example.com');
+        const create = state.browserSsoStore.createSession.bind(state.browserSsoStore);
+        let rejectedHandle: string | undefined;
+        vi.spyOn(state.browserSsoStore, 'createSession').mockImplementationOnce(async (input) => {
+            const created = await create(input);
+            rejectedHandle = created.handle;
+            for (const site of config.sites) {
+                site.accessRules.delete('other@example.com');
+            }
+            return created;
+        });
+        expect((await confirm(sent)).statusCode).toBe(403);
+        expect(central()).toBe(previous);
+        expect((await state.browserSsoStore.getSession(previous ?? '', Date.now()))?.email).toBe(
+            'owner@example.com',
+        );
+        expect(await state.browserSsoStore.getSession(rejectedHandle ?? '', Date.now())).toBeNull();
+    });
+
+    it('rejects revoked launcher grants at confirmation and does not send emails to unlisted accounts', async () => {
+        configureLauncher();
+        const sent = await sendLauncher();
+        for (const site of config.sites) {
+            site.accessRules.delete('owner@example.com');
+        }
+        expect((await confirm(sent)).statusCode).toBe(403);
+        expect(central()).toBeUndefined();
+        const form = await startLauncher();
+        const denied = await browser.post('/sso/signin', {
+            csrfToken: hidden(form.body, 'csrfToken'),
+            requestId: hidden(form.body, 'requestId'),
+            email: 'unknown@example.com',
+        });
+        expect(denied.statusCode).toBe(200);
+        expect(emails).toHaveLength(1);
+    });
+
+    it('clears an expired central cookie and leaves an unconfigured launcher disabled', async () => {
+        expect((await browser.get('/sso/apps')).statusCode).toBe(409);
+        configureLauncher();
+        await confirm(await sendLauncher());
+        const session = await state.browserSsoStore.getSession(central() ?? '', Date.now());
+        if (!session) {
+            throw new Error('Missing session');
+        }
+        vi.spyOn(Date, 'now').mockReturnValue(session.expiresAt);
+        const expired = await browser.get('/sso/apps');
+        expect(expired.body).not.toContain('owner@example.com');
+        expect(central()).toBeUndefined();
+    });
+
     it('classifies malformed JSON as a bad request and uses no-store protocol responses', async () => {
         const response = await app.inject({
             method: 'POST',

@@ -102,6 +102,69 @@ avoid caching auth responses or logging their query strings. Configure trusted
 proxy HTTPS handling explicitly, including `MAGICSSO_TRUST_PROXY` in the Django
 example. The fixed public origin remains the source of callback URLs.
 
+## My applications launcher
+
+The optional launcher is available at `https://login.identity.example/sso/apps`.
+It becomes available when browser SSO is enabled and at least one site defines
+launcher metadata. The issuer's root landing page links to it when that page is
+enabled. Sites without launcher metadata remain usable through their own URLs.
+
+Add this table to the corresponding `[[sites]]` entry, alongside its existing
+`[[sites.sso]]` registration:
+
+```toml
+[sites.launcher]
+name = "Reports"
+launchUrl = "https://reports.beta.example/reports?view=recent"
+scope = "reports"
+```
+
+`name` is the user-facing application name. `launchUrl` is the exact application
+page to open, including any query parameters; it is not a callback or sign-in
+endpoint. Its origin must have an explicit SSO registration on the same site,
+and its path must match `allowedRedirectUris`. Credentials, fragments, ambiguous
+paths and the registered start/callback/signed-out endpoints are rejected. The
+matching registration determines the SSO start endpoint, with `launchUrl` passed
+as `returnUrl`. No origin or callback is chosen as an application homepage.
+
+`scope` defaults to `"*"`, meaning full-site access. Set a concrete scope for an
+application entry intended for scoped users. The launcher only lists an entry
+when that email currently has the entry's scope or full-site access. Wildcard
+grants do not require listing every scope. Names, destinations and scopes are
+operator-owned configuration: change the base TOML and restart the issuer.
+Manager preserves these fields while rendering grants; grant apply/reload
+changes the list on the next page visit without restarting. Each application
+checks access again during its normal SSO authorization and exchange.
+
+An unsigned browser sees only a sign-in action. Magic link or configured OTP
+verification creates a central session and returns to the launcher; it creates
+no application JWT. Requests use the same bounded, browser-bound hosted email
+flow, one-time grants, expiry, rate limits, CSRF checks and explicit email
+confirmation as browser SSO. An email with no current access to any listed entry
+receives the generic confirmation response without sending a message. No
+application names or list are exposed to unsigned visitors. A signed-in user
+whose access was removed sees an empty state and can change account.
+
+**Change account** starts a fresh email confirmation. The current central
+identity remains until confirmation succeeds. **End browser SSO session** opens
+the existing confirmation page and returns to the signed-out launcher after a
+CSRF-protected POST. Both actions explain that existing application sessions
+retain their own identity and normal expiry. To switch an already signed-in
+application, also use that application's local sign-out action.
+
+To hide the launcher, remove all `[sites.launcher]` tables and restart. Browser
+SSO between applications continues to work. Before rolling back to an issuer
+version predating the launcher, stop new launcher sign-ins, wait the configured
+request lifetime and visit an SSO endpoint on the current version to prune
+expired launcher requests. Old file-store readers cannot parse pending
+`flow = "launcher"` records. All issuer replicas must run a launcher-capable
+version before enabling the launcher in a deployment using Redis.
+
+The normal `pnpm test:e2e:sso:https` suite includes launcher link/OTP sign-in,
+Gate and Next.js launches, preserved query parameters, account change, live
+grant removal, an empty list, central sign-out and surviving local app sessions
+on Chromium, Firefox and WebKit. It also captures desktop/mobile launcher views.
+
 ## Verify a pilot
 
 1. Run `pnpm doctor server --config /absolute/path/to/config.toml --json`. It

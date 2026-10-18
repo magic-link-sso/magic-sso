@@ -25,6 +25,7 @@ import {
 import { bootstrapContextSchema, browserSsoBootstrapEnabled } from './browserSsoBootstrap.js';
 import { generateOtpCode, hashOtpCode, normaliseOtpCode } from './otp.js';
 import { normalizeRequestedScope } from './scope.js';
+import { launcherApplications, launcherEnabled, launcherPath } from './browserSsoLauncher.js';
 
 const opaque = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const authorizeSchema = z
@@ -290,6 +291,8 @@ export async function registerBrowserSsoRoutes(
                     '/sso/signout',
                     '/sso/bootstrap/inspect',
                     '/sso/bootstrap/redeem',
+                    launcherPath,
+                    `${launcherPath}/signin`,
                 ]) {
                     sso.route({
                         method: ['GET', 'POST'],
@@ -326,6 +329,85 @@ export async function registerBrowserSsoRoutes(
                 },
             };
 
+            // Launcher requests share hosted email/OTP verification, but never
+            // issue an application code or JWT and cannot be opened by /authorize.
+            function pendingTarget(
+                pending: StoredAuthorizationRequest,
+            ): { site: SiteConfig | undefined; startUri: string } | undefined {
+                if (pending.flow === 'launcher') {
+                    return launcherEnabled(config)
+                        ? { site: undefined, startUri: launcherPath }
+                        : undefined;
+                }
+                return registration(pending.redirectUri);
+            }
+            function pendingAllows(pending: StoredAuthorizationRequest, email: string): boolean {
+                if (pending.flow === 'launcher') {
+                    return (
+                        launcherEnabled(config) &&
+                        launcherApplications(config, email, siteAllows).length > 0
+                    );
+                }
+                const target = registration(pending.redirectUri);
+                return target !== undefined && siteAllows(target.site, email, pending.scope);
+            }
+            sso.get(launcherPath, pageLimit, async (request, reply): Promise<void> => {
+                if (!launcherEnabled(config)) {
+                    await fail(request, reply, 'sso_disabled', 409);
+                    return;
+                }
+                const handle = request.cookies[sessionCookie];
+                const session =
+                    handle === undefined ? null : await store.getSession(handle, Date.now());
+                if (!session && handle) {
+                    reply.clearCookie(sessionCookie, cookieOptions);
+                }
+                const binding = ensureBinding(request, reply);
+                await view(reply, 'applications.ejs', undefined, {
+                    email: session?.email ?? null,
+                    csrfToken: csrf(binding),
+                    applications: session
+                        ? launcherApplications(config, session.email, siteAllows)
+                        : [],
+                    signoutHref: `/sso/signout?${new URLSearchParams({ returnUri: new URL(launcherPath, issuer).href })}`,
+                });
+            });
+            sso.post(
+                `${launcherPath}/signin`,
+                mutationLimit,
+                async (request, reply): Promise<void> => {
+                    if (!launcherEnabled(config)) {
+                        await fail(request, reply, 'sso_disabled', 409);
+                        return;
+                    }
+                    if (!validMutation(request) || !documentNavigation(request)) {
+                        await fail(request, reply, 'invalid_request', 403);
+                        return;
+                    }
+                    const now = Date.now();
+                    const created = await store.createRequest({
+                        flow: 'launcher',
+                        browserBinding: ensureBinding(request, reply),
+                        siteId: 'magic-link-sso-launcher',
+                        redirectUri: new URL(launcherPath, issuer).href,
+                        state: createBrowserSsoOpaqueValue(),
+                        codeChallenge: createBrowserSsoOpaqueValue(),
+                        scope: '*',
+                        now,
+                        expiresAt: now + policy.requestLifetimeSeconds * 1000,
+                    });
+                    if (created.kind !== 'created') {
+                        await fail(request, reply, 'invalid_request', 429);
+                        return;
+                    }
+                    reply
+                        .code(303)
+                        .redirect(
+                            `/sso/signin?${new URLSearchParams({ requestId: created.requestId })}`,
+                        );
+                },
+            );
+
             async function boundRequest(
                 request: FastifyRequest,
                 reply: FastifyReply,
@@ -348,7 +430,7 @@ export async function registerBrowserSsoRoutes(
                 error: string | false = false,
                 status = 200,
             ): Promise<void> {
-                const target = registration(pending.redirectUri);
+                const target = pendingTarget(pending);
                 const binding = currentBinding(request) ?? ensureBinding(request, reply);
                 await view(
                     reply,
@@ -356,7 +438,7 @@ export async function registerBrowserSsoRoutes(
                     target?.site,
                     {
                         copy:
-                            target?.site.hostedAuthPageCopy.signin ??
+                            target?.site?.hostedAuthPageCopy.signin ??
                             config.hostedAuthPageCopy.signin,
                         mode: challengeId === undefined ? 'form' : 'confirmation',
                         csrfToken: csrf(binding),
@@ -765,7 +847,7 @@ export async function registerBrowserSsoRoutes(
                 if (!pending) {
                     return;
                 }
-                const target = registration(pending.redirectUri);
+                const target = pendingTarget(pending);
                 if (!target) {
                     await fail(request, reply, 'invalid_callback', 400);
                     return;
@@ -777,7 +859,7 @@ export async function registerBrowserSsoRoutes(
                     return;
                 }
                 const challengeId = crypto.randomUUID();
-                if (!siteAllows(target.site, email, pending.scope)) {
+                if (!pendingAllows(pending, email)) {
                     await signinView(request, reply, requestId, pending, challengeId);
                     return;
                 }
@@ -855,7 +937,7 @@ export async function registerBrowserSsoRoutes(
                     verifyUrl: new URL(`/sso/verify?${new URLSearchParams({ requestId })}`, issuer)
                         .href,
                     siteTitle:
-                        target.site.hostedAuthBranding.title || config.hostedAuthBranding.title,
+                        target.site?.hostedAuthBranding.title || config.hostedAuthBranding.title,
                     ...(otpCode === undefined
                         ? {}
                         : {
@@ -866,6 +948,26 @@ export async function registerBrowserSsoRoutes(
                 await signinView(request, reply, requestId, pending, challengeId);
             });
 
+            async function finalizeLauncherSession(
+                request: FastifyRequest,
+                reply: FastifyReply,
+                input: { pending: StoredAuthorizationRequest; email: string },
+                handle: string,
+                previousHandle: string | undefined,
+            ): Promise<boolean> {
+                if (
+                    input.pending.flow === 'launcher' &&
+                    !pendingAllows(input.pending, input.email)
+                ) {
+                    await store.revokeSession(handle, Date.now());
+                    await fail(request, reply, 'access_denied', 403);
+                    return false;
+                }
+                if (input.pending.flow === 'launcher' && previousHandle !== undefined) {
+                    await store.revokeSession(previousHandle, Date.now());
+                }
+                return true;
+            }
             async function finishVerification(
                 request: FastifyRequest,
                 reply: FastifyReply,
@@ -877,8 +979,8 @@ export async function registerBrowserSsoRoutes(
                     expiresAt: number;
                 },
             ): Promise<void> {
-                const target = registration(input.pending.redirectUri);
-                if (!target || !siteAllows(target.site, input.email, input.pending.scope)) {
+                const target = pendingTarget(input.pending);
+                if (!target || !pendingAllows(input.pending, input.email)) {
                     await fail(request, reply, 'access_denied', 403);
                     return;
                 }
@@ -891,23 +993,52 @@ export async function registerBrowserSsoRoutes(
                     await fail(request, reply, 'request_expired', 400);
                     return;
                 }
+                if (
+                    input.pending.flow === 'launcher' &&
+                    !(await store.consumeLauncherRequest({
+                        requestId: input.requestId,
+                        grantId: input.jti,
+                        now: Date.now(),
+                    }))
+                ) {
+                    await fail(request, reply, 'request_expired', 400);
+                    return;
+                }
                 const now = Date.now();
                 const previousHandle = request.cookies[sessionCookie];
                 const created = await store.createSession({
                     email: input.email,
                     now,
                     expiresAt: now + (policy?.sessionLifetimeSeconds ?? 28_800) * 1000,
-                    ...(previousHandle === undefined ? {} : { previousHandle }),
+                    ...(previousHandle === undefined || input.pending.flow === 'launcher'
+                        ? {}
+                        : { previousHandle }),
                 });
+                if (
+                    !(await finalizeLauncherSession(
+                        request,
+                        reply,
+                        input,
+                        created.handle,
+                        previousHandle,
+                    ))
+                ) {
+                    return;
+                }
                 reply.setCookie(sessionCookie, created.handle, {
                     ...cookieOptions,
                     maxAge: Math.floor((created.session.expiresAt - now) / 1000),
                 });
+                if (input.pending.flow === 'launcher') {
+                    reply.code(303).redirect(launcherPath);
+                    return;
+                }
                 const binding = currentBinding(request);
                 if (!binding || hashBrowserSsoValue(binding) !== input.pending.bindingHash) {
                     await view(reply, 'verify-email.ejs', target.site, {
                         copy: {
-                            ...target.site.hostedAuthPageCopy.verifyEmail,
+                            ...(target.site?.hostedAuthPageCopy.verifyEmail ??
+                                config.hostedAuthPageCopy.verifyEmail),
                             title: 'Email confirmed',
                             helpText:
                                 'Continue to your application to start a new sign-in in this browser.',
@@ -973,11 +1104,11 @@ export async function registerBrowserSsoRoutes(
                 if (!context) {
                     return;
                 }
-                const target = registration(context.pending.redirectUri);
+                const target = pendingTarget(context.pending);
                 const binding = ensureBinding(request, reply);
                 await view(reply, 'verify-email.ejs', target?.site, {
                     copy: {
-                        ...(target?.site.hostedAuthPageCopy.verifyEmail ??
+                        ...(target?.site?.hostedAuthPageCopy.verifyEmail ??
                             config.hostedAuthPageCopy.verifyEmail),
                         helpText:
                             'Confirm this account to sign in. This replaces the current browser SSO identity; existing sessions in other applications keep their normal expiry.',
@@ -1152,6 +1283,7 @@ export async function registerBrowserSsoRoutes(
                 }
                 const uri = parsed.data.returnUri;
                 return uri === undefined ||
+                    (launcherEnabled(config) && uri === new URL(launcherPath, issuer).href) ||
                     config.sites.some((site) =>
                         site.sso?.some((entry) => entry.signedOutUri === uri),
                     )

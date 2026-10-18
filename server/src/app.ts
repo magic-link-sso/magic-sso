@@ -60,6 +60,7 @@ import type { SessionRevocationStore } from './sessionRevocationStore.js';
 import { type VerificationTokenReplayStore } from './verificationTokenReplayStore.js';
 import { getStartupProbeHeaderName } from './startupProbe.js';
 import { registerBrowserSsoRoutes } from './browserSsoRoutes.js';
+import { launcherEnabled, launcherPath } from './browserSsoLauncher.js';
 import {
     browserSsoBootstrapEnabled,
     bindBrowserSsoBootstrapGrant,
@@ -255,7 +256,7 @@ async function renderSigninPage(
 
 async function renderLandingPage(
     reply: FastifyReply,
-    viewConfig: HostedAuthViewConfig,
+    viewConfig: AppConfig,
     security: HtmlSecurityContext,
 ): Promise<void> {
     await reply
@@ -266,6 +267,7 @@ async function renderLandingPage(
             branding: viewConfig.hostedAuthBranding,
             cspNonce: security.cspNonce,
             lang: viewConfig.hostedAuthPageCopy.lang,
+            launcherHref: launcherEnabled(viewConfig) ? launcherPath : null,
         });
 }
 
@@ -774,6 +776,7 @@ function createReloadInvariantSnapshot(config: AppConfig): object {
             .map((site) => ({
                 ...cloneHostedAuthViewConfig(site),
                 id: site.id,
+                launcher: site.launcher,
                 origins: [...site.origins].sort(),
                 allowedRedirectUris: sortRedirectUriRules(site),
                 sso: site.sso

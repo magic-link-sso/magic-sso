@@ -21,6 +21,12 @@ import { readFileSync } from 'node:fs';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { z } from 'zod';
 import {
+    launcherConfigSchema,
+    validateLauncherConfiguration,
+    type LauncherConfig,
+} from './launcher.js';
+export type { LauncherConfig } from './launcher.js';
+import {
     browserSsoConfigSchema,
     browserSsoRegistrationSchema,
     validateBrowserSsoConfiguration,
@@ -146,6 +152,7 @@ export interface SiteConfig extends HostedAuthConfig {
     id: string;
     origins: Set<string>;
     sso?: BrowserSsoRegistration[] | undefined;
+    launcher?: LauncherConfig | undefined;
 }
 
 export interface SecurityStateConfig {
@@ -393,6 +400,7 @@ const rawSiteSchema = z
         id: z.string().min(1),
         origins: z.array(z.string()).min(1),
         sso: z.array(browserSsoRegistrationSchema).min(1).optional(),
+        launcher: launcherConfigSchema.optional(),
     })
     .strict()
     .superRefine((value, context) => {
@@ -1158,6 +1166,7 @@ function buildConfiguredSite(
     return {
         id: site.id,
         sso: site.sso?.map((registration) => ({ ...registration })),
+        launcher: site.launcher === undefined ? undefined : { ...site.launcher },
         origins: parseOrigins(site.origins, `sites[${site.id}].origins`),
         allowedRedirectUris: parseAllowedRedirectUris(
             site.allowedRedirectUris,
@@ -1365,6 +1374,7 @@ export function parseMagicSsoConfigToml(fileContents: string, filePath: string):
         sites,
         parsedConfig.cookie?.name ?? 'magic-sso',
     );
+    validateLauncherConfiguration(sites);
 
     return {
         ...serverSettings,

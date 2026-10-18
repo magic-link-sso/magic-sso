@@ -661,3 +661,8 @@ Gate and all SDK examples support hosted link/OTP sign-in and opt-in
 application-owned forms through the browser-bound bootstrap extension. See the
 [deployment, diagnostics and rollback guide](docs/browser-sso-deployment.md) and
 the [versioned protocol contract](docs/browser-sso-contract.md).
+
+An optional **My applications** launcher at `/sso/apps` shows the current
+browser identity and applications allowed by live grants. Configure an explicit
+name, destination and optional scope under `[sites.launcher]`; see
+[launcher setup and account controls](docs/browser-sso-deployment.md#my-applications-launcher).

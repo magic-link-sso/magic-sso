@@ -10,6 +10,11 @@ and this project follows
 
 ### Added
 
+- (sso) Add an optional My applications launcher with explicit names and
+  destinations, current-grant filtering, hosted link/OTP sign-in, account change
+  and central sign-out. Launch through registered SSO start routes while
+  preserving independent application sessions and permissions.
+
 - (sso) Extend shared browser sign-in to application-owned email and OTP forms
   across Gate and every SDK. Add opt-in browser-bound bootstrap tickets,
   completion receipts, explicit account/browser confirmation, logout
