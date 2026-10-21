@@ -89,6 +89,8 @@ export type StoredAuthorizationCode = z.infer<typeof codeSchema>;
 /** All reads (including absent records) participate in atomic commit validation. */
 export interface BrowserSsoTransaction {
     get(key: string): Promise<BrowserSsoRecord | null>;
+    /** Optional aggregate admission control for backends with shared snapshot limits. */
+    hasRequestCapacity?(additionalRecords: number): Promise<boolean>;
     set(key: string, value: BrowserSsoRecord | null): Promise<void>;
 }
 
@@ -543,6 +545,13 @@ export function createBrowserSsoStore(backend: BrowserSsoBackend): BrowserSsoSto
                     }
                 }
                 if (pending.length >= 32) {
+                    return { kind: 'request_limit' };
+                }
+                const additionalRecords = binding?.kind === 'binding' ? 1 : 2;
+                if (
+                    tx.hasRequestCapacity !== undefined &&
+                    !(await tx.hasRequestCapacity(additionalRecords))
+                ) {
                     return { kind: 'request_limit' };
                 }
                 await tx.set(key('request', request.id), request);

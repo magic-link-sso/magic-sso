@@ -13,12 +13,39 @@ interface Cookie extends BrowserSsoCookieValue {
     secure: boolean;
     maxAge?: number;
 }
+const MAX_FORM_BODY_BYTES = 16_384;
 type Respond = (
     body: string | null,
     status: number,
     cookies?: Cookie[],
     location?: string,
 ) => Response;
+async function readBoundedFormBody(request: Request): Promise<string | null> {
+    const body = request.body;
+    if (body === null) {
+        return '';
+    }
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    let raw = '';
+    try {
+        while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) {
+                return raw + decoder.decode();
+            }
+            bytesRead += chunk.value.byteLength;
+            if (bytesRead > MAX_FORM_BODY_BYTES) {
+                await reader.cancel().catch(() => undefined);
+                return null;
+            }
+            raw += decoder.decode(chunk.value, { stream: true });
+        }
+    } finally {
+        reader.releaseLock();
+    }
+}
 function field(name: string, value: string): string {
     return `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`;
 }
@@ -308,8 +335,8 @@ export function createBrowserSsoLocalHttpHandler(
         ) {
             return null;
         }
-        const raw = await request.text();
-        if (raw.length > 16_384) {
+        const raw = await readBoundedFormBody(request);
+        if (raw === null) {
             return null;
         }
         const form = new URLSearchParams(raw);

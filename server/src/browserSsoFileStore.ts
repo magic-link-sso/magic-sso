@@ -16,6 +16,7 @@ import {
 // File mode supports one issuer process. Separate instances in that process
 // share a queue; use Redis for replicas rather than sharing a filesystem.
 const queues = new Map<string, Promise<void>>();
+const DEFAULT_MAX_RECORDS = 10_000;
 const snapshotSchema = z
     .object({
         version: z.literal(1),
@@ -58,7 +59,12 @@ async function saveSnapshot(path: string, records: Map<string, BrowserSsoRecord>
 
 export async function createFileBrowserSsoStore(options: {
     directory: string;
+    maxRecords?: number;
 }): Promise<BrowserSsoStore> {
+    const maxRecords = options.maxRecords ?? DEFAULT_MAX_RECORDS;
+    if (!Number.isSafeInteger(maxRecords) || maxRecords < 1) {
+        throw new Error('Browser SSO file record limit must be a positive integer.');
+    }
     const directory = resolve(options.directory);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     await chmod(directory, 0o700);
@@ -84,9 +90,25 @@ export async function createFileBrowserSsoStore(options: {
                         changed = true;
                     }
                 }
+                const initialSize = records.size;
                 const result = await operation({
                     async get(id) {
                         return records.get(id) ?? null;
+                    },
+                    async hasRequestCapacity(additionalRecords) {
+                        if (!Number.isSafeInteger(additionalRecords) || additionalRecords < 1) {
+                            throw new Error('Invalid Browser SSO record reservation.');
+                        }
+                        let completionReservations = 0;
+                        for (const record of records.values()) {
+                            if (record.kind === 'request' || record.kind === 'bootstrap') {
+                                completionReservations += 1;
+                            }
+                        }
+                        return (
+                            records.size + completionReservations + additionalRecords + 1 <=
+                            maxRecords
+                        );
                     },
                     async set(id, record) {
                         if (record === null) {
@@ -97,6 +119,9 @@ export async function createFileBrowserSsoStore(options: {
                         }
                     },
                 });
+                if (records.size > maxRecords && records.size > initialSize) {
+                    throw new Error('Browser SSO file record capacity exceeded.');
+                }
                 if (changed) {
                     await saveSnapshot(path, records);
                 }

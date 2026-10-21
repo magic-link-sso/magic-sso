@@ -221,6 +221,70 @@ it('rejects cross-origin mutations and prefetch without touching the issuer or e
     expect(f.fetcher.mock.calls).toHaveLength(calls);
     expect(f.jar.get(options.cookieName)).toBe(f.jwt);
 });
+it('stops reading app-owned forms after 16 KiB without contacting the issuer', async () => {
+    const f = await setup();
+    const calls = f.fetcher.mock.calls.length;
+    let pulls = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>(
+        {
+            pull(controller) {
+                pulls += 1;
+                controller.enqueue(new Uint8Array(16_385));
+            },
+            cancel,
+        },
+        { highWaterMark: 0 },
+    );
+    const init: RequestInit & { duplex: 'half' } = {
+        method: 'POST',
+        headers: {
+            origin: options.audience,
+            'content-type': 'application/x-www-form-urlencoded',
+        },
+        body,
+        duplex: 'half',
+    };
+
+    const response = await f.handle(new Request(options.audience + '/sso/start', init));
+
+    expect(response.status).toBe(400);
+    expect(pulls).toBe(1);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(f.fetcher.mock.calls).toHaveLength(calls);
+});
+it('accepts exactly 16 KiB and applies the limit to UTF-8 bytes', async () => {
+    const f = await setup();
+    const formPrefix =
+        new URLSearchParams({
+            action: 'send',
+            state: f.state,
+            email: 'user@example.com',
+            scope: '',
+        }).toString() + '&padding=';
+    const exactBody = formPrefix + 'a'.repeat(16_384 - new TextEncoder().encode(formPrefix).length);
+    const postRaw = async (body: string): Promise<Response> =>
+        f.handle(
+            new Request(options.audience + '/sso/start', {
+                method: 'POST',
+                headers: {
+                    cookie: [...f.jar].map(([key, value]) => `${key}=${value}`).join('; '),
+                    origin: options.audience,
+                    'content-type': 'application/x-www-form-urlencoded',
+                },
+                body,
+            }),
+        );
+
+    expect(new TextEncoder().encode(exactBody)).toHaveLength(16_384);
+    expect(await (await postRaw(exactBody)).text()).toContain('Check your email');
+    const calls = f.fetcher.mock.calls.length;
+    const multibyteBody = formPrefix + 'é'.repeat(8_150);
+    expect(multibyteBody.length).toBeLessThan(16_384);
+    expect(new TextEncoder().encode(multibyteBody).length).toBeGreaterThan(16_384);
+    expect((await postRaw(multibyteBody)).status).toBe(400);
+    expect(f.fetcher.mock.calls).toHaveLength(calls);
+});
 it('retains the local JWT when the bootstrap result is lost or the finish has no local session', async () => {
     const f = await setup();
     f.fetcher.mockImplementationOnce(async () =>

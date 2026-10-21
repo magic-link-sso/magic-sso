@@ -57,8 +57,7 @@ export interface AuthMiddlewareOptions {
 }
 
 export function getExcludedPaths(options?: AuthMiddlewareOptions): readonly string[] {
-    const paths = options?.excludedPaths ?? DEFAULT_EXCLUDED_PATHS;
-    return getBrowserSsoMode() === 'off' ? paths : [...paths, ...Object.values(browserSsoPaths)];
+    return options?.excludedPaths ?? DEFAULT_EXCLUDED_PATHS;
 }
 
 export function isPublicPath(pathname: string, options?: AuthMiddlewareOptions): boolean {

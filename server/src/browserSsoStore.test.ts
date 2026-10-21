@@ -469,3 +469,80 @@ describe('browser SSO dependency failures', () => {
         await expect(store.getSession('opaque', Date.now())).rejects.toThrow('contention limit');
     });
 });
+
+describe('browser SSO file capacity', () => {
+    let directory: string;
+    const now = 1_800_000_000_000;
+
+    beforeEach(async () => {
+        directory = await mkdtemp(join(tmpdir(), 'magic-sso-browser-capacity-'));
+    });
+
+    afterEach(async () => {
+        await rm(directory, { recursive: true, force: true });
+    });
+
+    function requestInput(browserBinding: string, expiresAt: number) {
+        return {
+            browserBinding,
+            redirectUri,
+            siteId: 'app',
+            state: createBrowserSsoOpaqueValue(),
+            codeChallenge: challenge,
+            scope: '*',
+            now,
+            expiresAt,
+        };
+    }
+
+    it('caps aggregate requests across fresh bindings and frees expired capacity', async () => {
+        const store = await createFileBrowserSsoStore({ directory, maxRecords: 6 });
+        const first = await store.createRequest(requestInput('browser-1', now + 1_000));
+        const second = await store.createRequest(requestInput('browser-2', now + 60_000));
+        expect(first.kind).toBe('created');
+        expect(second.kind).toBe('created');
+        const beforeRejection = await readFile(join(directory, 'browser-sso-v1.json'), 'utf8');
+
+        expect(await store.createRequest(requestInput('browser-3', now + 60_000))).toEqual({
+            kind: 'request_limit',
+        });
+        expect(await readFile(join(directory, 'browser-sso-v1.json'), 'utf8')).toBe(
+            beforeRejection,
+        );
+
+        expect(
+            (
+                await store.createRequest({
+                    ...requestInput('browser-3', now + 60_000),
+                    now: now + 1_000,
+                })
+            ).kind,
+        ).toBe('created');
+    });
+
+    it('rejects aggregate growth but permits replacement at capacity', async () => {
+        const store = await createFileBrowserSsoStore({ directory, maxRecords: 1 });
+        const first = await store.createSession({
+            email: 'first@example.com',
+            now,
+            expiresAt: now + 60_000,
+        });
+        await expect(
+            store.createSession({
+                email: 'second@example.com',
+                now,
+                expiresAt: now + 60_000,
+            }),
+        ).rejects.toThrow('capacity');
+
+        const replacement = await store.createSession({
+            email: 'second@example.com',
+            now,
+            expiresAt: now + 60_000,
+            previousHandle: first.handle,
+        });
+        const reopened = await createFileBrowserSsoStore({ directory, maxRecords: 1 });
+        expect(await reopened.getSession(first.handle, now)).toBeNull();
+        expect(await reopened.getSession(replacement.handle, now)).toEqual(replacement.session);
+    });
+});
