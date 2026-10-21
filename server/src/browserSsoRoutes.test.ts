@@ -796,6 +796,22 @@ describe(`browser SSO issuer HTTP flow (${process.env.MAGICSSO_TEST_REDIS_URL ? 
         },
     );
 
+    it('opens each launcher application in a new tab without an opener or referrer', async () => {
+        configureLauncher();
+        await confirm(await sendLauncher());
+        const page = await browser.get('/sso/apps');
+        const links = [...page.body.matchAll(/<a class="application"[^>]*>/gu)].map(
+            ([link]) => link,
+        );
+        expect(links).toHaveLength(2);
+        for (const link of links) {
+            expect(link).toContain('target="_blank"');
+            expect(link).toContain('rel="noopener noreferrer"');
+            expect(link).toContain('(opens in a new tab)');
+        }
+        expect(page.body).toContain('Each application opens in a new tab.');
+    });
+
     it('filters scoped grants, ignores unlisted sites, and reflects revoked access immediately', async () => {
         configureLauncher();
         await confirm(await sendLauncher('reader@example.com'));

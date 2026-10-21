@@ -318,13 +318,27 @@ pnpm dev:direct
 
 #### Shared SSO development
 
-`pnpm dev` keeps the existing independent sign-in setup. Use these separate
-profiles to test one browser identity across all applications:
+`pnpm dev` keeps the existing independent sign-in setup. To test one browser
+identity across all applications, choose one of these two alternative profiles
+of the same shared SSO system:
 
 ```sh
-pnpm dev:sso        # Central sign-in form, magic links and OTP
-pnpm dev:sso:local  # Forms inside each application, magic links and OTP
+pnpm dev:sso        # Shared SSO with a central sign-in form
+pnpm dev:sso:local  # Shared SSO with sign-in forms inside each application
 ```
+
+Both profiles support magic links and OTP. They differ in where the first
+sign-in happens:
+
+- `dev:sso` redirects users from an application to the central Magic Link SSO
+  sign-in form.
+- `dev:sso:local` uses the application's own sign-in form, then establishes the
+  central browser SSO session after successful verification. Here, `local`
+  refers to the form's location; the central SSO server is still required.
+
+After the first sign-in, both profiles let the same browser enter other
+applications without another verification email. Run only one profile at a time:
+they start the same services on the same ports.
 
 `dev:sso:app-owned` is an alias for `dev:sso:local`. Both profiles start the
 issuer, Angular SSR, Next.js, Nuxt, Django, Fastify, Photos, both Gate-backed
@@ -386,12 +400,15 @@ delivery.
 Examples without a matching configured site stay outside the issuer's access
 list until you explicitly grant access with `--email`.
 
-The launcher uses the central form in both profiles. In `dev:sso:local`, start
-from an application's sign-in link in a fresh browser context to exercise its
-local form and the bootstrap into the central session. Then open other
-applications: they should need no additional email. Each application still owns
-its JWT and local sign-out. Ending browser SSO prevents future automatic
-sign-ins; existing application sessions remain valid until logout or expiry.
+**The launcher at `/sso/apps` always uses the central sign-in form, including in
+`dev:sso:local`.** To test an application's own form in `dev:sso:local`, open
+that application directly and use its sign-in link in a fresh browser context,
+before signing into the launcher. This also tests establishing the central
+session from an application. Then open other applications: they should need no
+additional email. The launcher's **Open** links open applications in new tabs,
+keeping the launcher available. Each application still owns its JWT and local
+sign-out. Ending browser SSO prevents future automatic sign-ins; existing
+application sessions remain valid until logout or expiry.
 
 Each run generates fresh secrets and private temporary TOML files. It does not
 rewrite your normal server TOML or application `.env` files; temporary

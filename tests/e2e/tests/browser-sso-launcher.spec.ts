@@ -67,15 +67,23 @@ for (const method of ['link', 'otp']) {
                     () => document.documentElement.scrollWidth <= window.innerWidth,
                 ),
             ).toBe(true);
+            const documentsOpened = page.waitForEvent('popup');
             await page.getByRole('link', { name: 'Open Documents' }).click();
-            await expect(page).toHaveURL(gate + '/reports?q=a%2Bb&tag=one&tag=two');
-            await expect(page.getByTestId('email')).toHaveText('owner@example.com');
-            await page.goto(issuer + '/sso/apps');
+            const documentsPage = await documentsOpened;
+            await expect(documentsPage).toHaveURL(gate + '/reports?q=a%2Bb&tag=one&tag=two');
+            await expect(documentsPage.getByTestId('email')).toHaveText('owner@example.com');
+            expect(await documentsPage.evaluate(() => window.opener === null)).toBe(true);
+            await expect(page).toHaveURL(issuer + '/sso/apps');
+            const nextOpened = page.waitForEvent('popup');
             await page.getByRole('link', { name: 'Open Next.js application' }).click();
-            await expect(page).toHaveURL(browserSsoOrigin('next') + '/protected');
-            await expect(page.getByText('owner@example.com', { exact: true })).toBeVisible();
+            const nextPage = await nextOpened;
+            await expect(nextPage).toHaveURL(browserSsoOrigin('next') + '/protected');
+            await expect(nextPage.getByText('owner@example.com', { exact: true })).toBeVisible();
+            expect(await nextPage.evaluate(() => window.opener === null)).toBe(true);
+            await expect(page).toHaveURL(issuer + '/sso/apps');
             expect(await listMessages(request)).toHaveLength(1);
-            await page.goto(issuer + '/sso/apps');
+            await documentsPage.close();
+            await nextPage.close();
             await page.getByRole('button', { name: 'Change account' }).click();
             await page.getByLabel('Email', { exact: true }).fill('other@example.com');
             await page.getByRole('button', { name: /send|sign in/i }).click();

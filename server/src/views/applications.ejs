@@ -51,10 +51,10 @@
     </header>
     <% if (email) { %>
         <% if (applications.length) { %>
-            <p class="intro">Choose an application. You can use this account without another verification email.</p>
+            <p class="intro">Choose an application. Each application opens in a new tab. You can use this account without another verification email.</p>
             <ul aria-label="Available applications">
                 <% for (const application of applications) { %>
-                    <li><a class="application" href="<%= application.href %>" aria-label="Open <%= application.name %>"><strong><%= application.name %></strong><span aria-hidden="true">Open</span></a></li>
+                    <li><a class="application" href="<%= application.href %>" target="_blank" rel="noopener noreferrer" aria-label="Open <%= application.name %> (opens in a new tab)"><strong><%= application.name %></strong><span aria-hidden="true">Open</span></a></li>
                 <% } %>
             </ul>
         <% } else { %>

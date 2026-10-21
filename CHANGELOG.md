@@ -42,7 +42,6 @@ and this project follows
 - (nuxt) Keep named page middleware available with whole-application protection
 - (adapters) Use configured or explicitly trusted forwarded origins for Next.js
   and Nuxt sign-in redirects; align the examples' form and submission URLs
-
 - (manager) Serialize state changes with apply to prevent concurrent writes from
   losing updates
 - (gate) Preserve WebSocket upgrade response headers
