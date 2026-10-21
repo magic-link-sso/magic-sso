@@ -7,7 +7,7 @@
         "format:check": "oxfmt --check .",
         "lint": "oxlint .",
         "mail-sink": "node src/smtp-sink.mjs",
-        "test": "vitest run tests/*.test.ts",
+        "test": "vitest run src/*.test.ts tests/*.test.ts",
         "test:e2e": "pnpm run test:e2e:indirect && pnpm run test:e2e:direct && pnpm run test:e2e:proxy && pnpm run test:e2e:manager && pnpm run test:e2e:starters && pnpm run test:e2e:sso && pnpm run test:e2e:sso:https && pnpm run test:e2e:sso:app-owned",
         "test:e2e:direct": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.direct.config.ts",
         "test:e2e:sso": "pnpm --filter @magic-link-sso/core build && pnpm --filter @magic-link-sso/nextjs build && env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.sso.config.ts",

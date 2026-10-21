@@ -32,7 +32,7 @@ for (const method of ['link', 'otp']) {
             await expect(page.getByRole('link', { name: 'Open Documents' })).toHaveCount(0);
             await page.getByRole('button', { name: 'Sign in', exact: true }).click();
             await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-            await page.getByRole('button', { name: /send|sign in/i }).click();
+            await page.getByLabel('Email', { exact: true }).press('Enter');
             if (method === 'link') {
                 await page.goto(
                     await waitForMagicLink(request, {
@@ -86,7 +86,7 @@ for (const method of ['link', 'otp']) {
             await nextPage.close();
             await page.getByRole('button', { name: 'Change account' }).click();
             await page.getByLabel('Email', { exact: true }).fill('other@example.com');
-            await page.getByRole('button', { name: /send|sign in/i }).click();
+            await page.getByLabel('Email', { exact: true }).press('Enter');
             await page.goto(
                 await waitForMagicLink(request, {
                     recipient: 'other@example.com',

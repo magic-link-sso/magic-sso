@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { APIRequestContext, Page } from '@playwright/test';
 import { test, expect } from './helpers/browser-sso-test.js';
-import { browserSsoOrigin } from '../src/browser-sso-fixture.js';
+import { browserSsoOrigin, browserSsoProxyUrl } from '../src/browser-sso-fixture.js';
 import {
     clearMailbox,
     listMessages,
@@ -26,7 +26,7 @@ async function signin(
     email = 'owner@example.com',
 ): Promise<void> {
     await page.getByLabel('Email', { exact: true }).fill(email);
-    await page.getByRole('button', { name: /send|sign in/i }).click();
+    await page.getByLabel('Email', { exact: true }).press('Enter');
     await page
         .getByLabel(/one-time code/i)
         .fill(await waitForEmailOtp(request, { recipient: email }));
@@ -53,6 +53,28 @@ test.beforeEach(async ({ request }) => {
     await clearMailbox(request);
     await grant(request, '*', 'owner@example.com', true);
     await grant(request, '*', 'other@example.com', true);
+});
+test('hosted sign-in completes when pointer activation of the send button is lost', async ({
+    page,
+    request,
+}) => {
+    await page.addInitScript(() => {
+        document.addEventListener(
+            'click',
+            (event) => {
+                if (
+                    event.detail > 0 &&
+                    event.target instanceof Element &&
+                    event.target.closest('#signIn')
+                ) {
+                    event.preventDefault();
+                }
+            },
+            { capture: true },
+        );
+    });
+    await loginFirst(page, request);
+    expect(await listMessages(request)).toHaveLength(1);
 });
 for (const role of ['nuxt', 'django', 'angular', 'fastify'] as const) {
     // Literal roles match the fixture's trusted origin map.
@@ -128,6 +150,7 @@ test('central account replacement preserves valid A; clearing A allows the new i
     await page.goto(first + '/reports');
     await expect(page.getByTestId('email')).toHaveText('owner@example.com');
     await page.getByRole('button', { name: 'Sign out of this application' }).click();
+    await page.waitForURL(first + '/_magicgate/signed-out');
     await page.goto(first + '/reports');
     // The fixture upstream reports the forwarded email, including a replacement account.
     await expect(page.getByTestId('email')).toHaveText('other@example.com');
@@ -143,6 +166,11 @@ test('central sign-out prevents reuse while another valid app session stays acti
     await page.getByRole('button', { name: 'Sign out of this application' }).click();
     await page.getByRole('link', { name: 'End browser SSO session' }).click();
     await page.getByRole('button', { name: /sign out|end/i }).click();
+    // Wait for the cross-site sign-out redirect to load before starting another navigation.
+    await page.waitForURL(second + '/sso/signed-out');
+    await expect(
+        page.getByRole('heading', { name: 'Signed out of this application' }),
+    ).toBeVisible();
     expect(
         (await context.cookies(issuer)).some(
             (cookie) => cookie.name === '__Host-magic-sso-browser',
@@ -150,9 +178,13 @@ test('central sign-out prevents reuse while another valid app session stays acti
     ).toBe(false);
     await page.goto(first + '/reports');
     await expect(page.getByTestId('email')).toHaveText('owner@example.com');
-    await page.goto(second + '/protected');
-    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    // Reuse the cookie jar in a fresh tab: Linux WebKit can crash when reusing B's old page target.
+    const signedOutApp = await context.newPage();
+    await signedOutApp.goto(second + '/protected');
+    await expect(signedOutApp.getByLabel('Email', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('email')).toHaveText('owner@example.com');
     expect(await listMessages(request)).toHaveLength(1);
+    await signedOutApp.close();
 });
 test('a confirmed email in another browser restarts from registered app state', async ({
     page,
@@ -162,14 +194,14 @@ test('a confirmed email in another browser restarts from registered app state', 
 }) => {
     await page.goto(first + '/reports');
     await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-    await page.getByRole('button', { name: /send|sign in/i }).click();
+    await page.getByLabel('Email', { exact: true }).press('Enter');
     const link = await waitForMagicLink(request, {
         recipient: 'owner@example.com',
         callbackUrlPrefix: issuer + '/sso/verify',
     });
     const other = await browser.newContext({
         ignoreHTTPSErrors: true,
-        proxy: { server: 'http://127.0.0.1:45100' },
+        proxy: { server: browserSsoProxyUrl },
     });
     try {
         const tab = await other.newPage();
@@ -204,10 +236,10 @@ test('two sign-in tabs retain their own transaction and OTP context', async ({
     await page.goto(first + '/reports?tab=first');
     await other.goto(first + '/reports?tab=second');
     await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-    await page.getByRole('button', { name: /send|sign in/i }).click();
+    await page.getByLabel('Email', { exact: true }).press('Enter');
     const code = await waitForEmailOtp(request, { recipient: 'owner@example.com' });
     await other.getByLabel('Email', { exact: true }).fill('other@example.com');
-    await other.getByRole('button', { name: /send|sign in/i }).click();
+    await other.getByLabel('Email', { exact: true }).press('Enter');
     const otherCode = await waitForEmailOtp(request, { recipient: 'other@example.com' });
     expect(
         (await context.cookies(first)).filter((cookie) => cookie.name.includes('magic-sso-tx-')),
@@ -302,7 +334,7 @@ for (const mode of ['404', 'disabled']) {
                 ),
             ).toBe(false);
             await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-            await page.getByRole('button', { name: /send|sign in/i }).click();
+            await page.getByLabel('Email', { exact: true }).press('Enter');
             const link = await waitForMagicLink(request, {
                 recipient: 'owner@example.com',
                 callbackUrlPrefix: origin + '/_magicgate/verify-email',

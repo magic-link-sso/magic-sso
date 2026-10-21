@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 import { test, expect } from './helpers/browser-sso-test.js';
-import { browserSsoOrigin, type BrowserSsoFixtureRole } from '../src/browser-sso-fixture.js';
+import {
+    browserSsoOrigin,
+    browserSsoProxyUrl,
+    type BrowserSsoFixtureRole,
+} from '../src/browser-sso-fixture.js';
 import {
     clearMailbox,
     listMessages,
@@ -25,6 +29,77 @@ const apps: App[] = [
     })),
 ];
 const query = '?q=a%2Bb%20%26%20c&tag=one&tag=two';
+async function transientCookieNames(
+    response: import('@playwright/test').Response | null,
+): Promise<string[]> {
+    if (!response) {
+        throw new Error('Expected a document response for the cookie check.');
+    }
+    // Cookie metadata can retain expired entries; inspect what the browser actually sends.
+    const header = (await response.request().headerValue('cookie')) ?? '';
+    return header
+        .split(';')
+        .map((pair) => pair.trim().split('=', 1)[0] ?? '')
+        .filter((name) => /magic-sso-(?:tx-|continuation-|confirm-)/u.test(name));
+}
+
+test('expired transaction cookies are not sent in requests', async ({ context, page }) => {
+    const name = '__Host-magic-sso-tx-delayed-cleanup';
+    await context.addCookies([
+        {
+            name,
+            value: '',
+            url: issuer,
+            secure: true,
+            httpOnly: true,
+            sameSite: 'Lax',
+            expires: Date.now() / 1000 + 2,
+        },
+    ]);
+    expect(await transientCookieNames(await page.goto(issuer + '/test/cookie-probe'))).toEqual([
+        name,
+    ]);
+    await expect.poll(async () => transientCookieNames(await page.reload())).toEqual([]);
+});
+
+async function requestAppSignIn(
+    page: import('@playwright/test').Page,
+    email = 'owner@example.com',
+): Promise<void> {
+    await page.getByLabel('Email address', { exact: true }).fill(email);
+    await page.getByLabel('Email address', { exact: true }).press('Enter');
+}
+
+test('app-owned sign-in sends email when pointer activation of the send button is lost', async ({
+    page,
+    request,
+}) => {
+    await clearMailbox(request);
+    await page.addInitScript(() => {
+        document.addEventListener(
+            'click',
+            (event) => {
+                if (
+                    event.detail > 0 &&
+                    event.target instanceof HTMLButtonElement &&
+                    event.target.textContent === 'Send magic link'
+                ) {
+                    event.preventDefault();
+                }
+            },
+            { capture: true },
+        );
+    });
+    await page.goto(browserSsoOrigin('nuxt') + '/protected');
+    await requestAppSignIn(page);
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+    await waitForMagicLink(request, {
+        recipient: 'owner@example.com',
+        callbackUrlPrefix: browserSsoOrigin('nuxt') + '/sso/start',
+    });
+    expect(await listMessages(request)).toHaveLength(1);
+});
+
 async function waitForApplicationReady(
     page: import('@playwright/test').Page,
     role: BrowserSsoFixtureRole,
@@ -58,8 +133,7 @@ for (const app of apps) {
             await expect(page.getByLabel('Email address', { exact: true })).toBeVisible();
             expect(new URL(page.url()).origin).toBe(origin);
             expect(new URL(page.url()).pathname).toBe(app.start);
-            await page.getByLabel('Email address', { exact: true }).fill('owner@example.com');
-            await page.getByRole('button', { name: 'Send magic link', exact: true }).click();
+            await requestAppSignIn(page);
             await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
             if (method === 'link') {
                 const link = await waitForMagicLink(request, {
@@ -89,15 +163,16 @@ for (const app of apps) {
             expect(beforeShared.some((cookie) => cookie.name === '__Host-magic-sso-browser')).toBe(
                 false,
             );
+            const applicationResponse = page.waitForResponse(
+                (response) =>
+                    response.request().isNavigationRequest() &&
+                    canonicalFlowUrl(response.url()) === canonicalFlowUrl(destination),
+            );
             await page.getByRole('link', { name: 'Complete shared sign-in', exact: true }).click();
             await expect(page).toHaveURL(
                 (url) => canonicalFlowUrl(url.href) === canonicalFlowUrl(destination),
             );
-            expect(
-                (await context.cookies()).filter((cookie) =>
-                    /magic-sso-(?:tx-|continuation-|confirm-)/u.test(cookie.name),
-                ),
-            ).toEqual([]);
+            expect(await transientCookieNames(await applicationResponse)).toEqual([]);
             await waitForApplicationReady(page, app.role);
             const local = (await context.cookies(destination)).find(
                 (cookie) => cookie.name === 'magic-sso',
@@ -130,8 +205,7 @@ async function submitOtp(
     request: import('@playwright/test').APIRequestContext,
     email = 'owner@example.com',
 ): Promise<void> {
-    await page.getByLabel('Email address', { exact: true }).fill(email);
-    await page.getByRole('button', { name: 'Send magic link', exact: true }).click();
+    await requestAppSignIn(page, email);
     await page
         .getByLabel('Email code', { exact: true })
         .fill(await waitForEmailOtp(request, { recipient: email }));
@@ -222,15 +296,14 @@ for (const role of ['next', 'django'] satisfies BrowserSsoFixtureRole[]) {
         const origin = browserSsoOrigin(role),
             start = '/sso/start' + (role === 'django' ? '/' : '');
         await page.goto(origin + start);
-        await page.getByLabel('Email address', { exact: true }).fill('owner@example.com');
-        await page.getByRole('button', { name: 'Send magic link', exact: true }).click();
+        await requestAppSignIn(page);
         const link = await waitForMagicLink(request, {
             recipient: 'owner@example.com',
             callbackUrlPrefix: origin + start,
         });
         const other = await browser.newContext({
             ignoreHTTPSErrors: true,
-            proxy: { server: 'http://127.0.0.1:45100' },
+            proxy: { server: browserSsoProxyUrl },
         });
         try {
             const tab = await other.newPage();
@@ -355,7 +428,7 @@ test('a copied bootstrap ticket requires account confirmation and fresh app stat
     )?.value;
     const other = await browser.newContext({
         ignoreHTTPSErrors: true,
-        proxy: { server: 'http://127.0.0.1:45100' },
+        proxy: { server: browserSsoProxyUrl },
     });
     try {
         const tab = await other.newPage();

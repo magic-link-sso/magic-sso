@@ -41,7 +41,7 @@ function createDriver(
                 await page.goto(credential);
             } else {
                 await submitEmailOtp(page, createInvalidOtp(credential));
-                await expect(page.getByRole('alert')).toBeVisible();
+                await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
                 await expectNoAuthCookie(page, app);
                 await submitEmailOtp(page, credential);
             }
@@ -86,6 +86,18 @@ export function registerSignInFlowSuites(
 ): void {
     for (const app of exampleApps) {
         test.describe(`${app.displayName} ${method} flow contract (${mode})`, () => {
+            if (app.name === 'nextjs' && method === 'otp') {
+                test.beforeEach(async ({ page }) => {
+                    await page.addInitScript(() => {
+                        document.addEventListener('DOMContentLoaded', () => {
+                            // Next.js can render an empty route-announcement alert after hydration.
+                            const announcer = document.createElement('div');
+                            announcer.setAttribute('role', 'alert');
+                            document.body.append(announcer);
+                        });
+                    });
+                });
+            }
             for (const protectedPath of app.protectedPaths.flatMap(signInReturnPaths)) {
                 test(`establishes, reuses and clears the session for ${protectedPath}`, async ({
                     page,

@@ -5,7 +5,11 @@ import { createServer as createHttpsServer } from 'node:https';
 import { connect } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { browserSsoTestHosts, browserSsoTestPorts } from './browser-sso-fixture.js';
+import {
+    browserSsoTestHosts,
+    browserSsoTestPorts,
+    browserSsoProxyUrl,
+} from './browser-sso-fixture.js';
 const directory = process.env.MAGICSSO_E2E_TLS_DIR;
 if (!directory) {
     throw new Error('Missing ephemeral test TLS directory');
@@ -94,7 +98,7 @@ proxy.on('connect', (request, socket, head) => {
     socket.on('error', () => upstream.destroy());
     socket.on('close', () => upstream.destroy());
 });
-proxy.listen(45100, '127.0.0.1');
+proxy.listen(Number(new URL(browserSsoProxyUrl).port), '127.0.0.1');
 function close(): void {
     for (const server of [...servers, proxy]) {
         server.closeAllConnections();

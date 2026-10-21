@@ -9,17 +9,21 @@ export type BrowserSsoFixtureRole =
     | 'angular'
     | 'fastify'
     | 'compat';
+// Keep fixed listeners below Linux's ephemeral range (32768–60999), including
+// the HTTPS upstreams at port + 1000, so outgoing connections cannot claim them.
 const ports: Record<BrowserSsoFixtureRole, number> = {
-    issuer: 45000,
-    'gate-a': 45001,
-    'gate-b': 45002,
-    next: 45004,
-    nuxt: 45005,
-    django: 45006,
-    angular: 45007,
-    fastify: 45008,
-    compat: 45009,
+    issuer: 25000,
+    'gate-a': 25001,
+    'gate-b': 25002,
+    next: 25004,
+    nuxt: 25005,
+    django: 25006,
+    angular: 25007,
+    fastify: 25008,
+    compat: 25009,
 };
+export const browserSsoUpstreamPort = 25003;
+export const browserSsoProxyUrl = 'http://127.0.0.1:25100';
 const hosts: Record<BrowserSsoFixtureRole, string> = {
     issuer: 'sso.identity.test',
     'gate-a': 'app.alpha.test',

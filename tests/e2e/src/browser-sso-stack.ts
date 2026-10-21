@@ -9,7 +9,12 @@ import { parseMagicSsoConfigToml } from 'magic-sso-server/dist/config.js';
 import { createApp } from 'magic-sso-gate/dist/app.js';
 import type { GateConfigInput } from 'magic-sso-gate/dist/config.js';
 
-import { browserSsoOrigin, browserSsoListenPort, browserSsoHttps } from './browser-sso-fixture.js';
+import {
+    browserSsoOrigin,
+    browserSsoListenPort,
+    browserSsoHttps,
+    browserSsoUpstreamPort,
+} from './browser-sso-fixture.js';
 const issuer = browserSsoOrigin('issuer');
 const first = browserSsoOrigin('gate-a');
 const second = browserSsoOrigin('gate-b');
@@ -146,7 +151,7 @@ const upstream = createServer((request, response) => {
 });
 await new Promise<void>((resolve, reject) => {
     upstream.once('error', reject);
-    upstream.listen(45003, '127.0.0.1', resolve);
+    upstream.listen(browserSsoUpstreamPort, '127.0.0.1', resolve);
 });
 const server = await buildApp({ config, logger: false });
 
@@ -314,7 +319,7 @@ server.get('/test/sso-ready', async (_request, reply): Promise<void> => {
 const base = {
     rateLimitMax: 10000,
     serverUrl: issuer,
-    upstreamUrl: 'http://127.0.0.1:45003',
+    upstreamUrl: `http://127.0.0.1:${browserSsoUpstreamPort}`,
     jwtSecret,
     previewSecret,
     browserSso: {

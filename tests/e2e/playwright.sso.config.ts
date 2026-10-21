@@ -10,6 +10,7 @@ import {
     browserSsoListenPort,
     browserSsoOrigin,
     browserSsoTestHosts,
+    browserSsoProxyUrl,
     type BrowserSsoFixtureRole,
 } from './src/browser-sso-fixture.js';
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -106,7 +107,7 @@ export default defineConfig({
     use: {
         trace: 'retain-on-failure',
         ...(browserSsoHttps
-            ? { ignoreHTTPSErrors: true, proxy: { server: 'http://127.0.0.1:45100' } }
+            ? { ignoreHTTPSErrors: true, proxy: { server: browserSsoProxyUrl } }
             : {}),
     },
     projects: browserSsoHttps
@@ -132,7 +133,7 @@ export default defineConfig({
                           'pnpm --filter magic-sso-server exec tsx ../tests/e2e/src/browser-sso-https-proxy.ts',
                       cwd: root,
                       env: sharedEnv,
-                      url: 'http://127.0.0.1:45100/ready',
+                      url: `${browserSsoProxyUrl}/ready`,
                       reuseExistingServer: false,
                       gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 5000 },
                   },

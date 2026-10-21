@@ -37,6 +37,25 @@ function readE2eCommand(): string {
 }
 
 describe('standard E2E command', () => {
+    it('retains Playwright failure traces after the CI test step fails', () => {
+        const workflow = readFileSync(
+            new URL('../../../.github/workflows/ci.yml', import.meta.url),
+            'utf8',
+        );
+        const e2e = workflow.split('\n  e2e:\n')[1]?.split('\n  python:\n')[0] ?? '';
+        const upload = e2e
+            .split('\n      - name: ')
+            .find((step) => step.startsWith('Upload E2E failure artifacts\n'));
+
+        expect(upload).toBeDefined();
+        expect(upload).toContain('\n        if: failure()\n');
+        expect(upload).toMatch(/uses: actions\/upload-artifact@[a-f0-9]{40}\b/u);
+        expect(upload).toContain('tests/e2e/test-results/');
+        expect(e2e.indexOf('Upload E2E failure artifacts')).toBeGreaterThan(
+            e2e.indexOf('run: pnpm test:e2e\n'),
+        );
+    });
+
     it.each(['ci', 'publish'])(
         'uses the complete command and all browser engines in %s',
         (workflow): void => {

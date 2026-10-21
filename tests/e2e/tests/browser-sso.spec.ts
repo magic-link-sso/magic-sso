@@ -84,7 +84,7 @@ for (const pair of [
                     new RegExp(`^${issuer.replaceAll('.', '\\.')}/sso/authorize\\?`),
                 );
                 await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-                await page.getByRole('button', { name: /send|sign in/i }).click();
+                await page.getByLabel('Email', { exact: true }).press('Enter');
                 if (method === 'link') {
                     const link = await waitForMagicLink(request, {
                         recipient: 'owner@example.com',
@@ -186,7 +186,7 @@ for (const method of ['link', 'otp']) {
         }
         await page.goto(first.origin + first.protectedPath + query);
         await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
-        await page.getByRole('button', { name: /send|sign in/i }).click();
+        await page.getByLabel('Email', { exact: true }).press('Enter');
         if (method === 'link') {
             await page.goto(
                 await waitForMagicLink(request, {

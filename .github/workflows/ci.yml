@@ -83,6 +83,15 @@ jobs:
       - name: Run end-to-end tests
         run: pnpm test:e2e
 
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-failure-artifacts
+          path: tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   python:
     runs-on: ubuntu-latest
     strategy:
