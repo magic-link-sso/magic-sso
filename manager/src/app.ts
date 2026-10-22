@@ -13,6 +13,7 @@ import { registerManagerHttpSecurity } from './http/security.js';
 import { registerManagerMutationBoundary } from './http/mutations.js';
 import { registerManagerSessionRoutes } from './routes/session.js';
 import { registerManagerSiteUiRoutes } from './routes/sites-ui.js';
+import { registerManagerPeopleUiRoutes } from './routes/people-ui.js';
 import { registerManagerOperationUiRoutes } from './routes/operations-ui.js';
 import { registerManagerSiteApiRoutes } from './routes/sites-api.js';
 import { registerManagerOperationApiRoutes } from './routes/operations-api.js';
@@ -63,6 +64,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const context = { ...options, settings };
     registerManagerSessionRoutes(app, context);
     registerManagerSiteUiRoutes(app, context);
+    registerManagerPeopleUiRoutes(app, context);
     registerManagerOperationUiRoutes(app, context);
     registerManagerSiteApiRoutes(app, context);
     registerManagerOperationApiRoutes(app, context);

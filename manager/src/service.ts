@@ -18,6 +18,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
     FULL_ACCESS_SCOPE,
     parseMagicSsoTomlConfig,
@@ -66,6 +67,7 @@ export interface ManagedSiteDetails extends ManagedSiteSummary {
 
 export interface ManagerDiffResult {
     diffSource: 'base' | 'runtime';
+    publicationRevision: string;
     driftStatus?: ConfigDriftStatus | undefined;
     runtimePlan: RuntimePlan;
     summary: ManagedSiteDiffSummary;
@@ -437,6 +439,15 @@ export function buildManagerDiff(
 
     return {
         diffSource: currentConfig.source,
+        publicationRevision: createHash('sha256')
+            .update(
+                JSON.stringify([
+                    currentConfig.source,
+                    currentConfig.config,
+                    runtimePlan.runtimeConfig,
+                ]),
+            )
+            .digest('hex'),
         driftStatus,
         runtimePlan,
         summary: summarizeManagedConfigDiff(

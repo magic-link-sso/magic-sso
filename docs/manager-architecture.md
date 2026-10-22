@@ -100,6 +100,45 @@ These rules map to current server semantics:
 
 - `["*"]` renders to `allowedEmails`.
 - Named scopes render to `[[sites.accessRules]]`.
+- Empty grant lists render explicit empty access lists, denying all sign-ins for
+  that site. A site with no access declaration at all is still rejected as
+  incomplete configuration.
+
+## Person-oriented administration
+
+The person view derives effective scopes from the same `buildSiteAccessRules`
+normalization used by the issuer. It shows all configured applications and the
+source of each applicable rule. Managed applications use manager state;
+unmanaged applications use the operator base configuration and stay read-only.
+The people list is the union of identities in saved and published access rules,
+not an account database. Any valid email can be looked up before its first
+grant.
+
+`people.ts` applies a person's changes to a cloned state and validates the whole
+candidate before saving anything. Preview and save are separate form actions. A
+domain-separated HMAC using the existing audit integrity key binds the reviewed
+changes, email, ten-minute expiry, and a baseline of manager state, managed site
+IDs, base file and runtime file. Save verifies that baseline under
+`manager.lock`, then persists the entire batch with one `access-replaced` audit
+event. Concurrent or repeated saves cannot overwrite a later state. Preview does
+not persist drafts or change the runtime file. Publication continues through the
+shared diff/apply pipeline. Its UI form carries a digest of the current and
+candidate configuration; apply compares that digest after acquiring the state
+lock and requires another review if either input changed. CLI and API apply keep
+their existing contracts.
+
+Saved rules and published runtime rules are shown separately. The latest apply
+attempt must have succeeded and acknowledged a reload of the exact current
+runtime hash before its contents are labelled last confirmed active. A failed
+attempt makes activation unconfirmed even after file rollback, since the server
+may have loaded the candidate before its response was lost. Applications present
+only in the runtime remain visible and read-only until publication removes them.
+This is historical evidence from the signed audit log, not a live server-state
+probe. The manager does not claim to observe external reloads, restarts, or
+existing app session expiry times. Access removal affects new sign-ins after
+reload and subsequent SSO authorizations; each application owns the lifetime of
+its existing session. The UI shows the current issuer JWT lifetime without
+treating it as the expiry of previously issued sessions.
 
 ## What the manager exposes
 

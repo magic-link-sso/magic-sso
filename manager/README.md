@@ -38,8 +38,62 @@ UI capabilities:
 - a temporary browser unlock at `/login` for legacy bearer-token deployments
 - a dashboard at `/` with managed-site counts, pending-change visibility, and
   recent audit entries
-- read-only site detail pages at `/sites/:siteId`
-- read-only diff and audit pages at `/diff` and `/audit`
+- people at `/people`, with email lookup and an effective-access view across
+  managed and operator-owned applications
+- atomic changes across several applications, with a signed preview before
+  saving pending changes and a separate publication step
+- site access and permission catalog editors at `/sites/:siteId`
+- publication previews at `/diff` and audit history at `/audit`
+
+## Managing a person's access
+
+Open **People**, enter an email (including a new person), and choose **Review
+person**. Each application shows saved scopes, the published runtime scopes,
+pending differences, and the applicable rule sources. Full access (`*`) includes
+every scope; named permissions are combined for that email. Manager-owned rules
+replace the base access rules for managed applications. Operator-owned sites,
+including bootstrap admin access, remain visible and read-only.
+
+For each managed application, keep the saved access, remove access, grant full
+access, or select permissions from its catalog. Choose **Preview access
+changes**, review the before/after values, then **Save pending changes**. This
+saves the entire batch under the same lock used by CLI, API and apply, with one
+audit event recording the operator and selected sites. Cancel leaves files
+untouched. Previews expire after ten minutes and must be recreated if manager
+state, the base file, or the runtime file changes. They contain only the
+reviewed access changes, not configuration secrets.
+
+Follow **Review all pending changes and publish** to `/diff`. This preview
+includes changes saved by other operators too. Publication writes the runtime
+file and requests a reload when configured. Without a reload endpoint, reload or
+restart the server yourself. Removing the last grant produces explicit empty
+access lists and denies all new sign-ins for that application. Deploy the
+corresponding server update before using empty access lists; older servers
+reject them and a configured reload rolls publication back.
+
+The publication form is bound to the displayed current and candidate
+configuration. If either changes before publication acquires the state lock, the
+manager returns a fresh diff for review instead of publishing unseen changes.
+
+**Saved** describes manager state (or the operator base file for read-only
+sites). **Pending** means saved access differs from the published runtime file.
+**Published** describes that file. **Last confirmed active** is shown only when
+the latest apply attempt succeeded and acknowledged a reload of the exact
+current runtime file; its timestamp is evidence of that acknowledgement, not
+live server monitoring. A file write without reload, an external runtime edit,
+or missing audit evidence leaves activation unconfirmed. External server changes
+cannot be observed by the manager. A later failed apply also makes activation
+unconfirmed: restoring the runtime file cannot prove the server rolled back when
+its reload response was lost. Applications removed from the base file remain
+visible as read-only while their published rules still exist in the runtime
+file.
+
+New sign-ins use the new grants after reload. Shared browser SSO checks current
+grants on each authorization. Existing application sessions retain their issued
+permissions until the application expires or clears them, normally bounded by
+their JWT expiry. The person page shows the current issuer JWT lifetime;
+previously issued sessions may use an older lifetime. The manager cannot inspect
+individual app sessions or remotely sign them out.
 
 Preferred auth model:
 

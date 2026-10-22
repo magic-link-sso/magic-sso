@@ -10,6 +10,12 @@ and this project follows
 
 ### Added
 
+- (manager) Add a People view with effective scopes and rule sources across
+  applications, atomic access changes with expiring previews, and separate
+  saved, pending, published and last-confirmed-active status. Keep
+  operator-owned and bootstrap access read-only; support removing the last
+  application grant with explicit deny-all access lists.
+
 - (sso) Add an optional My applications launcher with explicit names and
   destinations, current-grant filtering, hosted link/OTP sign-in, account change
   and central sign-out. Launch through registered SSO start routes while

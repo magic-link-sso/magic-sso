@@ -53,6 +53,34 @@ function withBranding(branding: string): string {
     return `${baseConfigToml}\n[hostedAuth.branding]\n${branding}\n`;
 }
 
+describe('explicit deny-all site access', () => {
+    it.each(['allowedEmails = []', 'accessRules = []', 'allowedEmails = []\naccessRules = []'])(
+        'accepts %s without granting access to any identity',
+        (declaration) => {
+            const toml = baseConfigToml.replace(
+                'allowedEmails = ["admin@example.com"]',
+                declaration,
+            );
+            const config = parseMagicSsoConfigToml(toml, '/tmp/deny-all.toml');
+            expect(config.sites[0]?.accessRules.size).toBe(0);
+            const roundTrip = stringifyMagicSsoTomlConfig(
+                parseMagicSsoTomlConfig(toml, '/tmp/deny-all.toml'),
+            );
+            expect(
+                parseMagicSsoConfigToml(roundTrip, '/tmp/deny-all.toml').sites[0]?.accessRules.size,
+            ).toBe(0);
+        },
+    );
+    it('still rejects a missing access declaration', () => {
+        expect(() =>
+            parseMagicSsoConfigToml(
+                baseConfigToml.replace('allowedEmails = ["admin@example.com"]', ''),
+                '/tmp/missing.toml',
+            ),
+        ).toThrow('Each site must define allowedEmails, accessRules, or both.');
+    });
+});
+
 describe('hosted auth branding', () => {
     it('accepts site-relative paths, http(s) URLs, and mailto support links', () => {
         const config = parseMagicSsoConfigToml(

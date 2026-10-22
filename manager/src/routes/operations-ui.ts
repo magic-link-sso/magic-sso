@@ -19,7 +19,12 @@ import {
     requireSameOriginFormPost,
     requireUiSession,
 } from '../http/security.js';
-import { getErrorStatusCode, mapRouteError, renderUiFailure } from '../http/errors.js';
+import {
+    createStatusError,
+    getErrorStatusCode,
+    mapRouteError,
+    renderUiFailure,
+} from '../http/errors.js';
 import { persistAuditedMutation } from '../http/mutations.js';
 import {
     buildUiNoticePath,
@@ -148,7 +153,20 @@ export function registerManagerOperationUiRoutes(
         loadManagerStateOrEmpty(settings);
         try {
             const result = await applyManagerState(
-                () => loadManagerStateOrEmpty(settings),
+                () => {
+                    const state = loadManagerStateOrEmpty(settings);
+                    const current = buildManagerDiff(state, settings);
+                    if (
+                        readFormField(request.body, 'publicationRevision') !==
+                        current.publicationRevision
+                    ) {
+                        throw createStatusError(
+                            409,
+                            'The publication preview changed. Review all pending changes again before publishing.',
+                        );
+                    }
+                    return state;
+                },
                 settings,
                 {
                     actor: createRequestAuditActor(request),
@@ -177,7 +195,7 @@ export function registerManagerOperationUiRoutes(
                     kind: failure.kind,
                     text: message,
                 },
-                failure.statusCode,
+                getErrorStatusCode(error, failure.statusCode),
             );
         }
     });

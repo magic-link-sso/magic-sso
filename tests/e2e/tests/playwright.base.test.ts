@@ -194,7 +194,7 @@ describe('playwright base config', () => {
             );
         }
         const bootstrapContents = readFileSync(bootstrapConfigFile, 'utf8');
-        expect(bootstrapContents).toContain('managedSiteIds = ["photos"]');
+        expect(bootstrapContents).toContain('managedSiteIds = ["photos", "archive"]');
         expect(bootstrapContents).not.toContain('[reload]');
         expect(bootstrapContents).not.toContain('[service]');
         const baseConfigPathMatch = bootstrapContents.match(/^baseConfigFile = "(.+)"$/mu);
@@ -212,7 +212,7 @@ describe('playwright base config', () => {
                 .service?.trustProxy,
         ).toBe(true);
         const serviceContents = readFileSync(serviceConfigFile, 'utf8');
-        expect(serviceContents).toContain('managedSiteIds = ["photos"]');
+        expect(serviceContents).toContain('managedSiteIds = ["photos", "archive"]');
         expect(serviceContents).toContain('requiredSiteId = "manager-admin"');
         expect(serviceContents).toContain('requiredScope = "*"');
         expect(serviceContents).toContain('/internal/access-config/reload');

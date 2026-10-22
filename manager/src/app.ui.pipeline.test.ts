@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, MANAGER_SESSION_COOKIE_NAME } from './app.js';
 import { MANAGER_STATE_VERSION } from './state.js';
 import { type ManagerRuntimeSettings } from './settings.js';
+import { buildManagerDiff, loadManagerStateOrEmpty } from './service.js';
 
 const tempDirectories: string[] = [];
 const managerToken = 'replace-me-with-a-dedicated-long-random-manager-api-token';
@@ -203,7 +204,12 @@ describe('manager service ui diff and apply routes', () => {
             const response = await app.inject({
                 headers: uiHeaders,
                 method: 'POST',
-                payload: '',
+                payload: new URLSearchParams({
+                    publicationRevision: buildManagerDiff(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                    ).publicationRevision,
+                }).toString(),
                 url: '/diff/apply',
             });
 
@@ -270,7 +276,12 @@ describe('manager service ui diff and apply routes', () => {
             const response = await app.inject({
                 headers: uiHeaders,
                 method: 'POST',
-                payload: '',
+                payload: new URLSearchParams({
+                    publicationRevision: buildManagerDiff(
+                        loadManagerStateOrEmpty(settings),
+                        settings,
+                    ).publicationRevision,
+                }).toString(),
                 url: '/diff/apply',
             });
 
