@@ -74,7 +74,7 @@
         "oxfmt": "latest",
         "oxlint": "latest",
         "turbo": "latest",
-        "vitest": "^4.1.11"
+        "vitest": "^4.1.12"
     },
     "lint-staged": {
         "*": "oxfmt --write --no-error-on-unmatched-pattern",

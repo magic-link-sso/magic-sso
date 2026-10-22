@@ -22,7 +22,7 @@
         "test:e2e:sso:app-owned": "MAGICSSO_E2E_SSO_HTTPS=true MAGICSSO_E2E_SSO_APP_OWNED=true pnpm run test:e2e:sso"
     },
     "devDependencies": {
-        "@playwright/test": "^1.64.0",
+        "@playwright/test": "^1.64.1",
         "@types/node": "^25.9.9",
         "magic-sso-gate": "workspace:*",
         "magic-sso-server": "workspace:*",

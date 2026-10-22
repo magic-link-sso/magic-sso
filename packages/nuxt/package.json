@@ -57,18 +57,18 @@
     },
     "dependencies": {
         "@magic-link-sso/core": "workspace:*",
-        "@nuxt/kit": "^4.6.0",
+        "@nuxt/kit": "^4.6.2",
         "cookie-es": "^2.0.1",
         "h3": "^1.15.11",
-        "nitropack": "^2.13.4"
+        "nitropack": "^2.13.5"
     },
     "devDependencies": {
-        "@nuxt/schema": "^4.6.0",
+        "@nuxt/schema": "^4.6.2",
         "@types/node": "^25.9.9",
-        "jose": "^6.2.12",
+        "jose": "^6.2.13",
         "nuxt": "^4.6.0",
         "typescript": "^6.0.3",
-        "vitest": "^4.1.11"
+        "vitest": "^4.1.12"
     },
     "peerDependencies": {
         "nuxt": "^4.2.0"

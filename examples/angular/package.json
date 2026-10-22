@@ -13,13 +13,13 @@
         "typecheck": "tsc -p tsconfig.typecheck.json"
     },
     "dependencies": {
-        "@angular/common": "22.2.2",
-        "@angular/core": "22.2.2",
-        "@angular/forms": "22.2.2",
-        "@angular/platform-browser": "22.2.2",
-        "@angular/platform-server": "22.2.2",
-        "@angular/router": "22.2.2",
-        "@angular/ssr": "22.2.2",
+        "@angular/common": "22.2.3",
+        "@angular/core": "22.2.3",
+        "@angular/forms": "22.2.3",
+        "@angular/platform-browser": "22.2.3",
+        "@angular/platform-server": "22.2.3",
+        "@angular/router": "22.2.3",
+        "@angular/ssr": "22.2.3",
         "@magic-link-sso/angular": "workspace:*",
         "@magic-link-sso/config-core": "workspace:*",
         "@magic-link-sso/core": "workspace:*",
@@ -31,13 +31,13 @@
         "zone.js": "^0.16.3"
     },
     "devDependencies": {
-        "@angular/build": "^22.2.2",
-        "@angular/cli": "22.2.2",
-        "@angular/compiler-cli": "22.2.2",
+        "@angular/build": "^22.2.3",
+        "@angular/cli": "22.2.3",
+        "@angular/compiler-cli": "22.2.3",
         "@types/express": "^5.0.6",
         "@types/node": "^25.9.9",
         "typescript": "~6.0.3",
-        "vitest": "^4.1.11"
+        "vitest": "^4.1.12"
     },
     "engines": {
         "node": ">=24.15.0"
