@@ -5,6 +5,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import { connect } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { browserSsoProxyHeaders } from './browser-sso-proxy-headers.js';
 import {
     browserSsoTestHosts,
     browserSsoTestPorts,
@@ -26,10 +27,16 @@ const servers = browserSsoTestPorts.map((port) => {
                 port: port + 1000,
                 path: request.url,
                 method: request.method,
-                headers: { ...request.headers, 'x-forwarded-proto': 'https' },
+                headers: {
+                    ...browserSsoProxyHeaders(request.headers),
+                    'x-forwarded-proto': 'https',
+                },
             },
             (upstream) => {
-                response.writeHead(upstream.statusCode ?? 502, upstream.headers);
+                response.writeHead(
+                    upstream.statusCode ?? 502,
+                    browserSsoProxyHeaders(upstream.headers),
+                );
                 upstream.on('aborted', () => response.destroy());
                 upstream.pipe(response);
             },
@@ -61,10 +68,10 @@ const proxy = createHttpServer((request, response) => {
             port: 43126,
             path: url.pathname + url.search,
             method: request.method,
-            headers: request.headers,
+            headers: browserSsoProxyHeaders(request.headers),
         },
         (result) => {
-            response.writeHead(result.statusCode ?? 502, result.headers);
+            response.writeHead(result.statusCode ?? 502, browserSsoProxyHeaders(result.headers));
             result.pipe(response);
         },
     );
