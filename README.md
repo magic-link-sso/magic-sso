@@ -7,11 +7,6 @@ deployments. It sends time-limited magic links, optionally includes a short
 email OTP for mobile and PWA sign-in, issues JWT session tokens, and can run
 without a database.
 
-Get started by
-[protecting an existing app with Gate](./docs/first-deployment.md#protect-an-existing-app-with-gate)
-or
-[building an app with an SDK](./docs/first-deployment.md#build-an-app-with-an-sdk).
-
 This repository contains the server, reusable framework packages, the Magic Link
 SSO Gate reverse-proxy service, and example apps for Angular, Django, Fastify,
 Next.js, Nuxt, and the managed-mode Photos demo, plus two Gate-backed private
@@ -23,6 +18,11 @@ Magic Link SSO also supports two operator workflows:
 - classic mode: the server reads one operator-maintained TOML file
 - managed mode: an optional manager generates a runtime TOML from static config
   plus manager-owned access state
+
+Get started by
+[protecting an existing app with Gate](./docs/first-deployment.md#protect-an-existing-app-with-gate)
+or
+[building an app with an SDK](./docs/first-deployment.md#build-an-app-with-an-sdk).
 
 For agent-agnostic setup and integration skills that can be installed into tools
 such as Codex, Claude, and Gemini, see the separate
@@ -104,6 +104,20 @@ second authentication factor. The `rotate` resend policy keeps one active
 challenge per login context, where a context is the combination of normalized
 email, site, scope, return URL, and verify URL. A resend invalidates the
 previous code for that context only. Other contexts keep their own challenges.
+
+### Shared browser sign-in
+
+Opt-in browser SSO lets a verified browser enter another allowed application
+without another email. Applications keep separate JWTs, grants and local logout.
+Gate and all SDK examples support hosted link/OTP sign-in and opt-in
+application-owned forms through the browser-bound bootstrap extension. See the
+[deployment, diagnostics and rollback guide](docs/browser-sso-deployment.md) and
+the [versioned protocol contract](docs/browser-sso-contract.md).
+
+An optional **My applications** launcher at `/sso/apps` shows the current
+browser identity and applications allowed by live grants. Configure an explicit
+name, destination and optional scope under `[sites.launcher]`; see
+[launcher setup and account controls](docs/browser-sso-deployment.md#my-applications-launcher).
 
 ## Getting started
 
@@ -768,17 +782,3 @@ always wins over the repository default.
 
 The root [`LICENSE-GPL`](./LICENSE-GPL) is a copy of the GPLv3 text used by the
 server and manager. It does not apply to anything outside those components.
-
-### Shared browser sign-in
-
-Opt-in browser SSO lets a verified browser enter another allowed application
-without another email. Applications keep separate JWTs, grants and local logout.
-Gate and all SDK examples support hosted link/OTP sign-in and opt-in
-application-owned forms through the browser-bound bootstrap extension. See the
-[deployment, diagnostics and rollback guide](docs/browser-sso-deployment.md) and
-the [versioned protocol contract](docs/browser-sso-contract.md).
-
-An optional **My applications** launcher at `/sso/apps` shows the current
-browser identity and applications allowed by live grants. Configure an explicit
-name, destination and optional scope under `[sites.launcher]`; see
-[launcher setup and account controls](docs/browser-sso-deployment.md#my-applications-launcher).
