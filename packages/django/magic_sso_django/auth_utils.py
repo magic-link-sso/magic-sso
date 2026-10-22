@@ -148,4 +148,7 @@ def redirect_to_login(request: HttpRequest, scope: str | None = None) -> HttpRes
     if isinstance(scope, str) and scope.strip():
         params['scope'] = scope.strip()
     params = urlencode(params)
-    return redirect(reverse('magic_sso:login') + '?' + params)
+    from .browser_sso import get_mode
+
+    endpoint = 'magic_sso:login' if get_mode() == 'off' else 'magic_sso:sso_start'
+    return redirect(reverse(endpoint) + '?' + params)

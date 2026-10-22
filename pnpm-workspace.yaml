@@ -30,7 +30,6 @@ minimumReleaseAgeExclude:
     - esbuild@0.28.1
     - nodemailer@10.0.16
     - sharp@0.35.5
-    - vite@8.0.16
     - '@types/node@25.9.1'
     - '@types/react@19.2.15'
     - postcss@8.5.15
@@ -72,8 +71,8 @@ overrides:
     undici@>=7.0.0 <7.29.1: ^7.29.1
     vite@>=7.0.0 <=7.3.1: '>=7.3.2'
     vite@>=7.1.0 <=7.3.1: '>=7.3.2'
-    vite@>=8.0.0 <=8.0.15: '>=8.0.16'
-    vite-node>vite: 8.0.16
+    vite@>=8.0.0 <=8.1.5: '>=8.1.6'
+    vite-node>vite: 8.3.4
 
 patchedDependencies:
     '@nuxt/devtools@3.4.2': patches/@nuxt__devtools@3.4.2.patch

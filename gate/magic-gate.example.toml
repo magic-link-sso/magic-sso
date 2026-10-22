@@ -24,6 +24,15 @@ jwtSecret = "replace-with-a-real-jwt-secret-at-least-32-chars"
 previewSecret = "replace-with-a-real-preview-secret-at-least-32-chars"
 serverUrl = "http://localhost:3000"
 
+# Opt-in shared browser session. Enable only after registering this Gate's
+# exact start/callback/signed-out URLs on a dedicated HTTPS issuer hostname.
+[auth.sso]
+# Optional app-origin email/OTP forms; also enable issuer bootstrapEnabled.
+# loginUi = "app-owned"
+mode = "off"
+# requestTimeoutMs = 5000
+# allowInsecureLocalhost = true # Local HTTP only; issuer/app hostnames must differ.
+
 [cookie]
 name = "magic-sso"
 path = "/"

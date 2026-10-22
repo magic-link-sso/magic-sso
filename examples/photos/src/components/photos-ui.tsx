@@ -63,7 +63,7 @@ export function SiteHeader({ viewer }: { readonly viewer: ViewerSession }): JSX.
 
       <div className="site-actions">
         {viewer === null ? (
-          <Link href="/login?returnUrl=%2F" className="button button-ghost">
+          <Link href={buildLoginHref('/')} className="button button-ghost">
             Sign in
           </Link>
         ) : (

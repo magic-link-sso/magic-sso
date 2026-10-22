@@ -19,6 +19,9 @@
 
 import type { AppConfig } from './config.js';
 import { join } from 'node:path';
+import { createFileBrowserSsoStore } from './browserSsoFileStore.js';
+import { createRedisBrowserSsoStore } from './browserSsoRedisStore.js';
+import type { BrowserSsoStore } from './browserSsoStore.js';
 import {
     createFilePerEmailSignInLimiter,
     type PerEmailSignInLimiter,
@@ -42,6 +45,7 @@ import {
 } from './verificationTokenReplayStore.js';
 
 export interface SharedSecurityState {
+    browserSsoStore: BrowserSsoStore;
     close(): Promise<void>;
     perEmailSignInLimiter: PerEmailSignInLimiter;
     otpChallengeStore: OtpChallengeStore;
@@ -76,6 +80,10 @@ export async function createSecurityState(
         }
 
         return {
+            browserSsoStore: createRedisBrowserSsoStore({
+                client,
+                keyPrefix: config.securityState.keyPrefix,
+            }),
             close: async (): Promise<void> => {
                 await client.quit();
             },
@@ -116,6 +124,9 @@ export async function createSecurityState(
     });
 
     return {
+        browserSsoStore: await createFileBrowserSsoStore({
+            directory: join(config.verifyTokenStoreDir, 'browser-sso'),
+        }),
         close: async (): Promise<void> => undefined,
         perEmailSignInLimiter,
         otpChallengeStore,

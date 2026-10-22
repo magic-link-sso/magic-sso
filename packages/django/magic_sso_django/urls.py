@@ -24,11 +24,14 @@
 
 from django.urls import path
 
-from . import views
+from . import browser_sso, views
 
 app_name = 'magic_sso'
 
 urlpatterns = [
+    path('start/', browser_sso.start, name='sso_start'),
+    path('callback/', browser_sso.callback, name='sso_callback'),
+    path('signed-out/', browser_sso.signed_out, name='sso_signed_out'),
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
     path('verify-email/', views.verify_token, name='verify_email'),

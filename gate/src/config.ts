@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { validateConfiguredSecret } from '@magic-link-sso/config-core';
+import type { BrowserSsoMode } from '@magic-link-sso/core';
 import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { parse as parseToml } from 'smol-toml';
@@ -10,6 +11,12 @@ import { z } from 'zod';
 export type GateMode = 'path-prefix' | 'subdomain';
 
 export interface GateConfigInput {
+    browserSso?: {
+        mode?: BrowserSsoMode;
+        loginUi?: 'hosted' | 'app-owned';
+        allowInsecureLocalhost?: boolean;
+        requestTimeoutMs?: number;
+    };
     cookieMaxAge?: number;
     cookieName?: string;
     cookiePath?: string;
@@ -34,6 +41,12 @@ export interface GateConfigInput {
 }
 
 export interface GateConfig {
+    browserSso: {
+        mode: BrowserSsoMode;
+        loginUi?: 'hosted' | 'app-owned';
+        allowInsecureLocalhost: boolean;
+        requestTimeoutMs: number;
+    };
     cookieMaxAge?: number;
     cookieName: string;
     cookiePath: string;
@@ -84,6 +97,15 @@ const gateTomlSchema = z
                 jwtSecret: configuredSecretSchema('auth.jwtSecret'),
                 serverUrl: z.string().min(1, 'auth.serverUrl is required.'),
                 previewSecret: configuredSecretSchema('auth.previewSecret'),
+                sso: z
+                    .object({
+                        mode: z.enum(['off', 'auto', 'required']).optional(),
+                        loginUi: z.enum(['hosted', 'app-owned']).optional(),
+                        allowInsecureLocalhost: z.boolean().optional(),
+                        requestTimeoutMs: z.number().int().min(100).max(30_000).optional(),
+                    })
+                    .strict()
+                    .optional(),
             })
             .strict(),
         cookie: z
@@ -511,6 +533,7 @@ function mapGateTomlToInput(config: z.infer<typeof gateTomlSchema>): GateConfigI
         publicOrigin: config.gate.publicOrigin,
         previewSecret: config.auth.previewSecret,
         serverUrl: config.auth.serverUrl,
+        ...(config.auth.sso === undefined ? {} : { browserSso: definedEntries(config.auth.sso) }),
         upstreamUrl: config.gate.upstreamUrl,
         ...definedEntries({
             cookieMaxAge: config.cookie?.maxAge,
@@ -552,6 +575,15 @@ function parseGateToml(fileContents: string, filePath: string): GateConfigInput 
     return mapGateTomlToInput(parsedConfig.data);
 }
 
+function resolveGateBrowserSso(config: GateConfigInput): GateConfig['browserSso'] {
+    return {
+        mode: config.browserSso?.mode ?? 'off',
+        ...(config.browserSso?.loginUi === undefined ? {} : { loginUi: config.browserSso.loginUi }),
+        allowInsecureLocalhost: config.browserSso?.allowInsecureLocalhost ?? false,
+        requestTimeoutMs: config.browserSso?.requestTimeoutMs ?? 5000,
+    };
+}
+
 export function resolveGateConfig(config: GateConfigInput = {}): GateConfig {
     const mode = resolveMode(config.mode);
     const publicPathPrefix = normaliseSlashPath(config.publicPathPrefix, {
@@ -585,6 +617,7 @@ export function resolveGateConfig(config: GateConfigInput = {}): GateConfig {
     );
 
     return {
+        browserSso: resolveGateBrowserSso(config),
         ...(typeof cookieMaxAge === 'number' ? { cookieMaxAge } : {}),
         cookieName: config.cookieName ?? 'magic-sso',
         cookiePath: resolveCookiePath({

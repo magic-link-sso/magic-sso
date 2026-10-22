@@ -22,6 +22,10 @@ function readConfigTable(value: unknown): Record<string, unknown> {
 /** Apply the module defaults once, so the server and public tables stay in step. */
 function resolveModuleOptions(options: MagicSsoModuleOptions) {
     return {
+        browserSsoMode: options.browserSsoMode ?? 'off',
+        browserSsoLoginUi: options.browserSsoLoginUi ?? 'hosted',
+        browserSsoAllowInsecureLocalhost: options.browserSsoAllowInsecureLocalhost ?? false,
+        browserSsoTimeoutMs: options.browserSsoTimeoutMs ?? 5000,
         authEverywhere: options.authEverywhere ?? false,
         cookieMaxAge: options.cookieMaxAge,
         cookieName: options.cookieName ?? 'token',
@@ -40,6 +44,13 @@ const serverHandlers: ReadonlyArray<{
     method: 'get' | 'post';
     route: string;
 }> = [
+    // Literal method keeps the generated route entries within the handler method union.
+    ...['start', 'callback', 'signed-out'].map((action) => ({
+        handler: './runtime/server/routes/browser-sso.get',
+        method: 'get' as const,
+        route: `/sso/${action}`,
+    })),
+    { handler: './runtime/server/routes/browser-sso.get', method: 'post', route: '/sso/start' },
     { handler: './runtime/server/routes/logout.post', method: 'post', route: '/logout' },
     { handler: './runtime/server/routes/verify-email.get', method: 'get', route: '/verify-email' },
     {

@@ -76,7 +76,12 @@ describe('Magic Link SSO Nuxt module', () => {
             serverUrl: 'http://sso.example.com',
         });
         expect(runtimeConfig.public.magicSso).not.toHaveProperty('jwtSecret');
-        expect(addServerHandlerMock).toHaveBeenCalledTimes(4);
+        expect(addServerHandlerMock).toHaveBeenCalledTimes(8);
+        for (const route of ['/sso/start', '/sso/callback', '/sso/signed-out']) {
+            expect(addServerHandlerMock).toHaveBeenCalledWith(
+                expect.objectContaining({ route, method: 'get' }),
+            );
+        }
         expect(addRouteMiddlewareMock).toHaveBeenCalledWith(
             expect.objectContaining({ global: false, name: 'magic-sso-auth' }),
         );

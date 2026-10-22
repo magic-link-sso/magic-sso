@@ -87,6 +87,8 @@
             font-size: 1rem;
             line-height: 1.6;
         }
+        .launcher-link { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1rem; color: var(--color-text); font-weight: 600; }
+        .launcher-link:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
     </style>
 </head>
 <body>
@@ -96,6 +98,7 @@
         <p class="landing-copy">
             <%= branding.title %> is online and ready to power passwordless sign-in.
         </p>
+        <% if (launcherHref) { %><a class="launcher-link" href="<%= launcherHref %>">My applications</a><% } %>
     </main>
 </body>
 </html>

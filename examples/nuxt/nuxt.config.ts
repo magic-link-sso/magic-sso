@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import { parseBooleanFlag } from '@magic-link-sso/core';
+import {
+    parseBrowserSsoMode,
+    parseBrowserSsoLoginUi,
+    parseBooleanFlag,
+} from '@magic-link-sso/core';
 import { defineNuxtConfig } from 'nuxt/config';
 
 function readBooleanEnv(value: string | undefined): boolean {
@@ -19,6 +23,12 @@ export default defineNuxtConfig({
     ],
     runtimeConfig: {
         magicSso: {
+            browserSsoLoginUi: parseBrowserSsoLoginUi(process.env.MAGICSSO_BROWSER_SSO_LOGIN_UI),
+            browserSsoMode: parseBrowserSsoMode(process.env.MAGICSSO_BROWSER_SSO_MODE),
+            browserSsoAllowInsecureLocalhost: readBooleanEnv(
+                process.env.MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST,
+            ),
+            browserSsoTimeoutMs: Number(process.env.MAGICSSO_BROWSER_SSO_TIMEOUT_MS ?? 5000),
             previewSecret: process.env.MAGICSSO_PREVIEW_SECRET ?? '',
             serverUrl: process.env.MAGICSSO_SERVER_URL ?? process.env.APP_URL ?? '',
             jwtSecret: process.env.MAGICSSO_JWT_SECRET ?? process.env.JWT_SECRET ?? '',
@@ -45,6 +55,10 @@ export default defineNuxtConfig({
         },
         public: {
             magicSso: {
+                browserSsoLoginUi: parseBrowserSsoLoginUi(
+                    process.env.MAGICSSO_BROWSER_SSO_LOGIN_UI,
+                ),
+                browserSsoMode: parseBrowserSsoMode(process.env.MAGICSSO_BROWSER_SSO_MODE),
                 serverUrl: process.env.MAGICSSO_SERVER_URL ?? process.env.APP_URL ?? '',
                 publicOrigin: process.env.MAGICSSO_PUBLIC_ORIGIN ?? process.env.APP_URL ?? '',
                 cookieName:

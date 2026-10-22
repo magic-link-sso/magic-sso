@@ -36,6 +36,7 @@ import {
 } from '@magic-link-sso/core';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { browserSsoPaths, getBrowserSsoMode } from './browserSsoConfig';
 
 export type AuthPayload = CoreAuthPayload;
 
@@ -248,7 +249,10 @@ export function buildAuthCookieOptions(value: string): AuthCookieOptions {
 }
 
 export function redirectToLogin(returnUrl: string, scope?: string): never {
-    const loginUrl = new URL('/login', 'http://magic-sso.local');
+    const loginUrl = new URL(
+        getBrowserSsoMode() === 'off' ? '/login' : browserSsoPaths.start,
+        'http://magic-sso.local',
+    );
     loginUrl.searchParams.set('returnUrl', returnUrl);
     if (typeof scope === 'string' && scope.trim().length > 0) {
         loginUrl.searchParams.set('scope', scope.trim());

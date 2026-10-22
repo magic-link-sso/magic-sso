@@ -42,7 +42,7 @@ describe('logout route', () => {
             },
         };
         getCookieNameMock.mockReturnValue('magic-sso');
-        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/auth' });
+        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/auth', browserSsoMode: 'off' });
         hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
@@ -110,7 +110,7 @@ describe('logout route', () => {
             },
         };
         getCookieNameMock.mockReturnValue('magic-sso');
-        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/' });
+        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/', browserSsoMode: 'off' });
         hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
@@ -136,7 +136,7 @@ describe('logout route', () => {
             },
         };
         getCookieNameMock.mockReturnValue('magic-sso');
-        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/' });
+        getMagicSsoConfigMock.mockReturnValue({ cookiePath: '/', browserSsoMode: 'off' });
         hasSameOriginMutationSourceMock.mockReturnValue(true);
 
         const { default: logoutRoute } = await import('./logout.post');
@@ -145,5 +145,25 @@ describe('logout route', () => {
         expect(response).toBeUndefined();
         expect(deleteCookieMock).toHaveBeenCalledOnce();
         expect(sendRedirectMock).toHaveBeenCalledWith(event, '/', 303);
+    });
+    it('clears only the local SSO app cookie and returns to a public signed-out page', async () => {
+        const event = {
+            node: { req: { method: 'POST', headers: { origin: 'http://nuxt.localhost' } } },
+        };
+        getCookieNameMock.mockReturnValue('magic-sso');
+        getMagicSsoConfigMock.mockReturnValue({
+            cookiePath: '/',
+            browserSsoMode: 'required',
+            publicOrigin: 'http://nuxt.localhost',
+        });
+        hasSameOriginMutationSourceMock.mockReturnValue(true);
+        const { default: logoutRoute } = await import('./logout.post');
+        await logoutRoute(event);
+        expect(deleteCookieMock).toHaveBeenCalledWith(
+            event,
+            'magic-sso',
+            expect.objectContaining({ secure: false, httpOnly: true, path: '/' }),
+        );
+        expect(sendRedirectMock).toHaveBeenCalledWith(event, '/sso/signed-out', 303);
     });
 });

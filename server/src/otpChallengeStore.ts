@@ -25,6 +25,7 @@ import { join, resolve } from 'node:path';
 import { hashOtpCode, isMatchingOtpHash } from './otp.js';
 
 export interface OtpChallenge {
+    browserSsoRequestId?: string | undefined;
     attemptsRemaining: number;
     challengeId: string;
     createdAt: number;
@@ -54,6 +55,7 @@ export type OtpChallengeVerificationResult =
 export interface OtpChallengeStore {
     create(challenge: OtpChallenge): Promise<void>;
     verify(input: {
+        browserSsoRequestId?: string;
         challengeId: string;
         code: string;
         now: number;
@@ -100,6 +102,8 @@ export function parseOtpChallenge(value: unknown): OtpChallenge | null {
 
     const read = (field: string): unknown => Reflect.get(value, field);
     const isValid =
+        (typeof read('browserSsoRequestId') === 'undefined' ||
+            typeof read('browserSsoRequestId') === 'string') &&
         typeof read('attemptsRemaining') === 'number' &&
         typeof read('challengeId') === 'string' &&
         typeof read('createdAt') === 'number' &&
@@ -325,6 +329,9 @@ export async function createFileOtpChallengeStore(options: {
                     if (challenge === null) {
                         return { category: 'not_found' };
                     }
+                    if (challenge.browserSsoRequestId !== input.browserSsoRequestId) {
+                        return { category: 'invalid' };
+                    }
                     const activeChallengeId = await readActiveChallengeId(
                         directory,
                         challenge.rotationKey,
@@ -397,6 +404,9 @@ export function createInMemoryOtpChallengeStore(): OtpChallengeStore {
             const challenge = challenges.get(input.challengeId);
             if (typeof challenge === 'undefined') {
                 return { category: 'not_found' };
+            }
+            if (challenge.browserSsoRequestId !== input.browserSsoRequestId) {
+                return { category: 'invalid' };
             }
             if (activeChallenges.get(challenge.rotationKey) !== challenge.challengeId) {
                 challenges.delete(input.challengeId);

@@ -27,6 +27,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { browserSsoPaths, getBrowserSsoMode } from '../../lib/browserSsoConfig';
 import {
     getCookieName,
     getCookiePath,
@@ -50,9 +51,13 @@ export async function LogoutRoute(request: Request): Promise<Response> {
         });
     }
 
-    const url = new URL('/', getExpectedMutationOrigin(request));
-    url.pathname = '/';
+    const url = new URL(
+        getBrowserSsoMode() === 'off' ? '/' : browserSsoPaths.signedOut,
+        getExpectedMutationOrigin(request),
+    );
     const response = NextResponse.redirect(url, 303);
+    response.headers.set('cache-control', 'no-store');
+    response.headers.set('referrer-policy', 'no-referrer');
 
     // Mirror the auth cookie attributes so the browser overwrites it reliably.
     response.cookies.set({
@@ -61,7 +66,10 @@ export async function LogoutRoute(request: Request): Promise<Response> {
         path: getCookiePath(),
         maxAge: 0,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure:
+            getBrowserSsoMode() === 'off'
+                ? process.env.NODE_ENV === 'production'
+                : url.protocol === 'https:',
         sameSite: 'lax',
     });
 

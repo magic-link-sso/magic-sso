@@ -40,6 +40,8 @@ import {
     verifyAuthToken,
 } from './lib/auth';
 
+import { browserSsoPaths, getBrowserSsoMode } from './lib/browserSsoConfig';
+
 const DEFAULT_EXCLUDED_PATHS = [
     '/',
     '/login',
@@ -55,15 +57,15 @@ export interface AuthMiddlewareOptions {
 }
 
 export function getExcludedPaths(options?: AuthMiddlewareOptions): readonly string[] {
-    const configuredPaths = options?.excludedPaths;
-    if (typeof configuredPaths === 'undefined') {
-        return DEFAULT_EXCLUDED_PATHS;
-    }
-
-    return configuredPaths;
+    return options?.excludedPaths ?? DEFAULT_EXCLUDED_PATHS;
 }
 
 export function isPublicPath(pathname: string, options?: AuthMiddlewareOptions): boolean {
+    // Pending callbacks must reach the explicit disabled error after a rollout
+    // is switched off, rather than being redirected into a legacy login flow.
+    if (Object.values(browserSsoPaths).includes(pathname)) {
+        return true;
+    }
     return getExcludedPaths(options).some(
         (path) => pathname === path || pathname.startsWith(`${path}/`),
     );
@@ -104,7 +106,9 @@ function buildLoginUrlWithError(
     const appOrigin = getExpectedAudience(request) ?? request.nextUrl.origin;
     const target = buildCoreLoginTarget({
         appOrigin,
-        directUse: parseBooleanFlag(process.env.MAGICSSO_DIRECT_USE),
+        directUse:
+            getBrowserSsoMode() === 'off' && parseBooleanFlag(process.env.MAGICSSO_DIRECT_USE),
+        ...(getBrowserSsoMode() === 'off' ? {} : { loginPath: browserSsoPaths.start }),
         returnUrl: pathname,
         ...(typeof scope === 'string' ? { scope } : {}),
         ...(typeof process.env.MAGICSSO_SERVER_URL === 'string'

@@ -7,20 +7,25 @@
         "format:check": "oxfmt --check .",
         "lint": "oxlint .",
         "mail-sink": "node src/smtp-sink.mjs",
-        "test": "vitest run tests/*.test.ts",
-        "test:e2e": "pnpm run test:e2e:indirect && pnpm run test:e2e:direct && pnpm run test:e2e:proxy && pnpm run test:e2e:manager && pnpm run test:e2e:starters",
+        "test": "vitest run src/*.test.ts tests/*.test.ts",
+        "test:e2e": "pnpm run test:e2e:indirect && pnpm run test:e2e:direct && pnpm run test:e2e:proxy && pnpm run test:e2e:manager && pnpm run test:e2e:starters && pnpm run test:e2e:sso && pnpm run test:e2e:sso:https && pnpm run test:e2e:sso:app-owned",
         "test:e2e:direct": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.direct.config.ts",
+        "test:e2e:sso": "pnpm --filter @magic-link-sso/core build && pnpm --filter @magic-link-sso/nextjs build && env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.sso.config.ts",
         "test:e2e:headed": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts --headed",
         "test:e2e:indirect": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.indirect.config.ts",
         "test:e2e:manager": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.manager.config.ts",
         "test:e2e:ui": "env -u NO_COLOR -u FORCE_COLOR PW_SLOWMO_MS=${PW_SLOWMO_MS:-700} playwright test --config playwright.indirect.config.ts --ui",
         "typecheck": "tsc -p tsconfig.json",
         "test:e2e:proxy": "env -u NO_COLOR -u FORCE_COLOR playwright test --config playwright.proxy.config.ts",
-        "test:e2e:starters": "MAGICSSO_STARTER_PATH=gate playwright test --config playwright.starters.config.ts && MAGICSSO_STARTER_PATH=sdk playwright test --config playwright.starters.config.ts"
+        "test:e2e:starters": "MAGICSSO_STARTER_PATH=gate playwright test --config playwright.starters.config.ts && MAGICSSO_STARTER_PATH=sdk playwright test --config playwright.starters.config.ts",
+        "test:e2e:sso:https": "MAGICSSO_E2E_SSO_HTTPS=true pnpm run test:e2e:sso",
+        "test:e2e:sso:app-owned": "MAGICSSO_E2E_SSO_HTTPS=true MAGICSSO_E2E_SSO_APP_OWNED=true pnpm run test:e2e:sso"
     },
     "devDependencies": {
         "@playwright/test": "^1.64.0",
         "@types/node": "^25.9.9",
+        "magic-sso-gate": "workspace:*",
+        "magic-sso-server": "workspace:*",
         "mailparser": "latest",
         "smtp-server": "latest",
         "typescript": "^5.9.3"

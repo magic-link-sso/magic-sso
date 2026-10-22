@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import type { AuthPayload } from '@magic-link-sso/nextjs';
+import { getBrowserSsoMode } from '@magic-link-sso/nextjs';
 
 export type ViewerSession = AuthPayload | null;
 
@@ -32,8 +33,12 @@ export function getAccessState(viewer: ViewerSession, requirement: AccessRequire
     return viewer === null ? 'signin' : 'switch-scope';
 }
 
-export function buildLoginHref(returnPath: string, requirement: AccessRequirement): string {
-    const loginUrl = new URL('/login', 'http://magic-link-sso.local');
+export function buildLoginHref(
+    returnPath: string,
+    requirement: AccessRequirement = { label: 'Application' },
+): string {
+    const path = getBrowserSsoMode() === 'off' ? '/login' : '/sso/start';
+    const loginUrl = new URL(path, 'http://magic-link-sso.local');
     loginUrl.searchParams.set('returnUrl', returnPath);
     if (typeof requirement.scope === 'string') {
         loginUrl.searchParams.set('scope', requirement.scope);

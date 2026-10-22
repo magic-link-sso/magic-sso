@@ -77,11 +77,20 @@ jobs:
         working-directory: examples/django
         run: uv sync --all-groups
 
-      - name: Install Playwright Chromium
-        run: pnpm --filter magic-sso-e2e exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm --filter magic-sso-e2e exec playwright install --with-deps chromium firefox webkit
 
       - name: Run end-to-end tests
         run: pnpm test:e2e
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-failure-artifacts
+          path: tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   python:
     runs-on: ubuntu-latest
@@ -122,6 +131,14 @@ jobs:
           else
             uv run ty check
           fi
+
+      - name: Validate browser SSO Python fixture
+        if: matrix.project == 'examples/django'
+        working-directory: examples/django
+        run: |
+          uv run ruff format --config pyproject.toml --check ../../tests/e2e/src/browser-sso-django-server.py
+          uv run ruff check --config pyproject.toml ../../tests/e2e/src/browser-sso-django-server.py
+          uv run ty check ../../tests/e2e/src/browser-sso-django-server.py
 
       - name: Test
         working-directory: ${{ matrix.project }}

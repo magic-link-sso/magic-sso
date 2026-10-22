@@ -47,7 +47,8 @@ function resolveTransferredMagicSsoConfig(config: MagicSsoConfig = {}): MagicSso
         return transferState.get(CONFIG_STATE_KEY, fallbackConfig);
     }
 
-    transferState.set(CONFIG_STATE_KEY, fallbackConfig);
+    // Only public configuration may enter the rendered TransferState script.
+    transferState.set(CONFIG_STATE_KEY, { ...fallbackConfig, jwtSecret: '' });
     return fallbackConfig;
 }
 
@@ -111,5 +112,14 @@ export const magicSsoAuthGuard: CanActivateFn = async (_route, state) => {
         return true;
     }
 
-    return router.parseUrl(buildLoginPath(getRequestOrigin(request), state.url, config));
+    const login = buildLoginPath(getRequestOrigin(request), state.url, config);
+    if (config.browserSsoMode !== 'off') {
+        // The HTTP server redirects unauthenticated SSR documents before rendering.
+        // Refuse an unprotected SSR request; only CSR uses browser navigation here.
+        if (!(request instanceof Request) && typeof globalThis.location === 'object') {
+            globalThis.location.assign(login);
+        }
+        return false;
+    }
+    return router.parseUrl(login);
 };

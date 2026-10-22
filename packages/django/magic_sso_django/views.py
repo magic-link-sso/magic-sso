@@ -223,11 +223,14 @@ def login(request: HttpRequest) -> HttpResponse:
 @csrf_protect
 @require_POST
 def logout(request: HttpRequest) -> HttpResponse:
-    response = redirect('/')
+    from .browser_sso import get_mode
+
+    mode = get_mode()
+    response = redirect('/' if mode == 'off' else reverse('magic_sso:sso_signed_out'))
     cookie_options = get_magic_sso_cookie_options()
     response.delete_cookie(
         settings.MAGICSSO_COOKIE_NAME,
-        domain=cookie_options['domain'],
+        domain=cookie_options['domain'] if mode == 'off' else None,
         path=cookie_options['path'],
         samesite=cookie_options['samesite'],
     )

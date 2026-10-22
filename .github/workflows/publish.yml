@@ -61,8 +61,8 @@ jobs:
         working-directory: examples/django
         run: uv sync --all-groups
 
-      - name: Install Playwright Chromium
-        run: pnpm --filter magic-sso-e2e exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm --filter magic-sso-e2e exec playwright install --with-deps chromium firefox webkit
 
       - name: Run end-to-end tests
         run: pnpm test:e2e

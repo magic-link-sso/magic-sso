@@ -5,16 +5,20 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 import { promisify } from 'node:util';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     parseMagicSsoConfigToml,
     parseMagicSsoTomlConfig,
 } from '../packages/config-core/src/index.js';
 import { loadConfig as loadGateConfig } from '../gate/src/config.js';
 import { runServerDoctor } from '../server/src/doctor.js';
-import { createStarterFiles, writeStarter, type StarterOptions } from './setup.mjs';
+import { createStarterFiles, writeStarter, runSetup, type StarterOptions } from './setup.mjs';
 
 const execute = promisify(execFile);
+const originalTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+beforeEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
+});
 const directories: string[] = [];
 function directory(): string {
     const path = mkdtempSync(join(tmpdir(), 'magic-sso-setup-'));
@@ -22,12 +26,69 @@ function directory(): string {
     return path;
 }
 afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalTty) {
+        Object.defineProperty(process.stdin, 'isTTY', originalTty);
+    } else {
+        Reflect.deleteProperty(process.stdin, 'isTTY');
+    }
     for (const path of directories.splice(0)) {
         rmSync(path, { recursive: true, force: true });
     }
 });
 
 describe('first-deployment setup', () => {
+    it('runs help and input validation without creating a deployment', async () => {
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        expect(await runSetup(['--help'])).toBe(0);
+        expect(stdout.mock.calls.map(([value]) => String(value)).join('')).toContain(
+            'pnpm setup:app gate|sdk',
+        );
+        for (const args of [[], ['unknown'], ['gate', 'sdk'], ['gate', '--force'], ['sdk']]) {
+            expect(await runSetup(args)).toBe(2);
+        }
+        expect(stderr.mock.calls.map(([value]) => String(value)).join('')).toContain(
+            'Setup failed:',
+        );
+    });
+
+    it('maps CLI options into private configuration and refuses to overwrite it', async () => {
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const output = join(directory(), 'direct-cli');
+        const args = [
+            'gate',
+            '--email',
+            'Owner@Example.com',
+            '--output',
+            output,
+            '--server-port',
+            '3333',
+            '--app-port',
+            '4444',
+            '--smtp-port',
+            '2525',
+            '--trust-proxy',
+        ];
+        expect(await runSetup(args)).toBe(0);
+        const source = readFileSync(join(output, 'magic-sso.toml'), 'utf8');
+        const config = parseMagicSsoConfigToml(source, 'starter');
+        expect(config.appPort).toBe(3333);
+        expect(config.emailSmtpPort).toBe(2525);
+        expect(config.trustProxy).toBe(true);
+        expect(
+            loadGateConfig({ MAGIC_GATE_CONFIG_FILE: join(output, 'magic-gate.toml') }).port,
+        ).toBe(4444);
+        const transcript = stdout.mock.calls.map(([value]) => String(value)).join('');
+        expect(transcript).toContain('NEXT-STEPS.md');
+        expect(transcript).not.toContain(config.jwtSecret);
+        expect(await runSetup(args)).toBe(2);
+        expect(readFileSync(join(output, 'magic-sso.toml'), 'utf8')).toBe(source);
+        expect(stderr.mock.calls.map(([value]) => String(value)).join('')).toContain(
+            'Output already exists',
+        );
+    });
     it.each(['gate', 'sdk'] satisfies StarterOptions['path'][])(
         'passes offline server diagnostics for the generated %s config',
         async (path) => {
@@ -127,6 +188,10 @@ describe('first-deployment setup', () => {
         ).toBe(true);
         const manifest = JSON.parse(readFileSync(join(output, 'app/package.json'), 'utf8'));
         expect(manifest.dependencies['@magic-link-sso/nextjs']).not.toContain('workspace:');
+        expect(Object.values(manifest.dependencies)).not.toContain('*');
+        expect(Object.values(manifest.devDependencies)).not.toContain('*');
+        expect(manifest.scripts.dev).toContain('--port 3001');
+        expect(manifest.scripts.start).toContain('--port 3001');
         expect(existsSync(join(output, 'app/src/app/verify-email/route.ts'))).toBe(true);
         expect(readFileSync(join(output, '.gitignore'), 'utf8')).toContain('app/.env*');
         expect(readFileSync(join(output, 'app/.gitignore'), 'utf8')).toContain('.env*');

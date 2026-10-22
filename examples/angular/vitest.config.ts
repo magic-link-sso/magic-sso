@@ -8,6 +8,7 @@ import { defineConfig } from 'vitest/config';
 const packageDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+    oxc: { decorator: { legacy: true } },
     resolve: {
         alias: {
             '@magic-link-sso/angular': resolve(packageDir, '../../packages/angular/src/index.ts'),
@@ -18,7 +19,7 @@ export default defineConfig({
         },
     },
     test: {
-        include: ['tests/**/*.test.ts'],
+        include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
         exclude: ['dist/**', 'node_modules/**'],
     },
 });

@@ -29,7 +29,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
 
     return navigateTo(buildLoginUrl(event, to.fullPath), {
-        external: config.directUse,
+        external: config.directUse || config.browserSsoMode !== 'off',
         redirectCode: 307,
     });
 });

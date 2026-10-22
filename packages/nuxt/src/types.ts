@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Wojciech Polak
 
-import type { AuthPayload as CoreAuthPayload } from '@magic-link-sso/core';
+import type { BrowserSsoMode, AuthPayload as CoreAuthPayload } from '@magic-link-sso/core';
 
 export type AuthPayload = CoreAuthPayload;
 
 export interface MagicSsoModuleOptions {
+    browserSsoLoginUi?: 'hosted' | 'app-owned';
+    browserSsoMode?: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost?: boolean;
+    browserSsoTimeoutMs?: number;
     previewSecret?: string;
     serverUrl?: string;
     jwtSecret?: string;
@@ -20,6 +24,10 @@ export interface MagicSsoModuleOptions {
 }
 
 export interface MagicSsoResolvedConfig {
+    browserSsoLoginUi: 'hosted' | 'app-owned';
+    browserSsoMode: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost: boolean;
+    browserSsoTimeoutMs: number;
     previewSecret: string;
     serverUrl: string;
     jwtSecret: string;

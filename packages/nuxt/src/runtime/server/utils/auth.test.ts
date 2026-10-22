@@ -134,6 +134,10 @@ function createEvent(origin: string): {
 describe('resolveMagicSsoConfig', () => {
     it('uses strict defaults when config is missing', () => {
         expect(resolveMagicSsoConfig(undefined)).toEqual({
+            browserSsoMode: 'off',
+            browserSsoLoginUi: 'hosted',
+            browserSsoAllowInsecureLocalhost: false,
+            browserSsoTimeoutMs: 5000,
             previewSecret: '',
             serverUrl: '',
             jwtSecret: '',
@@ -164,6 +168,10 @@ describe('resolveMagicSsoConfig', () => {
                 authEverywhere: true,
             }),
         ).toEqual({
+            browserSsoMode: 'off',
+            browserSsoLoginUi: 'hosted',
+            browserSsoAllowInsecureLocalhost: false,
+            browserSsoTimeoutMs: 5000,
             previewSecret: 'preview-secret',
             serverUrl: 'http://localhost:3000',
             jwtSecret: 'secret',

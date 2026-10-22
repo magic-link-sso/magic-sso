@@ -11,6 +11,7 @@ export type {
     VerifyAuthTokenOptions,
 } from './lib/core';
 export {
+    createBrowserSsoHandler,
     buildAuthCookieOptions,
     buildLoginPath,
     buildLoginTarget,

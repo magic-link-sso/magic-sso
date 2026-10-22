@@ -7,7 +7,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { protectedBadgeUrl } from 'magic-sso-example-ui';
-import { verifyToken, redirectToLogin } from '@magic-link-sso/nextjs';
+import { verifyToken, redirectToLogin, getBrowserSsoMode } from '@magic-link-sso/nextjs';
 
 export const metadata: Metadata = {
   title: 'Protected | Magic Link SSO Next.js',
@@ -60,7 +60,7 @@ export default async function ProtectedPage(): Promise<React.JSX.Element | null>
               </Link>
               <form action="/logout" method="post">
                 <button type="submit" className="button button-secondary">
-                  Logout
+                  {getBrowserSsoMode() === 'off' ? 'Logout' : 'Sign out of this application'}
                 </button>
               </form>
             </div>

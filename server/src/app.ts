@@ -59,6 +59,15 @@ import { createSecurityState, type SharedSecurityState } from './securityState.j
 import type { SessionRevocationStore } from './sessionRevocationStore.js';
 import { type VerificationTokenReplayStore } from './verificationTokenReplayStore.js';
 import { getStartupProbeHeaderName } from './startupProbe.js';
+import { registerBrowserSsoRoutes } from './browserSsoRoutes.js';
+import { launcherEnabled, launcherPath } from './browserSsoLauncher.js';
+import {
+    browserSsoBootstrapEnabled,
+    bindBrowserSsoBootstrapGrant,
+    bootstrapJwtLifetime,
+    completeBrowserSsoBootstrap,
+} from './browserSsoBootstrap.js';
+import type { BrowserSsoStore } from './browserSsoStore.js';
 
 interface BuildAppOptions {
     config?: AppConfig;
@@ -117,6 +126,7 @@ const signInBodySchema = z.object({
     returnUrl: optionalStringField(z.string().min(1)),
     scope: optionalStringField(z.string().min(1)),
     verifyUrl: optionalStringField(z.string().url()),
+    browserSso: z.unknown().optional(),
 });
 
 const verifyEmailQuerySchema = z.object({
@@ -129,6 +139,7 @@ const sessionRevocationCheckBodySchema = z.object({
 
 const verifyEmailBodySchema = z.object({
     token: z.string().min(1).optional(),
+    browserSso: z.unknown().optional(),
 });
 
 const verifyEmailOtpBodySchema = z.object({
@@ -137,6 +148,7 @@ const verifyEmailOtpBodySchema = z.object({
     returnUrl: z.string().optional(),
     scope: z.string().optional(),
     verifyUrl: z.string().optional(),
+    browserSso: z.unknown().optional(),
 });
 
 function wantsHtmlResponse(request: FastifyRequest): boolean {
@@ -244,7 +256,7 @@ async function renderSigninPage(
 
 async function renderLandingPage(
     reply: FastifyReply,
-    viewConfig: HostedAuthViewConfig,
+    viewConfig: AppConfig,
     security: HtmlSecurityContext,
 ): Promise<void> {
     await reply
@@ -255,6 +267,7 @@ async function renderLandingPage(
             branding: viewConfig.hostedAuthBranding,
             cspNonce: security.cspNonce,
             lang: viewConfig.hostedAuthPageCopy.lang,
+            launcherHref: launcherEnabled(viewConfig) ? launcherPath : null,
         });
 }
 
@@ -753,6 +766,7 @@ function createReloadInvariantSnapshot(config: AppConfig): object {
         rateLimitWindowMs: config.rateLimitWindowMs,
         reload: typeof config.reload === 'undefined' ? undefined : { ...config.reload },
         securityState: { ...config.securityState },
+        browserSso: config.browserSso === undefined ? undefined : { ...config.browserSso },
         serveRootLandingPage: config.serveRootLandingPage,
         signInEmailRateLimitMax: config.signInEmailRateLimitMax,
         signInEmailRateLimitStoreDir: config.signInEmailRateLimitStoreDir,
@@ -762,8 +776,12 @@ function createReloadInvariantSnapshot(config: AppConfig): object {
             .map((site) => ({
                 ...cloneHostedAuthViewConfig(site),
                 id: site.id,
+                launcher: site.launcher,
                 origins: [...site.origins].sort(),
                 allowedRedirectUris: sortRedirectUriRules(site),
+                sso: site.sso
+                    ?.map((registration) => ({ ...registration }))
+                    .sort((left, right) => left.redirectUri.localeCompare(right.redirectUri)),
             }))
             .sort((left, right) => left.id.localeCompare(right.id)),
         trustProxy: config.trustProxy,
@@ -1241,6 +1259,8 @@ async function completeEmailVerification(
         logger?: FastifyBaseLogger;
         token: string;
         verificationTokenReplayStore: VerificationTokenReplayStore;
+        browserSsoStore: BrowserSsoStore;
+        bootstrapContext?: unknown;
     },
 ): Promise<void> {
     const validation = await validateVerificationToken(
@@ -1304,12 +1324,36 @@ async function completeEmailVerification(
         [...validation.site.origins].sort(),
         getAppOrigin(options.config),
         options.config.jwtSecret,
-        options.config.jwtExpirationSeconds,
+        bootstrapJwtLifetime(options.config, options.isJson ? options.bootstrapContext : undefined),
     );
 
     if (options.isJson) {
         setNoStoreHeaders(reply);
-        reply.send({ accessToken });
+        const bootstrap = await completeBrowserSsoBootstrap(
+            options.config,
+            options.browserSsoStore,
+            options.bootstrapContext,
+            {
+                siteId: validation.site.id,
+                scope: validation.scope,
+                email: validation.email,
+                grantId: validation.jti,
+                accessToken,
+                siteAllows: (siteId, email, scope): boolean => {
+                    const current = findSiteById(options.config, siteId);
+                    return current !== undefined && siteAllows(current, email, scope);
+                },
+            },
+        );
+        if (
+            bootstrap.browserSso &&
+            'error' in bootstrap.browserSso &&
+            bootstrap.browserSso.error === 'access_denied'
+        ) {
+            reply.code(403).send({ message: getDefaultFeedbackMessage('forbidden') });
+            return;
+        }
+        reply.send({ accessToken, ...bootstrap });
         return;
     }
 
@@ -1338,6 +1382,8 @@ async function completeOtpVerification(
               }
             | undefined;
         verificationTokenReplayStore: VerificationTokenReplayStore;
+        browserSsoStore: BrowserSsoStore;
+        bootstrapContext?: unknown;
     },
 ): Promise<void> {
     const otpSecret = options.config.otp.secret;
@@ -1445,11 +1491,35 @@ async function completeOtpVerification(
         [...site.origins].sort(),
         getAppOrigin(options.config),
         options.config.jwtSecret,
-        options.config.jwtExpirationSeconds,
+        bootstrapJwtLifetime(options.config, options.isJson ? options.bootstrapContext : undefined),
     );
     if (options.isJson) {
         setNoStoreHeaders(reply);
-        reply.send({ accessToken });
+        const bootstrap = await completeBrowserSsoBootstrap(
+            options.config,
+            options.browserSsoStore,
+            options.bootstrapContext,
+            {
+                siteId: site.id,
+                scope: result.challenge.scope,
+                email: result.challenge.email,
+                grantId: result.challenge.jti,
+                accessToken,
+                siteAllows: (siteId, email, scope): boolean => {
+                    const current = findSiteById(options.config, siteId);
+                    return current !== undefined && siteAllows(current, email, scope);
+                },
+            },
+        );
+        if (
+            bootstrap.browserSso &&
+            'error' in bootstrap.browserSso &&
+            bootstrap.browserSso.error === 'access_denied'
+        ) {
+            reply.code(403).send({ message: getDefaultFeedbackMessage('forbidden') });
+            return;
+        }
+        reply.send({ accessToken, ...bootstrap });
         return;
     }
     reply
@@ -1457,6 +1527,36 @@ async function completeOtpVerification(
         .header('Pragma', 'no-cache')
         .setCookie(options.config.cookieName, accessToken, buildAuthCookieOptions(options.config))
         .redirect(result.challenge.safeReturnUrl ?? '/');
+}
+
+async function prepareSignInBootstrap(
+    reply: FastifyReply,
+    config: AppConfig,
+    store: SharedSecurityState['browserSsoStore'],
+    context: unknown,
+    input: { token: string; siteId: string; scope: string },
+): Promise<boolean> {
+    if (context === undefined || !browserSsoBootstrapEnabled(config)) {
+        return true;
+    }
+    const grant = await verifyEmailToken(input.token, config.emailSecret, {
+        expectedIssuer: getAppOrigin(config),
+    });
+    const error =
+        grant === null
+            ? 'invalid_request'
+            : await bindBrowserSsoBootstrapGrant(config, store, context, {
+                  siteId: input.siteId,
+                  scope: input.scope,
+                  grantId: grant.jti,
+              });
+    if (error) {
+        reply.code(error === 'temporarily_unavailable' ? 503 : 400).send({
+            message: 'Shared sign-in could not be prepared. Start again from your application.',
+        });
+        return false;
+    }
+    return true;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -1514,6 +1614,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     app.addHook('onSend', async (request, reply, payload): Promise<unknown> => {
         applyDefaultSecurityHeaders(request, reply);
         return payload;
+    });
+
+    await registerBrowserSsoRoutes(app, {
+        config,
+        mailer,
+        securityState,
+        otpChallengeStore,
+        perEmailSignInLimiter,
+        verificationTokenReplayStore,
+        siteAllows,
     });
 
     app.get('/', async (_request, reply): Promise<void> => {
@@ -1839,6 +1949,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 config.emailExpirationSeconds,
             );
 
+            if (
+                !(await prepareSignInBootstrap(
+                    reply,
+                    config,
+                    securityState.browserSsoStore,
+                    body.browserSso,
+                    { token, siteId: resolvedRequest.site.id, scope: requestedScope },
+                ))
+            ) {
+                return;
+            }
+
             let otpChallengeId: string | undefined;
             try {
                 otpChallengeId = await sendSignInVerificationEmail({
@@ -2058,6 +2180,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 logger: request.log,
                 token: submittedToken,
                 verificationTokenReplayStore,
+                browserSsoStore: securityState.browserSsoStore,
+                bootstrapContext: parsedBody.data.browserSso,
             });
         },
     );
@@ -2129,6 +2253,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                       }
                     : undefined,
                 verificationTokenReplayStore,
+                browserSsoStore: securityState.browserSsoStore,
+                bootstrapContext: parsedBody.data.browserSso,
             });
         },
     );

@@ -58,7 +58,11 @@ const sharedSigninBadgeUrl = '/assets/signin-page-badge.svg';
                                 >
                                 <form action="/logout" method="post">
                                     <button class="button button-secondary" type="submit">
-                                        Logout
+                                        {{
+                                            config.browserSsoMode === 'off'
+                                                ? 'Logout'
+                                                : 'Sign out of this application'
+                                        }}
                                     </button>
                                 </form>
                             } @else {
@@ -79,7 +83,7 @@ export class HomePageComponent {
     readonly loginTarget = signal<string>('/login');
     readonly signinBadgeUrl = sharedSigninBadgeUrl;
 
-    private readonly config = inject(MAGIC_SSO_CONFIG);
+    readonly config = inject(MAGIC_SSO_CONFIG);
     private readonly request = inject(REQUEST, { optional: true });
     private readonly session = inject(MagicSsoSessionService);
 

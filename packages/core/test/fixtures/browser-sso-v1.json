@@ -1,0 +1,48 @@
+{
+    "enabled": {
+        "browserSso": {
+            "version": 1,
+            "enabled": true,
+            "loginUi": "hosted",
+            "codeChallengeMethods": ["S256"],
+            "requestLifetimeSeconds": 900,
+            "codeLifetimeSeconds": 60,
+            "transactionLifetimeSeconds": 990
+        }
+    },
+    "disabled": {
+        "browserSso": {
+            "version": 1,
+            "enabled": false
+        }
+    },
+    "authorization": {
+        "redirectUri": "https://app.example.com/sso/callback",
+        "state": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+        "codeChallenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        "codeChallengeMethod": "S256",
+        "scope": "reports"
+    },
+    "exchange": {
+        "code": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+        "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+        "redirectUri": "https://app.example.com/sso/callback"
+    },
+    "transaction": {
+        "keyMaterial": "fixture-app-jwt-secret-0123456789abcdefghij",
+        "cookieName": "__Host-magic-sso-tx-AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+        "payload": {
+            "v": 1,
+            "state": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+            "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            "returnUrl": "https://app.example.com/reports?filter=pending&page=2",
+            "issuer": "https://sso.example.com",
+            "audience": "https://app.example.com",
+            "redirectUri": "https://app.example.com/sso/callback",
+            "createdAt": 1800000000,
+            "expiresAt": 1800000990,
+            "restarts": 0
+        },
+        "sealed": "v1.AwMDAwMDAwMDAwMDZSqm98EPZuuDXPdTjywdJ34zzbN16jZjla6Mq3AtNPIczQJnrkson-92xuvUkVc5eFjKurYdJ1ArWt5JkaHYgyyq1TBeLEG9tvUY8wnUmdC_yjkCLtIfh53-7WvFG7NypaXFIEYhaOpG3LhjONGE9gaLemENGjJjSgfQ-WgrGcXD0O3vva61QewZosv7rYTHCgN1CTaFYFiktJGRmzfv1dgWrHJa66NXOd6EuCMxe6OW2juj5g6RF-B1d_HagotBofbwSYmBpX9EYehJgOojmtlJjWR4EydhfIK1LB-AYjqBJ73tP2vqXvHbEIbEJRz6XQtAuiVWZfZ7j6rD1yp7pTPH97t_pY3EFRRBVhbvfddk5pOcMYf0dGs-JvtdqtZui--G0UaOTXa0gK3JUNL-zcjZ_SMgnYB0wWSKIBR4uJEENMPGmRrpHd_-_U-O5vKIRSq2AR0vhmQtjiRpedDolwQ6COHhNp6UB4ZPn4gTaubCwBOgKVpHbWPY3FAFGhMK2MzRQu2V"
+    }
+}

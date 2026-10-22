@@ -176,6 +176,7 @@ describe('buildLoginUrl', () => {
 });
 
 describe('authMiddleware', () => {
+    const originalBrowserSsoMode = process.env.MAGICSSO_BROWSER_SSO_MODE;
     const originalCookieName = process.env.MAGICSSO_COOKIE_NAME;
     const originalCookiePath = process.env.MAGICSSO_COOKIE_PATH;
     const originalJwtSecret = process.env.MAGICSSO_JWT_SECRET;
@@ -185,6 +186,7 @@ describe('authMiddleware', () => {
     const originalTrustProxy = process.env.MAGICSSO_TRUST_PROXY;
 
     afterEach(() => {
+        restoreEnv('MAGICSSO_BROWSER_SSO_MODE', originalBrowserSsoMode);
         restoreEnv('MAGICSSO_COOKIE_NAME', originalCookieName);
         restoreEnv('MAGICSSO_COOKIE_PATH', originalCookiePath);
         restoreEnv('MAGICSSO_JWT_SECRET', originalJwtSecret);
@@ -192,6 +194,27 @@ describe('authMiddleware', () => {
         restoreEnv('MAGICSSO_PUBLIC_ORIGIN', originalPublicOrigin);
         restoreEnv('MAGICSSO_SERVER_URL', originalServerUrl);
         restoreEnv('MAGICSSO_TRUST_PROXY', originalTrustProxy);
+    });
+
+    it('keeps only exact Browser SSO endpoints public', async () => {
+        process.env.MAGICSSO_BROWSER_SSO_MODE = 'required';
+        process.env.MAGICSSO_COOKIE_NAME = 'token';
+        process.env.MAGICSSO_JWT_SECRET = 'test-secret';
+        process.env.MAGICSSO_PUBLIC_ORIGIN = 'http://app.example.com';
+        process.env.MAGICSSO_SERVER_URL = 'http://sso.example.com';
+        process.env.MAGICSSO_DIRECT_USE = 'false';
+        const options: AuthMiddlewareOptions = { excludedPaths: ['/docs'] };
+
+        for (const path of ['/sso/start', '/sso/callback', '/sso/signed-out']) {
+            expect(isPublicPath(path, options)).toBe(true);
+            expect(isPublicPath(`${path}/private`, options)).toBe(false);
+        }
+        expect(isPublicPath('/docs/getting-started', options)).toBe(true);
+
+        const response = await authMiddleware(createRequest('/sso/start/private'), options);
+
+        expect(response.status).toBe(307);
+        expect(response.headers.get('location')).toContain('/sso/start?');
     });
 
     it.each([

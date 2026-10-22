@@ -3,6 +3,11 @@
 
 import {
     parseBooleanFlag,
+    parseBrowserSsoMode,
+    parseBrowserSsoLoginUi,
+    createBrowserSsoHttpHandler,
+    browserSsoPaths,
+    type BrowserSsoMode,
     type AuthPayload as CoreAuthPayload,
     buildAuthCookieOptions as buildCoreAuthCookieOptions,
     buildLoginTarget as buildCoreLoginTarget,
@@ -28,6 +33,11 @@ export interface AuthCookieOptions {
 }
 
 export interface MagicSsoConfig {
+    browserSsoLoginUi?: 'hosted' | 'app-owned';
+    browserSsoMode?: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost?: boolean;
+    browserSsoTimeoutMs?: number;
+    publicOrigin?: string;
     cookieMaxAge?: number;
     cookieName?: string;
     cookiePath?: string;
@@ -37,6 +47,11 @@ export interface MagicSsoConfig {
 }
 
 export interface MagicSsoResolvedConfig {
+    browserSsoLoginUi: 'hosted' | 'app-owned';
+    browserSsoMode: BrowserSsoMode;
+    browserSsoAllowInsecureLocalhost: boolean;
+    browserSsoTimeoutMs: number;
+    publicOrigin: string;
     cookieMaxAge?: number;
     cookieName: string;
     cookiePath: string;
@@ -88,6 +103,19 @@ export function resolveMagicSsoConfig(config: MagicSsoConfig = {}): MagicSsoReso
         config.cookieMaxAge ?? readPositiveInteger(process.env['MAGICSSO_COOKIE_MAX_AGE']);
 
     return {
+        browserSsoLoginUi: parseBrowserSsoLoginUi(
+            config.browserSsoLoginUi ?? process.env['MAGICSSO_BROWSER_SSO_LOGIN_UI'],
+        ),
+        browserSsoMode: parseBrowserSsoMode(
+            config.browserSsoMode ?? process.env['MAGICSSO_BROWSER_SSO_MODE'],
+        ),
+        browserSsoAllowInsecureLocalhost:
+            config.browserSsoAllowInsecureLocalhost ??
+            parseBooleanFlag(process.env['MAGICSSO_BROWSER_SSO_ALLOW_INSECURE_LOCALHOST']),
+        browserSsoTimeoutMs:
+            config.browserSsoTimeoutMs ??
+            Number(process.env['MAGICSSO_BROWSER_SSO_TIMEOUT_MS'] ?? 5000),
+        publicOrigin: config.publicOrigin ?? process.env['MAGICSSO_PUBLIC_ORIGIN'] ?? '',
         ...(typeof cookieMaxAge === 'number' ? { cookieMaxAge } : {}),
         cookieName: config.cookieName ?? process.env['MAGICSSO_COOKIE_NAME'] ?? 'token',
         cookiePath: readCookiePath(config.cookiePath ?? process.env['MAGICSSO_COOKIE_PATH']),
@@ -171,7 +199,8 @@ export function buildLoginTarget(appOrigin: string, returnTarget: string, scope?
     const resolvedConfig = resolveMagicSsoConfig();
     return buildCoreLoginTarget({
         appOrigin,
-        directUse: resolvedConfig.directUse,
+        directUse: resolvedConfig.browserSsoMode === 'off' && resolvedConfig.directUse,
+        loginPath: resolvedConfig.browserSsoMode === 'off' ? '/login' : browserSsoPaths.start,
         returnUrl: returnTarget,
         ...(typeof scope === 'string' ? { scope } : {}),
         serverUrl: resolvedConfig.serverUrl,
@@ -191,4 +220,29 @@ const loginErrorMessages: Record<string, string> = {
 
 export function getLoginErrorMessage(errorCode: string | undefined): string | undefined {
     return typeof errorCode === 'string' ? loginErrorMessages[errorCode] : undefined;
+}
+
+/** Create once on the server. A configured public origin is required for browser SSO. */
+export function createBrowserSsoHandler(
+    config?: MagicSsoConfig,
+): (request: Request) => Promise<Response> {
+    const resolved = resolveMagicSsoConfig(config);
+    if (!resolved.publicOrigin) {
+        throw new Error('Browser SSO routes require MAGICSSO_PUBLIC_ORIGIN.');
+    }
+    return createBrowserSsoHttpHandler({
+        mode: resolved.browserSsoMode,
+        loginUi: resolved.browserSsoLoginUi,
+        previewSecret: process.env['MAGICSSO_PREVIEW_SECRET'] ?? '',
+        issuer: new URL(resolved.serverUrl).origin,
+        audience: resolved.publicOrigin,
+        redirectUri: new URL(browserSsoPaths.callback, resolved.publicOrigin).href,
+        secret: resolved.jwtSecret,
+        cookieName: resolved.cookieName,
+        cookiePath: resolved.cookiePath,
+        ...(resolved.cookieMaxAge === undefined ? {} : { cookieMaxAge: resolved.cookieMaxAge }),
+        allowInsecureLocalhost: resolved.browserSsoAllowInsecureLocalhost,
+        timeoutMs: resolved.browserSsoTimeoutMs,
+        legacyDirectUse: resolved.directUse,
+    });
 }

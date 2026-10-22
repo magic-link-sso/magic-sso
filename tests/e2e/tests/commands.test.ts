@@ -7,6 +7,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const suites = [
+    'test:e2e:indirect',
+    'test:e2e:direct',
+    'test:e2e:proxy',
+    'test:e2e:manager',
+    'test:e2e:starters',
+    'test:e2e:sso',
+    'test:e2e:sso:https',
+    'test:e2e:sso:app-owned',
+];
+
 function readE2eCommand(): string {
     const manifest: unknown = JSON.parse(
         readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
@@ -26,14 +37,39 @@ function readE2eCommand(): string {
 }
 
 describe('standard E2E command', () => {
-    it.each([
-        '',
-        'test:e2e:indirect',
-        'test:e2e:direct',
-        'test:e2e:proxy',
-        'test:e2e:manager',
-        'test:e2e:starters',
-    ])('runs all suites and propagates failure from %s', (failingSuite) => {
+    it('retains Playwright failure traces after the CI test step fails', () => {
+        const workflow = readFileSync(
+            new URL('../../../.github/workflows/ci.yml', import.meta.url),
+            'utf8',
+        );
+        const e2e = workflow.split('\n  e2e:\n')[1]?.split('\n  python:\n')[0] ?? '';
+        const upload = e2e
+            .split('\n      - name: ')
+            .find((step) => step.startsWith('Upload E2E failure artifacts\n'));
+
+        expect(upload).toBeDefined();
+        expect(upload).toContain('\n        if: failure()\n');
+        expect(upload).toMatch(/uses: actions\/upload-artifact@[a-f0-9]{40}\b/u);
+        expect(upload).toContain('tests/e2e/test-results/');
+        expect(e2e.indexOf('Upload E2E failure artifacts')).toBeGreaterThan(
+            e2e.indexOf('run: pnpm test:e2e\n'),
+        );
+    });
+
+    it.each(['ci', 'publish'])(
+        'uses the complete command and all browser engines in %s',
+        (workflow): void => {
+            const contents = readFileSync(
+                new URL(`../../../.github/workflows/${workflow}.yml`, import.meta.url),
+                'utf8',
+            );
+            expect(contents).toContain('playwright install --with-deps chromium firefox webkit');
+            expect(contents.match(/run: pnpm test:e2e\n/gu)).toHaveLength(1);
+            expect(contents).not.toContain('run: pnpm test:e2e:sso');
+        },
+    );
+
+    it.each(['', ...suites])('runs all suites and propagates failure from %s', (failingSuite) => {
         const directory = mkdtempSync(join(tmpdir(), 'magic-sso-e2e-command-'));
         try {
             const executable = join(directory, 'pnpm');
@@ -52,13 +88,6 @@ describe('standard E2E command', () => {
                     MAGICSSO_TEST_FAIL_SUITE: failingSuite,
                 },
             });
-            const suites = [
-                'test:e2e:indirect',
-                'test:e2e:direct',
-                'test:e2e:proxy',
-                'test:e2e:manager',
-                'test:e2e:starters',
-            ];
             expect(result.status).toBe(failingSuite === '' ? 0 : 1);
             expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(
                 failingSuite === '' ? suites : suites.slice(0, suites.indexOf(failingSuite) + 1),

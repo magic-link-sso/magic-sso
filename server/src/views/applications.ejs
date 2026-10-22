@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>My applications · Magic Link SSO</title>
+    <style nonce="<%= cspNonce %>">
+        :root { color-scheme: light dark; --background: #f0f4f8; --surface: #fff; --ink: #172f43; --muted: #455c72; --line: #a8bdcc; --accent: #23587c; }
+        @media (prefers-color-scheme: dark) {
+            :root { --background: #14202b; --surface: #1d3040; --ink: #e6eef5; --muted: #b5c9da; --line: #637e93; --accent: #9bd0f5; }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--background); color: var(--ink); font: 1rem/1.6 'Segoe UI', 'Helvetica Neue', sans-serif; }
+        main { width: min(100% - 2rem, 44rem); margin: clamp(2rem, 8vh, 6rem) auto; }
+        header { border-bottom: 2px solid var(--accent); padding-bottom: 1.5rem; }
+        .brand { margin: 0 0 1rem; color: var(--muted); font-weight: 600; }
+        .brand img { display: block; max-width: 10rem; max-height: 4rem; margin-bottom: 0.75rem; }
+        h1 { margin: 0; font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.2; letter-spacing: -0.035em; }
+        p { max-width: 65ch; }
+        .identity { margin-bottom: 0; overflow-wrap: anywhere; }
+        .identity strong { display: block; font-weight: 600; }
+        .intro, .help { color: var(--muted); }
+        ul { padding: 0; margin: 1.5rem 0 2rem; list-style: none; }
+        li + li { margin-top: 0.75rem; }
+        .application { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-decoration: none; }
+        .application strong { font-size: 1.2rem; overflow-wrap: anywhere; }
+        .application span { flex-shrink: 0; text-decoration: underline; text-underline-offset: 0.2em; }
+        a, button { color: var(--accent); }
+        a:hover { text-decoration: underline; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+        button { font: inherit; cursor: pointer; border: 1px solid var(--accent); border-radius: 6px; padding: 0.6rem 1.1rem; background: var(--surface); }
+        .account-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem 1.5rem; }
+        .account-actions form { margin: 0; }
+        .help { margin-top: 1.5rem; font-size: 0.9rem; }
+        .empty { margin: 2rem 0; }
+        footer { margin-top: 2.5rem; border-top: 1px solid var(--line); padding-top: 1rem; color: var(--muted); }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <p class="brand">
+            <% if (branding.logoImageUrl) { %><img src="<%= branding.logoImageUrl %>" alt="<%= branding.logoAlt %>"><% } %>
+            <%= branding.title %>
+        </p>
+        <h1>My applications</h1>
+        <% if (email) { %>
+            <p class="identity">Signed in as <strong><%= email %></strong></p>
+        <% } %>
+    </header>
+    <% if (email) { %>
+        <% if (applications.length) { %>
+            <p class="intro">Choose an application. Each application opens in a new tab. You can use this account without another verification email.</p>
+            <ul aria-label="Available applications">
+                <% for (const application of applications) { %>
+                    <li><a class="application" href="<%= application.href %>" target="_blank" rel="noopener noreferrer" aria-label="Open <%= application.name %> (opens in a new tab)"><strong><%= application.name %></strong><span aria-hidden="true">Open</span></a></li>
+                <% } %>
+            </ul>
+        <% } else { %>
+            <div class="empty"><h2>No applications available</h2><p>Your account has no access to the applications listed here. Contact the administrator or change account.</p></div>
+        <% } %>
+    <% } else { %>
+        <p class="intro">Sign in with your email to see the applications you can access.</p>
+    <% } %>
+    <div class="account-actions">
+        <form method="post" action="/sso/apps/signin">
+            <input type="hidden" name="csrfToken" value="<%= csrfToken %>">
+            <button type="submit"><%= email ? 'Change account' : 'Sign in' %></button>
+        </form>
+        <% if (email) { %><a href="<%= signoutHref %>">End browser SSO session</a><% } %>
+    </div>
+    <% if (email) { %>
+        <p class="help">Changing account requires email confirmation. Ending the browser SSO session prevents new automatic sign-ins. Existing application sessions keep their normal expiry.</p>
+    <% } %>
+    <% if (branding.supportText || (branding.supportLinkText && branding.supportLinkUrl)) { %>
+        <footer>
+            <%= branding.supportText %>
+            <% if (branding.supportLinkText && branding.supportLinkUrl) { %><a href="<%= branding.supportLinkUrl %>" rel="noopener noreferrer"><%= branding.supportLinkText %></a><% } %>
+        </footer>
+    <% } %>
+</main>
+</body>
+</html>

@@ -7,7 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { signinBadgeUrl } from 'magic-sso-example-ui';
-import { verifyToken } from '@magic-link-sso/nextjs';
+import { verifyToken, getBrowserSsoMode } from '@magic-link-sso/nextjs';
 import { buildLoginTarget, getAppOrigin } from './login/url';
 
 export default async function HomePage(): Promise<React.JSX.Element> {
@@ -63,7 +63,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
                   </Link>
                   <form action="/logout" method="post">
                     <button type="submit" className="button button-secondary">
-                      Logout
+                      {getBrowserSsoMode() === 'off' ? 'Logout' : 'Sign out of this application'}
                     </button>
                   </form>
                 </>

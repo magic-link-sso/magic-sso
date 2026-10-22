@@ -4,11 +4,16 @@
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import { readResponsePayload, safeCompare } from '@magic-link-sso/config-core/runtime';
-import { isVerifyEmailPreviewResponse, isVerifyEmailResponse } from '@magic-link-sso/core';
+import {
+    createBrowserSsoClient,
+    isVerifyEmailPreviewResponse,
+    isVerifyEmailResponse,
+} from '@magic-link-sso/core';
 import Fastify, {
     type FastifyInstance,
     type FastifyReply,
     type FastifyRequest,
+    type FastifyServerOptions,
     type RouteHandlerMethod,
 } from 'fastify';
 import { protectedBadgeUrl, signinBadgeUrl } from 'magic-sso-example-ui';
@@ -25,6 +30,8 @@ import { request as createHttpsRequest } from 'node:https';
 import { Socket } from 'node:net';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { registerGateBrowserSsoRoutes } from './browserSso.js';
+
 import {
     buildAuthCookieOptions,
     buildLoginTarget,
@@ -56,6 +63,8 @@ import {
 } from './html.js';
 import { verifyEmailPageScript } from './verifyEmailPageScript.js';
 import { createGateRateLimiter } from './rateLimit.js';
+
+const browserSsoTransactionCookiePattern = /^(?:__Host-)?magic-sso-(?:tx-|continuation-|confirm-)/u;
 
 interface SignInBody {
     email?: string;
@@ -108,7 +117,7 @@ interface GateProxyOptions {
 
 export interface CreateAppOptions {
     config?: GateConfigInput;
-    logger?: false | { level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' };
+    logger?: FastifyServerOptions['logger'];
     proxyFactory?: () => GateProxyServer;
 }
 
@@ -309,7 +318,11 @@ function createDefaultProxyServer(proxyTimeout: number): GateProxyServer {
         const values = Array.isArray(value) ? value : [value];
         const filteredValues = values.filter((entry) => {
             const cookieName = readSetCookieName(entry);
-            return typeof cookieName === 'undefined' || !blockedCookieNames.has(cookieName);
+            return (
+                typeof cookieName === 'undefined' ||
+                (!blockedCookieNames.has(cookieName) &&
+                    !browserSsoTransactionCookiePattern.test(cookieName))
+            );
         });
 
         if (filteredValues.length === 0) {
@@ -501,13 +514,19 @@ function isHtmlResponse(reply: FastifyReply): boolean {
     return typeof contentType === 'string' && contentType.includes('text/html');
 }
 
-function applyDefaultSecurityHeaders(request: FastifyRequest, reply: FastifyReply): void {
+function applyDefaultSecurityHeaders(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    preserveSsoPolicy = false,
+): void {
     reply.removeHeader('Server');
     if (isHtmlResponse(reply)) {
         setNoStoreHeaders(reply);
     }
 
-    reply.header('Content-Security-Policy', buildGateContentSecurityPolicy());
+    if (!preserveSsoPolicy || reply.getHeader('Content-Security-Policy') === undefined) {
+        reply.header('Content-Security-Policy', buildGateContentSecurityPolicy());
+    }
     reply.header('Permissions-Policy', permissionsPolicyValue);
     if (typeof reply.getHeader('Referrer-Policy') === 'undefined') {
         reply.header('Referrer-Policy', 'same-origin');
@@ -942,7 +961,15 @@ function stripCookieFromHeader(
                 return true;
             }
 
-            return cookie.slice(0, equalsIndex).trim() !== cookieName;
+            const name = cookie.slice(0, equalsIndex).trim();
+            return (
+                ![
+                    cookieName,
+                    `${cookieName}.verify-csrf`,
+                    `${cookieName}.verify-token`,
+                    `${cookieName}.otp-challenge`,
+                ].includes(name) && !browserSsoTransactionCookiePattern.test(name)
+            );
         });
 
     return remainingCookies.length === 0 ? undefined : remainingCookies.join('; ');
@@ -1083,6 +1110,16 @@ function resolvePageTitle(config: GateConfig): string {
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
     const config =
         typeof options.config === 'undefined' ? loadConfig() : resolveGateConfig(options.config);
+    const browserSsoClient = createBrowserSsoClient({
+        mode: config.browserSso.mode,
+        loginUi: config.browserSso.loginUi ?? 'hosted',
+        issuer: config.serverUrl,
+        audience: config.publicOrigin,
+        redirectUri: new URL(buildGatePath(config, '/sso/callback'), config.publicOrigin).href,
+        secret: config.jwtSecret,
+        allowInsecureLocalhost: config.browserSso.allowInsecureLocalhost,
+        timeoutMs: config.browserSso.requestTimeoutMs,
+    });
     const rateLimiter = await createGateRateLimiter({
         keyPrefix: config.rateLimitKeyPrefix,
         max: config.rateLimitMax,
@@ -1134,7 +1171,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
 
     app.addHook('onSend', async (request, reply, payload): Promise<unknown> => {
-        applyDefaultSecurityHeaders(request, reply);
+        const path = new URL(request.url, config.publicOrigin).pathname;
+        const localSso =
+            config.browserSso.mode !== 'off' &&
+            config.browserSso.loginUi === 'app-owned' &&
+            ['/sso/start', '/sso/callback', '/signed-out'].some(
+                (route) => path === buildGatePath(config, route),
+            );
+        applyDefaultSecurityHeaders(request, reply, localSso);
         return payload;
     });
 
@@ -1205,6 +1249,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
 
     app.get(buildGatePath(config, '/healthz'), async () => ({ ok: true }));
+    await registerGateBrowserSsoRoutes(app, config, browserSsoClient);
 
     app.get<{ Querystring: LoginQuery }>(
         buildGatePath(config, '/login'),
@@ -1630,7 +1675,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
         reply.clearCookie(config.cookieName, buildAuthCookieOptions(config));
         return reply.redirect(
-            config.protectedRootPath === '/' ? '/' : `${config.protectedRootPath}/`,
+            config.browserSso.mode !== 'off'
+                ? buildGatePath(config, '/signed-out')
+                : config.protectedRootPath === '/'
+                  ? '/'
+                  : `${config.protectedRootPath}/`,
         );
     });
 

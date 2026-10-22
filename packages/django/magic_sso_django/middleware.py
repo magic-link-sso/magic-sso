@@ -51,6 +51,10 @@ class MagicSsoMiddleware:
         resolved_url = resolve(magic_request.path_info)
         current_url_name = resolved_url.url_name
         is_sign_in_endpoint = 'magic_sso' in resolved_url.app_names and current_url_name in {
+            'sso_start',
+            'sso_callback',
+            'sso_signed_out',
+            'logout',
             'login',
             'verify_email',
             'verify_email_otp',

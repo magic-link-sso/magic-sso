@@ -83,14 +83,14 @@ describe('release security checks', () => {
         expect(workspace).toContain('miniflare>sharp: 0.35.5');
         expect(workspace).toContain('miniflare>undici: ^7.29.1');
         expect(workspace).toContain('undici@>=7.0.0 <7.29.1: ^7.29.1');
-        expect(workspace).toContain("vite@>=8.0.0 <=8.0.15: '>=8.0.16'");
-        expect(workspace).toContain('vite-node>vite: 8.0.16');
+        expect(workspace).toContain("vite@>=8.0.0 <=8.1.5: '>=8.1.6'");
+        expect(workspace).toContain('vite-node>vite: 8.3.4');
         expect(workspace).toContain('- esbuild@0.28.1');
         expect(workspace).toContain('- nodemailer@10.0.16');
         expect(workspace).toContain('- sharp@0.35.5');
-        expect(workspace).toContain('- vite@8.0.16');
+        expect(workspace).not.toContain('- vite@8.0.16');
         expectMinimumVersion(serverPackage.dependencies?.nodemailer, [10, 0, 9]);
-        expectMinimumVersion(nuxtExamplePackage.devDependencies?.vite, [8, 0, 16]);
+        expectMinimumVersion(nuxtExamplePackage.devDependencies?.vite, [8, 1, 6]);
     });
 
     it('documents the version bump helper in the release checklist', async () => {

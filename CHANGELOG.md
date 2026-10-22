@@ -10,6 +10,24 @@ and this project follows
 
 ### Added
 
+- (sso) Add an optional My applications launcher with explicit names and
+  destinations, current-grant filtering, hosted link/OTP sign-in, account change
+  and central sign-out. Launch through registered SSO start routes while
+  preserving independent application sessions and permissions.
+
+- (sso) Extend shared browser sign-in to application-owned email and OTP forms
+  across Gate and every SDK. Add opt-in browser-bound bootstrap tickets,
+  completion receipts, explicit account/browser confirmation, logout
+  cancellation and cross-language continuation fixtures. Preserve valid local
+  sessions on shared-setup failures and verify the full flow over cross-site
+  HTTPS in Chromium, Firefox and WebKit.
+
+- (sso) Add opt-in shared browser identity with hosted magic-link/OTP, atomic
+  one-time PKCE codes, host-only central cookies and independent application
+  JWTs across Gate, Next.js, Angular SSR, Nuxt, Django and Fastify. Include
+  bounded concurrent sign-in tabs, explicit account changes, distinct local and
+  central logout, deployment diagnostics and a cross-site HTTPS browser suite.
+
 - (tests) Extend the shared adapter contract to complete magic-link and OTP
   sign-in, full return URLs, session reuse and logout across all integrations;
   include reverse-proxy and whole-application protection in standard E2E checks
@@ -24,7 +42,6 @@ and this project follows
 - (nuxt) Keep named page middleware available with whole-application protection
 - (adapters) Use configured or explicitly trusted forwarded origins for Next.js
   and Nuxt sign-in redirects; align the examples' form and submission URLs
-
 - (manager) Serialize state changes with apply to prevent concurrent writes from
   losing updates
 - (gate) Preserve WebSocket upgrade response headers

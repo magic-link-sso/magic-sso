@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { simpleParser } from 'mailparser';
 import { SMTPServer } from 'smtp-server';
+import { renderMailbox } from './mailbox.mjs';
 
 function readEnvNumber(name, fallback) {
     const value = process.env[name];
@@ -100,6 +101,13 @@ const httpServer = createServer((request, response) => {
     }
 
     const requestUrl = new URL(request.url, `http://${httpHost}:${httpPort}`);
+    if (request.method === 'GET' && requestUrl.pathname === '/') {
+        response.setHeader('content-type', 'text/html; charset=utf-8');
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('referrer-policy', 'no-referrer');
+        response.end(renderMailbox(mailbox));
+        return;
+    }
     if (request.method === 'GET' && requestUrl.pathname === '/healthz') {
         writeJson(response, 200, { status: 'ok' });
         return;

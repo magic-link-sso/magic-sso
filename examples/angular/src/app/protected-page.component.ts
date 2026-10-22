@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { MagicSsoSessionService, type AuthPayload } from './magic-sso';
+import { MAGIC_SSO_CONFIG, MagicSsoSessionService, type AuthPayload } from './magic-sso';
 
 const sharedProtectedBadgeUrl = '/assets/protected-page-badge.svg';
 
@@ -47,7 +47,11 @@ const sharedProtectedBadgeUrl = '/assets/protected-page-badge.svg';
                             <a href="/" class="button button-primary">Back Home</a>
                             <form action="/logout" method="post">
                                 <button class="button button-secondary" type="submit">
-                                    Logout
+                                    {{
+                                        config.browserSsoMode === 'off'
+                                            ? 'Logout'
+                                            : 'Sign out of this application'
+                                    }}
                                 </button>
                             </form>
                         </div>
@@ -58,6 +62,7 @@ const sharedProtectedBadgeUrl = '/assets/protected-page-badge.svg';
     `,
 })
 export class ProtectedPageComponent {
+    readonly config = inject(MAGIC_SSO_CONFIG);
     readonly auth = signal<AuthPayload | null>(null);
     readonly protectedBadgeUrl = sharedProtectedBadgeUrl;
 

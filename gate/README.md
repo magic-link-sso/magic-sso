@@ -136,6 +136,61 @@ email for the dedicated `manager-admin` site.
 The compose stack is designed as a local mirror of the production topology
 documented in [`docs/gate.md`](../docs/gate.md).
 
+## Shared browser SSO (opt-in)
+
+Gate can reuse an issuer browser session after a single hosted email or OTP
+confirmation. Existing application sessions remain independent. Participation
+defaults to `off`. Enable it on the issuer and each participating application
+using the configuration below.
+
+Add this to each participating Gate's TOML:
+
+```toml
+[auth.sso]
+mode = "required" # or "auto" for compatibility with an older/disabled issuer
+requestTimeoutMs = 5000
+```
+
+Use a dedicated issuer hostname, such as `https://sso.example.com`, distinct
+from every application hostname. On the issuer enable `[auth.sso].enabled` and
+register each Gate under its existing `[[sites]]` entry:
+
+```toml
+[[sites.sso]]
+redirectUri = "https://private.example.com/_magicgate/sso/callback"
+startUri = "https://private.example.com/_magicgate/sso/start"
+signedOutUri = "https://private.example.com/_magicgate/signed-out"
+```
+
+In path-prefix mode include both the public prefix and configured namespace; for
+example `/private/_access/sso/callback`, `/private/_access/sso/start`, and
+`/private/_access/signed-out`. Registrations are exact and require a restart.
+Current grants are checked for every authorization and exchange. Changes to
+grants keep their existing reload behavior.
+
+New sign-ins go through the hosted issuer regardless of `gate.directUse`. `auto`
+falls back before creating state only for HTTP 404 or explicit disabled or
+unsupported capability documents. Timeouts, malformed responses and 5xx
+responses show an error. An exchange is attempted once and never falls back to
+an email-grant exchange.
+
+Local logout lands on the public namespaced signed-out page, retaining browser
+SSO. Its explicit “Sign in” link may reuse that session. “End browser SSO
+session” opens the issuer's confirmation; it prevents new sessions while other
+apps' existing JWTs retain their normal expiry/revocation policy. Existing local
+login endpoints remain available for legacy clients.
+
+Gate uses up to three encrypted host-only transaction cookies. They are never
+forwarded to the upstream, and upstream responses cannot overwrite them.
+Additional starts reject without replacing another tab's transaction.
+
+For local HTTP tests only, set `allowInsecureLocalhost = true` on both issuer
+and Gate and use distinct hosts, for example issuer `127.0.0.1`, Gate
+`a.localhost` and Gate `b.localhost`. Different ports on the same hostname are
+insufficient. See the [version 1 contract](../docs/browser-sso-contract.md). Run
+`pnpm test:e2e:sso` for local HTTP checks or `pnpm test:e2e:sso:https` for the
+cross-site HTTPS browser suite.
+
 ## Standalone Production Gate
 
 The repository also ships a production-oriented Gate compose example for the
@@ -177,3 +232,17 @@ file mounted at `/app/gate/magic-gate.toml`. The compose example points
 `MAGIC_GATE_CONFIG_FILE` at that file and leaves the rest of the runtime
 settings inside the TOML itself. The production `.env.prod.example` therefore
 only needs the image name and config-file path.
+
+### Application-owned Gate form
+
+Set `loginUi = "app-owned"` in Gate's `[auth.sso]` table and enable
+`bootstrapEnabled = true` in the issuer's separate `[auth.sso]` policy. Gate
+serves local email and OTP forms below its configured namespace. It verifies and
+sets its own JWT before a top-level issuer visit establishes the shared browser
+session. The callback checks the completion receipt without setting another JWT.
+Local sessions survive shared-setup failures; recovery starts a fresh hosted
+transaction. Hosted sign-in remains the default.
+
+Continuation and confirmation cookies stay host-only and are stripped from
+HTTP/WebSocket upstream requests and blocked in upstream Set-Cookie responses.
+See [the bootstrap contract](../docs/browser-sso-bootstrap-contract.md).

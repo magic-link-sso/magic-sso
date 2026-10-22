@@ -1,0 +1,31 @@
+# Public, synthetic contract fixture; these are not deployment credentials.
+[server]
+appUrl = "https://sso.example.com"
+
+[auth]
+jwtSecret = "fixture-jwt-secret-0123456789-0123456789"
+csrfSecret = "fixture-csrf-secret-0123456789-012345678"
+emailSecret = "fixture-email-secret-0123456789-01234567"
+previewSecret = "fixture-preview-secret-0123456789-0123456"
+
+[auth.sso]
+enabled = false
+
+[email]
+from = "signin@example.com"
+
+[email.smtp]
+host = "smtp.example.com"
+user = "fixture"
+pass = "fixture-password"
+
+[[sites]]
+id = "app"
+origins = ["https://app.example.com"]
+allowedRedirectUris = ["https://app.example.com/verify-email", "https://app.example.com/*"]
+allowedEmails = ["owner@example.com"]
+
+[[sites.sso]]
+redirectUri = "https://app.example.com/sso/callback"
+startUri = "https://app.example.com/sso/start"
+signedOutUri = "https://app.example.com/signed-out"
