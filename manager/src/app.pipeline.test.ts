@@ -295,7 +295,14 @@ describe('manager service pipeline endpoints', () => {
     it('returns actionable validation errors when the runtime candidate is invalid', async () => {
         const tempDirectory = createTempDirectory('magic-sso-manager-api-validate-error-');
         const settings = createFileBackedSettings(tempDirectory);
-        writeFileSync(settings.paths.baseConfigFile, createBaseConfigToml(), 'utf8');
+        writeFileSync(
+            settings.paths.baseConfigFile,
+            createBaseConfigToml().replace(
+                'jwtSecret =',
+                'jwtExpiration = "tomorrow"\njwtSecret =',
+            ),
+            'utf8',
+        );
 
         const app = await buildApp({
             logger: false,
@@ -316,9 +323,7 @@ describe('manager service pipeline endpoints', () => {
                     runtimeConfigFile: settings.paths.runtimeConfigFile,
                 },
             });
-            expect(String(response.json().message)).toContain(
-                'Each site must define allowedEmails, accessRules, or both.',
-            );
+            expect(String(response.json().message)).toContain('Invalid duration value: tomorrow');
         } finally {
             await app.close();
         }

@@ -315,26 +315,31 @@ describe('runtime planning', () => {
         expect(driftStatus.currentRuntimeConfigHash).toBeUndefined();
     });
 
-    it('fails validation when managed state would remove every access rule from a site', () => {
+    it('renders explicit deny-all access when the last managed grant is removed', () => {
         const tempDirectory = mkdtempSync(join(tmpdir(), 'magic-sso-manager-invalid-runtime-'));
         tempDirectories.push(tempDirectory);
         const settings = createSettings(tempDirectory);
         writeFileSync(settings.paths.baseConfigFile, createBaseConfigToml(), 'utf8');
 
-        expect(() =>
-            buildRuntimePlan(
-                {
-                    version: MANAGER_STATE_VERSION,
-                    managedSites: {
-                        client: {
-                            grants: [],
-                            scopeCatalog: [],
-                        },
+        const plan = buildRuntimePlan(
+            {
+                version: MANAGER_STATE_VERSION,
+                managedSites: {
+                    client: {
+                        grants: [],
+                        scopeCatalog: [],
                     },
-                    metadata: {},
-                } satisfies ManagerState,
-                settings,
-            ),
-        ).toThrowError(/Each site must define allowedEmails, accessRules, or both./u);
+                },
+                metadata: {},
+            } satisfies ManagerState,
+            settings,
+        );
+        expect(
+            plan.runtimeConfig.sites.find((site) => site.id === 'client')?.allowedEmails,
+        ).toEqual([]);
+        expect(
+            plan.validatedRuntimeConfig.sites.find((site) => site.id === 'client')?.accessRules
+                .size,
+        ).toBe(0);
     });
 });

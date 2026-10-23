@@ -1,0 +1,36 @@
+diff --git a/dist/core/index.mjs b/dist/core/index.mjs
+--- a/dist/core/index.mjs
++++ b/dist/core/index.mjs
+@@ -20,7 +20,7 @@
+ export { defineNitroPreset } from 'nitropack/kit';
+ import { findWorkspaceDir } from 'pkg-types';
+ import { createJiti } from 'jiti';
+-import { globby } from 'globby';
++import { glob as globby } from 'tinyglobby';
+ import fsp, { readFile, rm, writeFile as writeFile$1 } from 'node:fs/promises';
+ import http from 'node:http';
+ import { createFetch, ofetch } from 'ofetch';
+diff --git a/dist/presets/cloudflare/utils.mjs b/dist/presets/cloudflare/utils.mjs
+--- a/dist/presets/cloudflare/utils.mjs
++++ b/dist/presets/cloudflare/utils.mjs
+@@ -4,7 +4,7 @@
+ import { parseTOML, parseJSONC } from "confbox";
+ import { readGitConfig, readPackageJSON, findNearestFile } from "pkg-types";
+ import { defu } from "defu";
+-import { globby } from "globby";
++import { glob as globby } from "tinyglobby";
+ import { provider } from "std-env";
+ import { dirname, extname, join, relative, resolve } from "pathe";
+ import {
+diff --git a/dist/rollup/index.mjs b/dist/rollup/index.mjs
+--- a/dist/rollup/index.mjs
++++ b/dist/rollup/index.mjs
+@@ -20,7 +20,7 @@
+ import { genImport, genSafeVariableName } from 'knitwork';
+ import { connectors } from 'db0';
+ import { camelCase } from 'scule';
+-import { globby } from 'globby';
++import { glob as globby } from 'tinyglobby';
+ import { createFilter } from 'unplugin-utils';
+ import { transform } from 'esbuild';
+ import { existsSync, promises } from 'node:fs';

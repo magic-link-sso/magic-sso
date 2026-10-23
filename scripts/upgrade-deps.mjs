@@ -115,8 +115,15 @@ export async function findJsPackageFiles(rootDir) {
         }
     }
 
-    files.push(path.join(rootDir, 'server', 'package.json'));
-    files.push(path.join(rootDir, 'tests', 'e2e', 'package.json'));
+    for (const workspace of ['gate', 'manager', 'server', path.join('tests', 'e2e')]) {
+        const packageFile = path.join(rootDir, workspace, 'package.json');
+        try {
+            await access(packageFile);
+            files.push(packageFile);
+        } catch {
+            // Optional workspaces may be absent from a partial checkout or fixture.
+        }
+    }
 
     return files;
 }

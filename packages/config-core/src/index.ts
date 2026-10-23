@@ -393,9 +393,9 @@ const rawSiteAccessRuleSchema = z
 
 const rawSiteSchema = z
     .object({
-        accessRules: z.array(rawSiteAccessRuleSchema).default([]),
+        accessRules: z.array(rawSiteAccessRuleSchema).optional(),
         allowedRedirectUris: z.array(z.string()).min(1),
-        allowedEmails: z.array(z.string()).default([]),
+        allowedEmails: z.array(z.string()).optional(),
         hostedAuth: rawHostedAuthSchema.optional(),
         id: z.string().min(1),
         origins: z.array(z.string()).min(1),
@@ -404,13 +404,19 @@ const rawSiteSchema = z
     })
     .strict()
     .superRefine((value, context) => {
-        if (value.allowedEmails.length === 0 && value.accessRules.length === 0) {
+        if (value.allowedEmails === undefined && value.accessRules === undefined) {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: 'Each site must define allowedEmails, accessRules, or both.',
             });
         }
-    });
+    })
+    .transform((value) => ({
+        ...value,
+        // Explicit empty lists intentionally deny all access, including the last revoked grant.
+        allowedEmails: value.allowedEmails ?? [],
+        accessRules: value.accessRules ?? [],
+    }));
 
 const rawConfigSchema = z
     .object({

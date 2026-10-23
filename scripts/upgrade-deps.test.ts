@@ -75,6 +75,42 @@ describe('CLI options', () => {
 });
 
 describe('JS dependency planning', () => {
+    it('includes Gate and manager dependencies in workspace upgrades', async () => {
+        const rootDir = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-services-'));
+        await mkdir(path.join(rootDir, 'packages'));
+        await mkdir(path.join(rootDir, 'examples'));
+        await writeFile(path.join(rootDir, 'package.json'), '{"name":"workspace"}');
+        for (const service of ['gate', 'manager', 'server', 'tests/e2e']) {
+            await mkdir(path.join(rootDir, service), { recursive: true });
+            await writeFile(
+                path.join(rootDir, service, 'package.json'),
+                JSON.stringify({
+                    name: service,
+                    dependencies: { fastify: '^5.12.5' },
+                }),
+            );
+        }
+        const changes = await updateJsDependencies({
+            rootDir,
+            apply: false,
+            includePeer: false,
+            mode: 'compatible',
+            runNcu: async (options: Record<string, unknown>): Promise<Record<string, string>> =>
+                options.packageFile === path.join(rootDir, 'package.json')
+                    ? {}
+                    : { fastify: '^5.12.7' },
+        });
+        expect(changes.map((entry) => path.relative(rootDir, entry.file))).toEqual(
+            expect.arrayContaining([
+                'gate/package.json',
+                'manager/package.json',
+                'server/package.json',
+                'tests/e2e/package.json',
+            ]),
+        );
+        expect(changes).toHaveLength(4);
+    });
+
     it('skips peer dependencies unless explicitly requested', async () => {
         const manifest = JSON.parse(await readFixture('sample-js-package.json'));
         const reject = collectJsRejectNames(manifest, false);

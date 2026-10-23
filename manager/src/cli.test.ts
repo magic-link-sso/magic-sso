@@ -434,6 +434,14 @@ describe('manager cli', () => {
 
     it('returns a non-zero exit code when validation fails', async () => {
         const setup = setupManagerFiles();
+        writeFileSync(
+            join(setup.tempDirectory, 'magic-sso.base.toml'),
+            createBaseConfigToml().replace(
+                'jwtSecret =',
+                'jwtExpiration = "tomorrow"\njwtSecret =',
+            ),
+            'utf8',
+        );
         const stdout = createWriter();
         const stderr = createWriter();
 
@@ -445,9 +453,7 @@ describe('manager cli', () => {
         });
 
         expect(exitCode).toBe(1);
-        expect(stderr.output).toContain(
-            'Each site must define allowedEmails, accessRules, or both.',
-        );
+        expect(stderr.output).toContain('Invalid duration value: tomorrow');
     });
 
     it('applies with --yes and writes runtime plus audit files', async () => {

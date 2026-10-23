@@ -20,6 +20,12 @@
 import { escapeHtml } from '@magic-link-sso/config-core/runtime';
 import { type ManagerAuditEvent } from './apply.js';
 import { type ConfigDriftStatus, type ManagedSiteDiff } from './runtime.js';
+import type {
+    PersonAccessView,
+    PersonAccessPreview,
+    PersonAccessChange,
+    PersonApplicationAccess,
+} from './people.js';
 import {
     type ManagedSiteDetails,
     type ManagerReconcileStatus,
@@ -73,6 +79,10 @@ export interface ManagerSiteEditorDraft {
     scopes: readonly string[];
 }
 
+export interface PersonAccessEditorDraft extends PersonAccessChange {
+    mode: string | undefined;
+}
+
 export interface ManagerSitePageEditorState {
     addPersonDraft?: ManagerSiteEditorDraft | undefined;
     addPersonOpen?: boolean | undefined;
@@ -113,7 +123,7 @@ export interface ManagerLoginPageOptions {
 }
 
 interface ManagerShellOptions {
-    currentPath: '/audit' | '/diff' | '/reconcile' | '/' | `/sites/${string}`;
+    currentPath: '/audit' | '/diff' | '/reconcile' | '/people' | '/' | `/sites/${string}`;
     driftStatus?: ConfigDriftStatus | undefined;
     notice?: ManagerPageNotice | undefined;
     signOutPath?: string | undefined;
@@ -341,6 +351,22 @@ function renderShell(options: ManagerShellOptions, body: string): string {
         font-size: clamp(2.2rem, 4vw, 3.7rem);
         line-height: 0.98;
         letter-spacing: -0.05em;
+        overflow-wrap: anywhere;
+      }
+
+      .masthead-top > div,
+      .person-access,
+      .person-access .panel,
+      .person-access form {
+        min-width: 0;
+      }
+
+      .person-access {
+        overflow-wrap: anywhere;
+      }
+
+      .person-access fieldset {
+        min-inline-size: 0;
       }
 
       .subtitle {
@@ -1034,6 +1060,7 @@ function renderShell(options: ManagerShellOptions, body: string): string {
         </div>
         <nav class="nav-row" aria-label="Manager navigation">
           <div class="nav-links">
+            ${buildNavLink('/people', 'People', options.currentPath)}
             ${buildNavLink('/', 'Sites', options.currentPath)}
             ${buildNavLink('/diff', 'Diff', options.currentPath)}
             ${buildNavLink('/reconcile', 'Sync', options.currentPath)}
@@ -1280,6 +1307,7 @@ function renderGrantListItem(
         <span class="grant-list-action">Edit</span>
       </summary>
       <div class="disclosure-body">
+        <p><a href="/people/${encodeURIComponent(grant.email)}">View access across applications</a></p>
         ${renderGrantForm(siteId, scopeCatalog, editorGrant, canEdit, 'existing')}
       </div>
     </details>`;
@@ -1339,6 +1367,7 @@ export function renderManagerDashboardPage(options: ManagerDashboardPageOptions)
                 <p class="muted">Only sites listed in manager settings are editable here.</p>
               </div>
               <div class="page-links">
+                <a class="button-link" href="/people">Manage a person's access</a>
                 <a class="button-link button-link-secondary" href="/diff">Review changes</a>
                 <a class="button-link button-link-secondary" href="/audit">Open audit log</a>
               </div>
@@ -1637,6 +1666,7 @@ export function renderManagerDiffPage(options: ManagerDiffPageOptions): string {
                   </div>
                 </form>
                 <form method="post" action="/diff/apply">
+                  <input type="hidden" name="publicationRevision" value="${escapeHtml(options.diff.publicationRevision)}" />
                   <div class="button-row">
                     <button type="submit" ${applyDisabled ? 'disabled' : ''}>Publish changes</button>
                   </div>
@@ -1890,6 +1920,192 @@ export function renderManagerReconcilePage(options: ManagerReconcilePageOptions)
             </section>
           </aside>
         </section>`,
+    );
+}
+
+export function renderManagerPeoplePage(options: {
+    people: readonly string[];
+    signOutPath?: string | undefined;
+}): string {
+    return renderShell(
+        {
+            currentPath: '/people',
+            title: 'People',
+            signOutPath: options.signOutPath,
+            subtitle: 'Find a person and manage their access across applications.',
+        },
+        `<section class="panel stack">
+      <form method="get" action="/people">
+        <label for="person-email">Email</label>
+        <input id="person-email" name="email" type="email" autocomplete="off" required />
+        <div class="button-row"><button type="submit">Review person</button></div>
+      </form>
+      <h2>People in saved or published rules</h2>
+      ${
+          options.people.length
+              ? `<ul>${options.people.map((email) => `<li><a href="/people/${encodeURIComponent(email)}">${escapeHtml(email)}</a></li>`).join('')}</ul>`
+              : '<p>No people yet. Enter an email above to grant access.</p>'
+      }
+      <p class="muted">This list comes from access rules, not a directory of accounts or browser sessions. Operator-owned applications are read-only.</p>
+    </section>`,
+    );
+}
+
+function renderPersonScopes(scopes: readonly string[] | undefined): string {
+    return scopes === undefined
+        ? 'Unconfirmed'
+        : scopes.length === 0
+          ? 'No access'
+          : scopes.includes('*')
+            ? 'Full access (*)'
+            : escapeHtml(scopes.join(', '));
+}
+
+const personSessionExplanation =
+    'Changes affect new sign-ins after the server reloads. Browser SSO checks current grants on the next authorization. Existing application sessions keep their issued permissions until that application expires or clears its session (normally bounded by the JWT expiry); removing access does not remotely sign out those sessions. The manager cannot inspect their individual expiry times.';
+
+function renderPersonRuleSources(sources: readonly string[], emptyMessage: string): string {
+    return sources.length ? sources.map(escapeHtml).join('<br />') : emptyMessage;
+}
+
+function renderPersonApplicationFacts(
+    application: PersonApplicationAccess,
+    activeConfirmed: boolean,
+): string {
+    const pending =
+        application.publishedScopes === undefined ||
+        JSON.stringify(application.savedScopes) !== JSON.stringify(application.publishedScopes);
+    return `<dl class="definition-list">
+      <div><dt>Saved</dt><dd>${renderPersonScopes(application.savedScopes)}</dd></div>
+      <div><dt>Pending</dt><dd>${pending ? 'Yes — review before publishing' : 'No'}</dd></div>
+      <div><dt>Published</dt><dd>${application.publishedScopes === undefined ? 'Not published' : renderPersonScopes(application.publishedScopes)}</dd></div>
+      <div><dt>Last confirmed active</dt><dd>${renderPersonScopes(activeConfirmed ? application.publishedScopes : undefined)}</dd></div>
+      <div><dt>Saved rule source</dt><dd>${renderPersonRuleSources(application.sources, 'No applicable rule')}</dd></div>
+      <div><dt>Published rule source</dt><dd>${renderPersonRuleSources(application.publishedSources, 'No applicable published rule')}</dd></div>
+    </dl>`;
+}
+
+function renderPersonApplicationEditor(options: {
+    application: PersonApplicationAccess;
+    index: number;
+    canEdit: boolean;
+    draft: PersonAccessEditorDraft | undefined;
+}): string {
+    const { application, index, canEdit, draft } = options;
+    const scopes = draft?.scopes ?? application.savedScopes;
+    const mode = draft?.mode ?? 'unchanged';
+    const modes = [
+        ['unchanged', 'Keep saved access'],
+        ['remove', 'Remove access'],
+        ['full', 'Full access'],
+        ['scoped', 'Selected permissions'],
+    ];
+    return `<input type="hidden" name="site${index}" value="${escapeHtml(application.siteId)}" />
+      <label for="mode${index}">Change access for ${escapeHtml(application.name)}</label>
+      <select id="mode${index}" name="mode${index}" ${canEdit ? '' : 'disabled'}>
+        ${modes.map(([value, label]) => `<option value="${value}" ${mode === value ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+      <fieldset ${canEdit ? '' : 'disabled'}><legend>Permissions for ${escapeHtml(application.name)} (used with Selected permissions)</legend>
+        ${application.scopeCatalog.length ? application.scopeCatalog.map((scope, scopeIndex) => `<label class="scope-option"><input type="checkbox" name="scope${index}_${scopeIndex}" value="${escapeHtml(scope)}" ${scopes.includes(scope) ? 'checked' : ''} /> <span>${escapeHtml(scope)}</span></label>`).join('') : '<p class="muted">No named permissions configured. Use full access or edit the application permission catalog first.</p>'}
+      </fieldset>
+      <a href="/sites/${encodeURIComponent(application.siteId)}">Application access and permission catalog</a>`;
+}
+
+function renderPersonApplication(options: {
+    application: PersonApplicationAccess;
+    index: number;
+    canEdit: boolean;
+    activeConfirmed: boolean;
+    draft: PersonAccessEditorDraft | undefined;
+}): string {
+    const { application } = options;
+    return `<section class="panel stack" aria-label="${escapeHtml(application.siteId)} access">
+      <h2>${escapeHtml(application.name)}${application.name === application.siteId ? '' : ` (${escapeHtml(application.siteId)})`}</h2>
+      ${renderPersonApplicationFacts(application, options.activeConfirmed)}
+      ${
+          application.managed
+              ? renderPersonApplicationEditor(options)
+              : '<p class="muted">Operator-owned access. Change the base configuration through your deployment workflow.</p>'
+      }
+    </section>`;
+}
+
+export function renderManagerPersonPage(options: {
+    person: PersonAccessView;
+    canEdit: boolean;
+    signOutPath?: string | undefined;
+    driftStatus?: ConfigDriftStatus | undefined;
+    notice?: ManagerPageNotice | undefined;
+    draft?: readonly PersonAccessEditorDraft[] | undefined;
+}): string {
+    const person = options.person;
+    const action = `/people/${encodeURIComponent(person.email)}/preview`;
+    return renderShell(
+        {
+            currentPath: '/people',
+            title: person.email,
+            subtitle: 'Review effective access, its source, and changes waiting for publication.',
+            signOutPath: options.signOutPath,
+            driftStatus: options.driftStatus,
+            notice: options.notice,
+        },
+        `<section class="stack person-access">
+      <section class="panel stack">
+        <h2>Configuration status</h2>
+        <p><strong>Saved</strong> is the access stored in the manager (or operator base config). <strong>Pending</strong> means it differs from the published runtime file. <strong>Published</strong> means written to that file. <strong>Active</strong> requires a successful server reload.</p>
+        <p role="status">${escapeHtml(person.activation)}</p>
+        <p class="muted">${personSessionExplanation}</p>
+        <p class="muted">Current issuer JWT lifetime: ${person.jwtLifetimeSeconds} seconds. Previously issued sessions may use an older lifetime.</p>
+        <a href="/diff">Review all pending changes and publish</a>
+      </section>
+      <form method="post" action="${action}" class="stack">
+        ${person.applications
+            .map((application, index) =>
+                renderPersonApplication({
+                    application,
+                    index,
+                    canEdit: options.canEdit,
+                    activeConfirmed: person.activeConfirmed,
+                    draft: options.draft?.find((change) => change.siteId === application.siteId),
+                }),
+            )
+            .join('')}
+        <div class="button-row"><button type="submit" ${options.canEdit ? '' : 'disabled'}>Preview access changes</button><a href="/people">Back to people</a></div>
+      </form>
+    </section>`,
+    );
+}
+
+export function renderManagerPersonPreview(options: {
+    person: PersonAccessView;
+    preview: PersonAccessPreview;
+    signOutPath?: string | undefined;
+}): string {
+    return renderShell(
+        {
+            currentPath: '/people',
+            title: 'Preview access changes',
+            subtitle: options.person.email,
+            signOutPath: options.signOutPath,
+        },
+        `<section class="panel stack">
+      <h2>Changes to save</h2>
+      <p>Review every selected application. Saving makes these changes pending; publication is a separate step. Other saved changes will also appear on the publication page.</p>
+      ${options.preview.changes
+          .map((change) => {
+              const application = options.person.applications.find(
+                  (entry) => entry.siteId === change.siteId,
+              );
+              return `<article class="diff-item"><h3>${escapeHtml(application?.name ?? change.siteId)}</h3><p>Saved now: ${renderPersonScopes(application?.savedScopes)}</p><p>After saving: ${renderPersonScopes(change.scopes)}</p><p>Published now: ${renderPersonScopes(application?.publishedScopes)}</p></article>`;
+          })
+          .join('')}
+      <p class="muted">${personSessionExplanation}</p>
+      <p>This preview expires in 10 minutes. If access rules or configuration change, review again.</p>
+      <form method="post" action="/people/${encodeURIComponent(options.person.email)}/save">
+        <input type="hidden" name="previewToken" value="${escapeHtml(options.preview.token)}" />
+        <div class="button-row"><button type="submit">Save pending changes</button><a href="/people/${encodeURIComponent(options.person.email)}">Cancel</a></div>
+      </form>
+    </section>`,
     );
 }
 

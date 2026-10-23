@@ -107,6 +107,12 @@ title = "Magic Link SSO Photos Demo"
 logoText = "PH"
 
 [[sites]]
+id = "archive"
+origins = ["http://localhost:5002"]
+allowedRedirectUris = ["http://localhost:5002/verify-email"]
+allowedEmails = []
+
+[[sites]]
 id = "manager-admin"
 origins = ["http://localhost:${managerGatePort}"]
 allowedRedirectUris = ["http://localhost:${managerGatePort}/_magicgate/verify-email", "http://localhost:${managerGatePort}/*"]
@@ -146,6 +152,7 @@ function createEphemeralManagerSettingsPaths(): {
             {
                 version: 1,
                 managedSites: {
+                    archive: { grants: [], scopeCatalog: ['read'] },
                     photos: {
                         grants: [
                             {
@@ -174,7 +181,7 @@ function createEphemeralManagerSettingsPaths(): {
     writeFileSync(
         bootstrapConfigPath,
         `
-managedSiteIds = ["photos"]
+managedSiteIds = ["photos", "archive"]
 
 [audit]
 integrityKey = "test-manager-audit-integrity-key-1234567890"
@@ -192,7 +199,7 @@ lockFile = "${lockFile}"
     writeFileSync(
         configPath,
         `
-managedSiteIds = ["photos"]
+managedSiteIds = ["photos", "archive"]
 
 [audit]
 integrityKey = "test-manager-audit-integrity-key-1234567890"

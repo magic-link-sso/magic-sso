@@ -9,7 +9,7 @@ authors = [{ name = "Wojciech Polak" }]
 dependencies = ["django>=6.1.2,<7", "magic-link-sso-django"]
 
 [dependency-groups]
-dev = ["pytest>=9.1.1,<10", "ruff>=0.17.0,<1", "ty>=0.0.86,<1"]
+dev = ["pytest>=9.1.1,<10", "ruff>=0.17.2,<1", "ty>=0.0.91,<1"]
 
 [tool.uv.sources]
 magic-link-sso-django = { path = "../../packages/django", editable = true }

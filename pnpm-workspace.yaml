@@ -59,10 +59,11 @@ overrides:
     listhen@1.10.1>node-forge: '-'
     miniflare>sharp: 0.35.5
     miniflare>undici: ^7.29.1
-    next@>=16.0.0 <16.3.3: '>=16.3.3'
+    next@>=16.0.0 <16.4.1: ^16.4.2
     next>postcss: ^8.5.15
     next>sharp: ^0.35.5
     nitropack@2.13.4>globby: '-'
+    nitropack@2.13.5>globby: '-'
     nodemailer@<10.0.9: ^10.0.16
     qs@>=2.2.5 <6.16.0: ^6.16.0
     sharp@<0.35.5: ^0.35.5
@@ -78,9 +79,13 @@ patchedDependencies:
     '@nuxt/devtools@3.4.2': patches/@nuxt__devtools@3.4.2.patch
     listhen@1.10.1: patches/listhen@1.10.1.patch
     nitropack@2.13.4: patches/nitropack@2.13.4.patch
+    nitropack@2.13.5: patches/nitropack@2.13.5.patch
 
 packageExtensions:
     nitropack@2.13.4:
+        dependencies:
+            tinyglobby: ^0.2.17
+    nitropack@2.13.5:
         dependencies:
             tinyglobby: ^0.2.17
     listhen@1.10.1:
