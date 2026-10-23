@@ -3,7 +3,10 @@
 
 import { generateKeyPair, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
+import { registerVerifyAuthTokenContract } from '../../packages/core/test/adapter-contract.js';
 import { deriveVerifyCsrfSecret, readCookieValue, verifyAuthToken } from '../src/auth.js';
+
+registerVerifyAuthTokenContract({ name: 'Gate', verify: verifyAuthToken });
 
 describe('verifyAuthToken', () => {
     it('rejects tokens signed with an algorithm other than HS256', async () => {
@@ -17,6 +20,7 @@ describe('verifyAuthToken', () => {
             .setProtectedHeader({ alg: 'RS256' })
             .setAudience('http://app.example.com')
             .setIssuer('http://sso.example.com')
+            .setIssuedAt()
             .setExpirationTime('1h')
             .sign(privateKey);
 

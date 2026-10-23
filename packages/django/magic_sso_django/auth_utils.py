@@ -25,12 +25,13 @@
 from typing import Any
 from urllib.parse import urlencode, urlsplit
 
-import jwt
 from django.conf import settings
 from django.core.exceptions import DisallowedHost
 from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
+
+from .tokens import verify_auth_token
 
 
 def normalize_origin(origin: str, setting_name: str) -> str:
@@ -106,28 +107,12 @@ def verify_access_token(token: str, request: HttpRequest) -> dict[str, Any] | No
     if expected_issuer is None or expected_audience is None:
         return None
 
-    try:
-        payload = jwt.decode(
-            token,
-            settings.MAGICSSO_JWT_SECRET,
-            algorithms=['HS256'],
-            audience=expected_audience,
-            issuer=expected_issuer,
-        )
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
-    if (
-        not isinstance(payload, dict)
-        or not isinstance(payload.get('email'), str)
-        or not isinstance(payload.get('scope'), str)
-        or not isinstance(payload.get('siteId'), str)
-    ):
-        return None
-
-    return payload
+    return verify_auth_token(
+        token,
+        settings.MAGICSSO_JWT_SECRET,
+        expected_audience=expected_audience,
+        expected_issuer=expected_issuer,
+    )
 
 
 def is_authenticated(request: HttpRequest) -> tuple[bool, dict[str, Any]]:

@@ -8,7 +8,8 @@ export interface ExampleAppDefinition {
     readonly displayName: string;
     readonly loginHeading: string;
     readonly loginPath: string;
-    readonly name: 'angular' | 'django' | 'fastify' | 'nextjs' | 'nuxt' | 'private1' | 'private2';
+    /** Site identifier registered in the issuer fixture; adapters need no central name union. */
+    readonly name: string;
     readonly protectedPaths: readonly string[];
     readonly successHeading: string;
     readonly verifyPath: string;

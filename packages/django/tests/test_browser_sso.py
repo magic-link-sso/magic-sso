@@ -144,6 +144,7 @@ def test_browser_session_is_set_only_after_matching_transaction(monkeypatch: Mon
     assert response.status_code == 303
     assert response['Location'] == APP + '/private?x=a%2Bb&tag=1&tag=2'
     assert response.cookies[name]['max-age'] == 0
+    assert response.cookies[name]['expires'] == 'Thu, 01 Jan 1970 00:00:00 GMT'
     app_cookie = response.cookies['magic-sso']
     assert app_cookie['httponly'] and app_cookie['secure']
     assert app_cookie['samesite'] == 'Lax' and not app_cookie['domain']

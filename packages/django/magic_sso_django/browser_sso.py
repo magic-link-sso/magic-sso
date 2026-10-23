@@ -409,6 +409,8 @@ def set_transaction_cookie(
         name,
         value,
         max_age=age,
+        # Use the same past expiry as Django's delete_cookie; "now" can linger in Firefox.
+        expires='Thu, 01 Jan 1970 00:00:00 GMT' if age == 0 else None,
         path='/',
         httponly=True,
         secure=client.audience.startswith('https:'),

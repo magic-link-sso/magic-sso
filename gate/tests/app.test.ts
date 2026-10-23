@@ -147,6 +147,8 @@ async function createAccessToken(options: {
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(options.audience)
         .setIssuer(options.issuer)
+        .setIssuedAt()
+        .setExpirationTime('1h')
         .sign(secret);
 }
 

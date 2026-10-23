@@ -83,8 +83,9 @@ function createDriver(
 export function registerSignInFlowSuites(
     mode: FlowMode,
     method: SignInFlowScenario['method'],
+    apps: readonly ExampleAppDefinition[] = exampleApps,
 ): void {
-    for (const app of exampleApps) {
+    for (const app of apps) {
         test.describe(`${app.displayName} ${method} flow contract (${mode})`, () => {
             if (app.name === 'nextjs' && method === 'otp') {
                 test.beforeEach(async ({ page }) => {

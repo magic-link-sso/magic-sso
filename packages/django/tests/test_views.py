@@ -17,6 +17,9 @@ def sign_access_token(audience: str = 'http://testserver') -> str:
     return jwt.encode(
         {
             'email': 'user@example.com',
+            'jti': 'test-session-jti',
+            'iat': 1609459200,
+            'exp': 4102444800,
             'scope': 'album-A',
             'siteId': 'site-a',
             'aud': audience,

@@ -2,21 +2,19 @@
 // Copyright (C) 2026 Wojciech Polak
 
 import { readCookieValue as readSharedCookieValue } from '@magic-link-sso/config-core/runtime';
+import {
+    verifyAuthTokenWithOptionalIssuer,
+    type AuthPayload as CoreAuthPayload,
+} from '@magic-link-sso/core';
 import { hkdfSync } from 'node:crypto';
-import { jwtVerify, type JWTPayload } from 'jose';
 import type { GateConfig } from './config.js';
 import { buildGatePath, buildPublicUrl, normaliseReturnUrl } from './config.js';
 
-export interface AuthPayload extends JWTPayload {
-    email: string;
-    jti: string;
-    scope: string;
-    siteId: string;
-}
+export type AuthPayload = CoreAuthPayload;
 
 export interface VerifyAuthTokenOptions {
     expectedAudience: string;
-    expectedIssuer: string;
+    expectedIssuer?: string;
 }
 
 export interface AuthCookieOptions {
@@ -33,21 +31,6 @@ const verifyEmailPreviewSecretHeaderName = 'x-magic-sso-preview-secret';
 
 interface SessionRevocationCheckResponse {
     revoked: boolean;
-}
-
-function isAuthPayload(payload: JWTPayload): payload is AuthPayload {
-    return (
-        typeof payload.email === 'string' &&
-        payload.email.length > 0 &&
-        typeof payload.jti === 'string' &&
-        payload.jti.length > 0 &&
-        typeof payload.scope === 'string' &&
-        typeof payload.siteId === 'string' &&
-        (typeof payload.aud === 'string' ||
-            (Array.isArray(payload.aud) &&
-                payload.aud.every((entry) => typeof entry === 'string'))) &&
-        typeof payload.iss === 'string'
-    );
 }
 
 function isSessionRevocationCheckResponse(value: unknown): value is SessionRevocationCheckResponse {
@@ -80,16 +63,7 @@ export async function verifyAuthToken(
     secret: Uint8Array,
     options: VerifyAuthTokenOptions,
 ): Promise<AuthPayload | null> {
-    try {
-        const { payload } = await jwtVerify(token, secret, {
-            algorithms: ['HS256'],
-            audience: options.expectedAudience,
-            issuer: options.expectedIssuer,
-        });
-        return isAuthPayload(payload) ? payload : null;
-    } catch {
-        return null;
-    }
+    return verifyAuthTokenWithOptionalIssuer(token, secret, options);
 }
 
 async function isSessionRevoked(jti: string, config: GateConfig): Promise<boolean> {

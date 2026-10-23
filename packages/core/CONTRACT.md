@@ -39,16 +39,77 @@ is therefore an invariant of issued access tokens, not only a consumer type.
 
 ## Existing adapter compatibility
 
-| Consumer        | Migration mode  | Compatibility façade retained                                         |
-| --------------- | --------------- | --------------------------------------------------------------------- |
-| Angular SSR     | wrapper         | config resolution, `maxAgeSeconds`, request origin and public exports |
-| Next.js         | wrapper         | `cookies()`, `headers()`, redirects, proxy trust and route handlers   |
-| Nuxt            | wrapper         | Nitro runtime config, H3 events, middleware and composables           |
-| Fastify example | direct core use | application-specific environment and response mapping only            |
+| Consumer        | Migration mode                    | Compatibility façade retained                                         |
+| --------------- | --------------------------------- | --------------------------------------------------------------------- |
+| Angular SSR     | wrapper                           | config resolution, `maxAgeSeconds`, request origin and public exports |
+| Next.js         | wrapper                           | `cookies()`, `headers()`, redirects, proxy trust and route handlers   |
+| Nuxt            | wrapper                           | Nitro runtime config, H3 events, middleware and composables           |
+| Fastify example | direct core use                   | application-specific environment and response mapping only            |
+| Gate            | wrapper                           | Fastify cookies, proxy policy, CSRF and online session revocation     |
+| Django          | independent Python implementation | request origin, settings, views, middleware and cookies               |
 
-The shared adapter contract suite verifies that Angular, Next.js, Nuxt and the
-Fastify example all accept the same complete token and fail closed for a wrong
-issuer, a wrong audience, or an omitted expected issuer.
+`test/fixtures/access-token-v1.json` is the common acceptance matrix for core,
+Angular, Next.js, Nuxt, the Fastify example, Gate and Django. TypeScript
+consumers register `registerVerifyAuthTokenContract`; Django signs the same
+payload cases with PyJWT and verifies them through its public request adapter.
+The fixture covers required claims and their types, empty identities, audience
+lists, wrong issuer/audience/signing secret/algorithm, expiration and `nbf`. An
+empty scope is valid. `iat` is finite numeric issuance metadata; `nbf` controls
+activation, so a future `iat` alone does not reject an otherwise valid token.
+Optional `nbf` must be finite numeric data and optional `sub` must be a string.
+Other application claims are retained without interpreting them as identity or
+authorization. Verification uses an integer-second clock without truncating
+fractional claim values: `exp <= now` expires and `nbf > now` rejects. Both test
+runtimes freeze time to the fixture's `now`, including exact-boundary and
+fractional-second cases, so the matrix does not depend on the execution date.
+
+Gate delegates JWT verification to core. Django keeps its independent Python
+implementation in `magic_sso_django/tokens.py`, which takes explicit trusted
+values and has no Django imports. Its request adapter resolves settings and
+origins before calling it. Both now reject incomplete session JWTs, including
+tokens without `jti`, `iat` or `exp`; issuer-produced tokens already carry these
+claims.
+
+## Core and adapter boundary
+
+Core owns portable protocol decisions: token claims and signatures, safe return
+URLs, neutral cookie options, OTP exchange, browser SSO transactions, PKCE and
+standard Web `Request`/`Response` handlers. It accepts trusted configuration and
+Web API dependencies explicitly. Framework request objects, response APIs,
+environment/settings resolution, proxy trust, UI, route registration and cookie
+installation stay in adapters. Gate's online revocation check remains a Gate
+policy rather than a requirement for locally verified SDK sessions.
+
+The package test bundles the complete public entrypoint and checks that its
+dependency graph contains only core and `jose`, with no Node imports or ambient
+`process` configuration. The existing Node, browser-global and workerd tests
+exercise that boundary at runtime. New portable dependencies require an explicit
+review of this guard and the supported runtimes.
+
+Add framework support when a real deployment needs it. Before expanding the
+portfolio, record the deployment requirement and check whether Gate or an
+existing integration already fits. A new adapter should:
+
+1. Resolve trusted issuer, application origin and secret, then reuse core for
+   TypeScript or implement the same versioned protocol fixtures in its language.
+   Register the shared verifier contract without copying its cases.
+2. Keep framework I/O in small adapter modules and test origin/proxy trust,
+   response mapping and cookie options there.
+3. Add a running example to the existing E2E stack and its issuer site fixture,
+   then provide an `ExampleAppDefinition` from
+   `tests/e2e/tests/helpers/apps.ts`. Its `name` is the issuer's site
+   identifier; no central framework-name union needs updating.
+4. Add the definition to `exampleApps`, or pass a dedicated list as the third
+   argument to `registerSignInFlowSuites(mode, method, apps)`. The same existing
+   magic-link/OTP driver and return-URL cases run for that list. The harness's
+   `adapter-registration.test.ts` checks registration for an additional adapter
+   outside the built-in catalog. Frameworks with different UI can instead
+   implement `SignInFlowDriver` and call the same runner directly.
+5. Run `pnpm check`, plus the relevant indirect, direct and proxy browser
+   profiles. For browser SSO, also run the shared-session, HTTPS and app-owned
+   profiles; keep the protocol fixtures and lifecycle assertions unchanged.
+
+No additional framework is introduced solely to demonstrate registration.
 
 ## Complete sign-in flow contract
 

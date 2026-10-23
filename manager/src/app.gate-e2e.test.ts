@@ -108,6 +108,8 @@ async function createAccessToken(): Promise<string> {
         .setProtectedHeader({ alg: 'HS256' })
         .setAudience(managerOrigin)
         .setIssuer(ssoOrigin)
+        .setIssuedAt()
+        .setExpirationTime('1h')
         .sign(secret);
 }
 

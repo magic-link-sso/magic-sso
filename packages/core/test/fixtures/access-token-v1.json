@@ -1,0 +1,366 @@
+{
+    "version": 1,
+    "now": 1800000000,
+    "secret": "shared-contract-test-secret-0123456789-abcdefghijklmnop",
+    "payload": {
+        "email": "person@example.test",
+        "jti": "token-id",
+        "scope": "*",
+        "siteId": "site-a",
+        "aud": "https://app.example.test",
+        "iss": "https://sso.example.test",
+        "iat": 1609459200,
+        "exp": 4102444800
+    },
+    "cases": [
+        {
+            "name": "complete token",
+            "accepted": true
+        },
+        {
+            "name": "empty scope",
+            "claims": {
+                "scope": ""
+            },
+            "accepted": true
+        },
+        {
+            "name": "audience list",
+            "claims": {
+                "aud": ["https://other.example.test", "https://app.example.test"]
+            },
+            "accepted": true
+        },
+        {
+            "name": "issued-at is metadata, not an activation time",
+            "claims": {
+                "iat": 4102444800
+            },
+            "accepted": true
+        },
+        {
+            "name": "missing email",
+            "omit": ["email"],
+            "accepted": false
+        },
+        {
+            "name": "missing jti",
+            "omit": ["jti"],
+            "accepted": false
+        },
+        {
+            "name": "missing scope",
+            "omit": ["scope"],
+            "accepted": false
+        },
+        {
+            "name": "missing siteId",
+            "omit": ["siteId"],
+            "accepted": false
+        },
+        {
+            "name": "missing aud",
+            "omit": ["aud"],
+            "accepted": false
+        },
+        {
+            "name": "missing iss",
+            "omit": ["iss"],
+            "accepted": false
+        },
+        {
+            "name": "missing iat",
+            "omit": ["iat"],
+            "accepted": false
+        },
+        {
+            "name": "missing exp",
+            "omit": ["exp"],
+            "accepted": false
+        },
+        {
+            "name": "empty email",
+            "claims": {
+                "email": ""
+            },
+            "accepted": false
+        },
+        {
+            "name": "empty jti",
+            "claims": {
+                "jti": ""
+            },
+            "accepted": false
+        },
+        {
+            "name": "empty siteId",
+            "claims": {
+                "siteId": ""
+            },
+            "accepted": false
+        },
+        {
+            "name": "empty iss",
+            "claims": {
+                "iss": ""
+            },
+            "accepted": false
+        },
+        {
+            "name": "non-string scope",
+            "claims": {
+                "scope": []
+            },
+            "accepted": false
+        },
+        {
+            "name": "non-string identity",
+            "claims": {
+                "email": 42
+            },
+            "accepted": false
+        },
+        {
+            "name": "wrong issuer",
+            "claims": {
+                "iss": "https://other-sso.example.test"
+            },
+            "accepted": false
+        },
+        {
+            "name": "wrong audience",
+            "claims": {
+                "aud": "https://other-app.example.test"
+            },
+            "accepted": false
+        },
+        {
+            "name": "empty audience list",
+            "claims": {
+                "aud": []
+            },
+            "accepted": false
+        },
+        {
+            "name": "invalid audience member",
+            "claims": {
+                "aud": ["https://app.example.test", ""]
+            },
+            "accepted": false
+        },
+        {
+            "name": "non-string audience member",
+            "claims": {
+                "aud": ["https://app.example.test", 42]
+            },
+            "accepted": false
+        },
+        {
+            "name": "string issued-at",
+            "claims": {
+                "iat": "1609459200"
+            },
+            "accepted": false
+        },
+        {
+            "name": "boolean issued-at",
+            "claims": {
+                "iat": true
+            },
+            "accepted": false
+        },
+        {
+            "name": "string expiry",
+            "claims": {
+                "exp": "4102444800"
+            },
+            "accepted": false
+        },
+        {
+            "name": "boolean expiry",
+            "claims": {
+                "exp": true
+            },
+            "accepted": false
+        },
+        {
+            "name": "expired token",
+            "claims": {
+                "exp": 1
+            },
+            "accepted": false
+        },
+        {
+            "name": "not yet valid",
+            "claims": {
+                "nbf": 4102444800
+            },
+            "accepted": false
+        },
+        {
+            "name": "wrong signing secret",
+            "signingSecret": "other-contract-test-secret-0123456789",
+            "accepted": false
+        },
+        {
+            "name": "wrong signing algorithm",
+            "algorithm": "HS384",
+            "accepted": false
+        },
+        {
+            "name": "null iat",
+            "claims": {
+                "iat": null
+            },
+            "accepted": false
+        },
+        {
+            "name": "array iat",
+            "claims": {
+                "iat": []
+            },
+            "accepted": false
+        },
+        {
+            "name": "object iat",
+            "claims": {
+                "iat": {}
+            },
+            "accepted": false
+        },
+        {
+            "name": "null exp",
+            "claims": {
+                "exp": null
+            },
+            "accepted": false
+        },
+        {
+            "name": "array exp",
+            "claims": {
+                "exp": []
+            },
+            "accepted": false
+        },
+        {
+            "name": "object exp",
+            "claims": {
+                "exp": {}
+            },
+            "accepted": false
+        },
+        {
+            "name": "not-before in the past",
+            "claims": {
+                "nbf": 1609459200
+            },
+            "accepted": true
+        },
+        {
+            "name": "string not-before",
+            "claims": {
+                "nbf": "1609459200"
+            },
+            "accepted": false
+        },
+        {
+            "name": "boolean not-before",
+            "claims": {
+                "nbf": true
+            },
+            "accepted": false
+        },
+        {
+            "name": "null not-before",
+            "claims": {
+                "nbf": null
+            },
+            "accepted": false
+        },
+        {
+            "name": "array not-before",
+            "claims": {
+                "nbf": []
+            },
+            "accepted": false
+        },
+        {
+            "name": "object not-before",
+            "claims": {
+                "nbf": {}
+            },
+            "accepted": false
+        },
+        {
+            "name": "not-before at the current second",
+            "claims": {
+                "nbf": 1800000000
+            },
+            "accepted": true
+        },
+        {
+            "name": "fractional not-before in the next second",
+            "claims": {
+                "nbf": 1800000000.5
+            },
+            "accepted": false
+        },
+        {
+            "name": "fractional not-before in the previous second",
+            "claims": {
+                "nbf": 1799999999.5
+            },
+            "accepted": true
+        },
+        {
+            "name": "expiry at the current second",
+            "claims": {
+                "exp": 1800000000
+            },
+            "accepted": false
+        },
+        {
+            "name": "fractional expiry in the next second",
+            "claims": {
+                "exp": 1800000000.5
+            },
+            "accepted": true
+        },
+        {
+            "name": "fractional expiry in the previous second",
+            "claims": {
+                "exp": 1799999999.5
+            },
+            "accepted": false
+        },
+        {
+            "name": "string subject",
+            "claims": {
+                "sub": "person@example.test"
+            },
+            "accepted": true
+        },
+        {
+            "name": "non-string subject",
+            "claims": {
+                "sub": 42
+            },
+            "accepted": false
+        },
+        {
+            "name": "null subject",
+            "claims": {
+                "sub": null
+            },
+            "accepted": false
+        },
+        {
+            "name": "uninterpreted application claims",
+            "claims": {
+                "roles": ["reader"],
+                "displayName": "Person"
+            },
+            "accepted": true
+        }
+    ]
+}

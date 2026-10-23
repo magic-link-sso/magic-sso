@@ -26,6 +26,8 @@ function isAuthPayload(payload: JWTPayload): payload is AuthPayload {
         isNonEmptyString(payload.siteId) &&
         hasAudience(payload.aud) &&
         isNonEmptyString(payload.iss) &&
+        (payload.sub === undefined || typeof payload.sub === 'string') &&
+        (payload.nbf === undefined || Number.isFinite(payload.nbf)) &&
         Number.isFinite(payload.iat) &&
         Number.isFinite(payload.exp)
     );

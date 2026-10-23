@@ -4,7 +4,7 @@
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
@@ -109,11 +109,12 @@ describe('@magic-link-sso/core package', () => {
         packageLifecycleTimeout,
     );
 
-    it('bundles the portable entrypoint for a Web runtime without Node imports', async () => {
+    it('bundles only core and jose for a Web runtime without ambient configuration', async () => {
         const result = await build({
             bundle: true,
             entryPoints: [resolve(packageDirectory, 'dist/index.js')],
             format: 'esm',
+            metafile: true,
             platform: 'browser',
             write: false,
         });
@@ -124,6 +125,13 @@ describe('@magic-link-sso/core package', () => {
         }
 
         expect(output).not.toContain('node:');
+        expect(output).not.toMatch(/\bprocess\s*(?:\.|\[)/u);
+        for (const input of Object.keys(result.metafile.inputs)) {
+            const path = resolve(input);
+            const coreSource = path.startsWith(`${resolve(packageDirectory, 'dist')}${sep}`);
+            const joseSource = path.includes(`${sep}node_modules${sep}jose${sep}`);
+            expect(coreSource || joseSource, `Non-portable dependency: ${input}`).toBe(true);
+        }
     });
 
     it(
