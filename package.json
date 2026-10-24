@@ -3,7 +3,7 @@
     "private": true,
     "scripts": {
         "audit": "pnpm run audit:js && pnpm run audit:python",
-        "audit:js": "pnpm audit -P",
+        "audit:js": "pnpm audit",
         "audit:python": "node scripts/audit-python.mjs",
         "build": "turbo run build",
         "check": "turbo run lint format:check build && turbo run typecheck && pnpm run test && pnpm run python:check",

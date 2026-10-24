@@ -54,6 +54,22 @@ pnpm release:prepare -- 0.9.0
 
 ## Verification commands
 
+`pnpm run audit` runs the full `pnpm audit` check, including development
+dependencies, followed by the Python runtime dependency audit.
+
+To update dependencies, preview with `pnpm deps:upgrade` and apply with
+`pnpm deps:upgrade -- --apply`. Applying also refreshes transitive JavaScript
+dependencies within their declared ranges, even when no manifest versions
+change. Run `pnpm install` afterwards to sync installed packages with the new
+lockfile. The upgrade helper keeps peer compatibility ranges unchanged unless
+`--include-peer` is passed; a dependency also used for development still gets
+updated in `devDependencies`.
+
+An upgrade is not a guarantee of a clean audit: upstream exact pins, workspace
+overrides, and the 24-hour release cooldown can still prevent a fixed version
+from being selected. Review the reported dependency paths and add a targeted
+workspace override when necessary, then install and rerun the audit.
+
 Run these from the repository root:
 
 ```sh

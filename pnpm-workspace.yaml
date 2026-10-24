@@ -67,18 +67,15 @@ overrides:
     nodemailer@<10.0.9: ^10.0.16
     qs@>=2.2.5 <6.16.0: ^6.16.0
     sharp@<0.35.5: ^0.35.5
-    simple-git@<4.0.1: ^4.0.1
-    svgo@>=4.0.0 <4.1.0: ^4.1.0
     undici@>=7.0.0 <7.29.1: ^7.29.1
     vite@>=7.0.0 <=7.3.1: '>=7.3.2'
     vite@>=7.1.0 <=7.3.1: '>=7.3.2'
     vite@>=8.0.0 <=8.1.5: '>=8.1.6'
+    vite@>=8.3.0 <8.3.3: ^8.3.5
     vite-node>vite: 8.3.4
 
 patchedDependencies:
-    '@nuxt/devtools@3.4.2': patches/@nuxt__devtools@3.4.2.patch
     listhen@1.10.1: patches/listhen@1.10.1.patch
-    nitropack@2.13.4: patches/nitropack@2.13.4.patch
     nitropack@2.13.5: patches/nitropack@2.13.5.patch
 
 packageExtensions:

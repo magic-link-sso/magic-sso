@@ -122,6 +122,119 @@ describe('JS dependency planning', () => {
         expect(reject).not.toContain('tilde-dep');
     });
 
+    it('allows upgrading a dev dependency that also declares peer compatibility', () => {
+        expect(
+            collectJsRejectNames(
+                {
+                    devDependencies: { nuxt: '^4.6.0' },
+                    peerDependencies: { nuxt: '^4.2.0' },
+                },
+                false,
+            ),
+        ).not.toContain('nuxt');
+        expect(
+            buildJsChanges(
+                {
+                    devDependencies: { nuxt: '^4.6.0' },
+                    peerDependencies: { nuxt: '^4.2.0' },
+                },
+                { nuxt: '^4.6.2' },
+                false,
+            ),
+        ).toEqual([{ dependency: 'nuxt', next: '^4.6.2', previous: '^4.6.0' }]);
+    });
+
+    it.each([false, true])(
+        'preserves rejected specs across dependency sections (includePeer=%s)',
+        (includePeer) => {
+            const reject = collectJsRejectNames(
+                {
+                    dependencies: { shared: 'latest', runtime: '^1.0.0' },
+                    devDependencies: { shared: '^1.0.0', local: 'workspace:*' },
+                    peerDependencies: { shared: '^1.0.0', runtime: '^1.0.0', peer: '^2.0.0' },
+                },
+                includePeer,
+            );
+
+            expect(reject.sort()).toEqual(
+                includePeer ? ['local', 'shared'] : ['local', 'peer', 'shared'],
+            );
+        },
+    );
+
+    it('checks peer specs only when peer updates are included', () => {
+        expect(
+            collectJsRejectNames(
+                {
+                    devDependencies: { shared: '^1.0.0' },
+                    peerDependencies: { shared: 'latest', local: 'workspace:*' },
+                },
+                true,
+            ).sort(),
+        ).toEqual(['local', 'shared']);
+        expect(collectJsRejectNames({}, false)).toEqual([]);
+    });
+
+    it.each([false, true])(
+        'refreshes the entire JS lockfile only on apply, even without manifest changes (apply=%s)',
+        async (apply) => {
+            const rootDir = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-lock-'));
+            await mkdir(path.join(rootDir, 'packages'));
+            await mkdir(path.join(rootDir, 'examples'));
+            await writeFile(path.join(rootDir, 'package.json'), '{"private":true}\n');
+            const runCommandImpl = vi.fn();
+
+            await expect(
+                updateJsDependencies({
+                    apply,
+                    includePeer: false,
+                    mode: 'compatible',
+                    rootDir,
+                    runNcu: async (): Promise<Record<string, string>> => ({}),
+                    runCommandImpl,
+                }),
+            ).resolves.toEqual([]);
+
+            if (apply) {
+                expect(runCommandImpl).toHaveBeenCalledExactlyOnceWith(
+                    'pnpm',
+                    [
+                        'update',
+                        '--recursive',
+                        '--include-workspace-root',
+                        '--lockfile-only',
+                        '--no-save',
+                        '--ignore-scripts',
+                    ],
+                    { cwd: rootDir, env: process.env },
+                );
+            } else {
+                expect(runCommandImpl).not.toHaveBeenCalled();
+            }
+            expect(await readFile(path.join(rootDir, 'package.json'), 'utf8')).toBe(
+                '{"private":true}\n',
+            );
+        },
+    );
+
+    it('reports a failed lockfile refresh as a failed upgrade', async () => {
+        const rootDir = await mkdtemp(path.join(tmpdir(), 'magic-sso-upgrade-lock-'));
+        await mkdir(path.join(rootDir, 'packages'));
+        await mkdir(path.join(rootDir, 'examples'));
+        await writeFile(path.join(rootDir, 'package.json'), '{"private":true}\n');
+
+        await expect(
+            updateJsDependencies({
+                apply: true,
+                includePeer: false,
+                mode: 'compatible',
+                rootDir,
+                runNcu: async (): Promise<Record<string, string>> => ({}),
+                runCommandImpl: vi.fn().mockRejectedValue(new Error('registry unavailable')),
+            }),
+        ).rejects.toThrow('registry unavailable');
+    });
+
     it('builds changes for exact, caret, and tilde upgrades while ignoring skipped specs', async () => {
         const manifest = JSON.parse(await readFixture('sample-js-package.json'));
         const changes = buildJsChanges(
@@ -242,6 +355,7 @@ describe('JS dependency planning', () => {
                 mode: 'compatible',
                 rootDir: tempRoot,
                 runNcu,
+                runCommandImpl: vi.fn(),
             }),
         ).resolves.toEqual([
             {

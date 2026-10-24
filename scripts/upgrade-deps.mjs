@@ -61,7 +61,9 @@ export function parseCliArgs(argv) {
                 'Usage: node scripts/upgrade-deps.mjs <compatible|latest> [--apply] [--include-peer] [--include-python-package]',
                 '',
                 'JS upgrades are planned with npm-check-updates, filtered through a 24h cooldown',
-                'to match pnpm minimumReleaseAge, then applied through pnpm lockfile resolution.',
+                'to match pnpm minimumReleaseAge. --apply also refreshes transitive JS dependencies',
+                'in the lockfile, even when no package.json versions change.',
+                'Run pnpm install after applying, then pnpm run audit to check for remaining advisories.',
                 '',
                 'Examples:',
                 '  pnpm deps:upgrade',
@@ -134,26 +136,18 @@ export async function findJsPackageFiles(rootDir) {
  * @returns {string[]}
  */
 export function collectJsRejectNames(manifest, includePeer) {
-    /** @type {Set<string>} */
-    const reject = new Set();
     const sections = includePeer
         ? ['dependencies', 'devDependencies', 'peerDependencies']
-        : ['dependencies', 'devDependencies', 'peerDependencies'];
+        : ['dependencies', 'devDependencies'];
+    const reject = new Set(
+        sections.flatMap((section) =>
+            collectRejectedVersionedDependencies(manifest[section] ?? {}),
+        ),
+    );
 
-    for (const section of sections) {
-        const dependencies = manifest[section];
-
-        if (!dependencies) {
-            continue;
-        }
-
-        for (const [name, specifier] of Object.entries(dependencies)) {
-            if (!includePeer && section === 'peerDependencies') {
-                reject.add(name);
-                continue;
-            }
-
-            if (specifier === 'latest' || specifier.startsWith('workspace:')) {
+    if (!includePeer) {
+        for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+            if (!manifest.dependencies?.[name] && !manifest.devDependencies?.[name]) {
                 reject.add(name);
             }
         }
@@ -634,11 +628,12 @@ export async function loadNcuRun() {
  *   mode: 'compatible' | 'latest';
  *   rootDir: string;
  *   runNcu: (options: Record<string, unknown>) => Promise<Record<string, string>>;
+ *   runCommandImpl?: typeof runCommand;
  * }} options
  * @returns {Promise<Array<{ changes: DependencyChange[]; file: string }>>}
  */
 export async function updateJsDependencies(options) {
-    const { apply, includePeer, mode, rootDir, runNcu } = options;
+    const { apply, includePeer, mode, rootDir, runNcu, runCommandImpl = runCommand } = options;
     const packageFiles = await findJsPackageFiles(rootDir);
     const rootPackageFile = path.join(rootDir, 'package.json');
     /** @type {Array<{ changes: DependencyChange[]; file: string }>} */
@@ -681,6 +676,21 @@ export async function updateJsDependencies(options) {
         }
     } finally {
         process.setMaxListeners(previousMaxListeners);
+    }
+
+    if (apply) {
+        await runCommandImpl(
+            'pnpm',
+            [
+                'update',
+                '--recursive',
+                '--include-workspace-root',
+                '--lockfile-only',
+                '--no-save',
+                '--ignore-scripts',
+            ],
+            { cwd: rootDir, env: process.env },
+        );
     }
 
     return results;
@@ -834,16 +844,12 @@ export async function runUpgradeWorkflow(options) {
         rootDir,
     });
 
-    if (options.apply && jsResults.length > 0) {
-        await runCommand('pnpm', ['install', '--lockfile-only'], {
-            cwd: rootDir,
-            env: process.env,
-        });
-    }
-
     console.log(`Mode: ${options.mode}${options.apply ? ' (apply)' : ' (preview)'}`);
     console.log(formatResults('JS', jsResults));
     console.log(formatResults('Python', pythonResults));
+    if (options.apply) {
+        console.log('Lockfiles refreshed. Run pnpm install, then pnpm run audit.');
+    }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

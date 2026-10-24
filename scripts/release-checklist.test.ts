@@ -54,7 +54,7 @@ describe('release security checks', () => {
         };
 
         expect(packageJson.scripts?.['audit']).toBe('pnpm run audit:js && pnpm run audit:python');
-        expect(packageJson.scripts?.['audit:js']).toBe('pnpm audit -P');
+        expect(packageJson.scripts?.['audit:js']).toBe('pnpm audit');
         expect(packageJson.scripts?.['audit:python']).toBe('node scripts/audit-python.mjs');
     });
 
@@ -78,12 +78,14 @@ describe('release security checks', () => {
         expect(workspace).toContain('esbuild@>=0.27.3 <0.28.1:');
         expect(workspace).toContain('nodemailer@<10.0.9: ^10.0.16');
         expect(workspace).toContain('compression@<1.8.2: ^1.8.2');
-        expect(workspace).toContain('simple-git@<4.0.1: ^4.0.1');
+        expect(workspace).not.toContain('simple-git@<4.0.1:');
+        expect(workspace).not.toContain('svgo@>=4.0.0 <4.1.0:');
         expect(workspace).toContain('sharp@<0.35.5: ^0.35.5');
         expect(workspace).toContain('miniflare>sharp: 0.35.5');
         expect(workspace).toContain('miniflare>undici: ^7.29.1');
         expect(workspace).toContain('undici@>=7.0.0 <7.29.1: ^7.29.1');
         expect(workspace).toContain("vite@>=8.0.0 <=8.1.5: '>=8.1.6'");
+        expect(workspace).toContain('vite@>=8.3.0 <8.3.3: ^8.3.5');
         expect(workspace).toContain('vite-node>vite: 8.3.4');
         expect(workspace).toContain('- esbuild@0.28.1');
         expect(workspace).toContain('- nodemailer@10.0.16');

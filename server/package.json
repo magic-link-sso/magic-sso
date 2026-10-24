@@ -35,7 +35,7 @@
         "fastify": "^5.12.7",
         "ioredis": "^5.11.1",
         "jose": "^6.2.13",
-        "nodemailer": "^10.2.0",
+        "nodemailer": "^10.2.1",
         "pino-pretty": "^13.2.0",
         "zod": "^4.6.7"
     },

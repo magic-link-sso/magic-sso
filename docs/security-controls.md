@@ -86,9 +86,10 @@ off a design intent.
   lockfiles in Docker builds. This reduces install-time script risk and keeps
   dependency resolution reproducible.
 
-- Audit scripts track workspace dependency advisories. `pnpm audit -P`, the
-  Python audit helper, and root `pnpm` overrides carry the repository's
-  dependency-security work.
+- `pnpm run audit` checks all JavaScript dependencies, including development
+  tools, with `pnpm audit`, then checks the Django package's locked runtime
+  dependencies with the Python audit helper. Workspace overrides enforce fixes
+  where an upstream package pins a vulnerable version.
 
 - Known vulnerable dependency ranges are overridden at the workspace root.
   Recent fixes include forcing patched versions for packages such as PostCSS,
