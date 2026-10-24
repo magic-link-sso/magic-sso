@@ -1,0 +1,85 @@
+@startuml MagicLinkSSO-Browser-SSO-Flow
+
+title Magic Link SSO Shared Browser Sign-In (Hosted UI)
+hide footbox
+
+participant "User's browser" as Browser
+participant "Application A\n(SDK or Gate)" as AppA
+participant "SSO server" as SSO
+participant "Email inbox" as Email
+participant "Application B\n(SDK or Gate)" as AppB
+
+== Enter Application A Without a Valid Local Session ==
+
+Browser -> AppA: Open protected URL / sign-in start
+AppA -> SSO: GET /sso/capabilities (backend)
+SSO --> AppA: Supported browser SSO capabilities
+AppA -> AppA: Create state + PKCE S256 transaction;\nretain full returnUrl in encrypted cookie
+AppA --> Browser: Set transaction cookie; redirect to issuer
+Browser -> SSO: GET /sso/authorize\nredirectUri, state, codeChallenge, scope
+SSO -> SSO: Validate exact registration;\nread host-only central session cookie
+
+alt Existing identity lacks access and prompt is not login
+    SSO --> Browser: Access denied + explicit account change\n(no automatic email)
+else Existing identity allowed, or fresh verification needed
+    opt No valid central session, or prompt=login
+        Browser -> SSO: Submit email to POST /sso/signin
+        SSO -> SSO: Check current site/scope grant
+        SSO -> Email: Send one-time magic link + optional OTP
+        alt Magic link
+            Email --> Browser: Open GET /sso/verify (preview only)
+            Browser -> SSO: Confirm identity; POST /sso/verify (CSRF)
+        else Email OTP
+            Browser -> SSO: Enter code; POST /sso/otp (CSRF)
+        end
+        SSO -> SSO: Consume email grant once;\ncreate central identity session
+        SSO --> Browser: Set issuer-only HttpOnly session cookie
+    end
+    opt Identity verified and current target grant allowed
+        SSO -> SSO: Issue one-time code bound to\ncentral session, callback, scope and PKCE
+        SSO --> Browser: Redirect to registered callback (code, state)
+        Browser -> AppA: GET /sso/callback?code=...&state=...
+        AppA -> AppA: Validate state + transaction cookie
+        AppA -> SSO: POST /sso/exchange (backend)\n{ code, codeVerifier, redirectUri }
+        SSO -> SSO: Check current session + grant;\nvalidate proof and atomically consume code
+        SSO --> AppA: { accessToken } for application A
+        AppA --> Browser: Set own verified JWT cookie;\nredirect to saved returnUrl
+    end
+end
+
+== Enter Application B ==
+
+Browser -> AppB: Open protected URL / registered start
+ref over Browser, AppB
+    Repeat state/PKCE authorization for B.
+    A valid central identity with B access needs no new email.
+    B exchanges its own code and stores its own JWT cookie.
+end ref
+
+note over Browser, AppB
+Optional /sso/apps launcher lists applications from current grants.
+Its Open links use registered app start routes; launcher sign-in
+creates central identity only. Each app session remains independent.
+end note
+
+== Local and Central Sign-Out ==
+
+opt Sign out of application A
+    Browser -> AppA: POST local logout (same-origin)
+    AppA --> Browser: Clear/revoke local session; public signed-out page
+end
+opt End browser SSO session
+    Browser -> SSO: GET /sso/signout (confirmation only)
+    Browser -> SSO: Confirm; POST /sso/signout (CSRF)
+    SSO -> SSO: Revoke central session and pending codes
+    SSO --> Browser: Clear central cookie; signed-out destination
+end
+
+note over Browser, AppB
+Local logout retains central identity. Central logout prevents new
+automatic sign-ins; existing app JWTs keep their expiry/revocation policy.
+Gate uses namespaced routes; Django uses trailing slashes.
+All issuer browser visits are top-level document navigations.
+end note
+
+@enduml

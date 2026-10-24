@@ -6,6 +6,9 @@ own JWT. Start with two applications and keep their existing local sign-in
 available during rollout. Application-owned forms use the existing protocol
 until the separate bootstrap extension is enabled.
 
+See the [authentication flow diagrams](./authentication-flows.md) for hosted
+sign-in, reuse across applications and application-owned bootstrap.
+
 ## Configure the issuer
 
 Use a dedicated HTTPS hostname, for example `https://login.identity.example`. An

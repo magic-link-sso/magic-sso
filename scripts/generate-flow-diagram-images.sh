@@ -40,3 +40,13 @@ render_diagram \
     "${docs_dir}/MagicLinkSSO-Overview.puml" \
     "${docs_dir}/MagicLinkSSO_Overview_light.png" \
     "${docs_dir}/MagicLinkSSO_Overview_dark.png"
+
+render_diagram \
+    "${docs_dir}/MagicLinkSSO-Browser-SSO-Flow.puml" \
+    "${docs_dir}/MagicLinkSSO_Browser_SSO_Flow_light.png" \
+    "${docs_dir}/MagicLinkSSO_Browser_SSO_Flow_dark.png"
+
+render_diagram \
+    "${docs_dir}/MagicLinkSSO-Bootstrap-Flow.puml" \
+    "${docs_dir}/MagicLinkSSO_Bootstrap_Flow_light.png" \
+    "${docs_dir}/MagicLinkSSO_Bootstrap_Flow_dark.png"

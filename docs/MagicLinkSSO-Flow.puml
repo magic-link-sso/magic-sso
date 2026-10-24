@@ -1,6 +1,6 @@
 @startuml MagicLinkSSO-Flow
 
-title Magic Link SSO Authentication Flow (Magic Link + Optional Email OTP)
+title Magic Link SSO Email Sign-In (Browser SSO Off)
 
 actor User
 participant "Client App\n(Angular / Fastify /\nNext.js / Nuxt / Django)" as Client
@@ -42,12 +42,13 @@ else Cookie missing or invalid
             SSO -> GrantService: Validate without consuming
             SSO --> Client: 200 JSON { email }
             Client -> User: Render no-store confirmation
+            User -> Client: Confirm displayed email identity
             Client -> SSO: POST /verify-email { token }
         else Server-managed callback
             User -> SSO: GET /verify-email?token=...
             SSO -> GrantService: Validate without consuming
             SSO -> User: No-store confirmation;\nHttpOnly token + CSRF cookies
-            User -> SSO: POST /verify-email (CSRF)
+            User -> SSO: Confirm identity; POST /verify-email (CSRF)
         end
         SSO -> GrantService: Validate and atomically consume jti
         SSO --> Client: Access token or trusted verification callback
@@ -56,8 +57,7 @@ else Cookie missing or invalid
             User -> Client: Enter code in already-open app
             Client -> SSO: POST /verify-email/otp\n{ challengeId, code } (JSON)
         else Hosted code field
-            User -> SSO: Enter code in already-open hosted page
-            SSO -> SSO: POST /verify-email/otp (CSRF)
+            User -> SSO: Enter code; POST /verify-email/otp (CSRF)
         end
         SSO -> GrantService: Verify code, expiry, and attempts
         alt Invalid code with attempts remaining
@@ -80,6 +80,12 @@ note over GrantService
 The magic link and OTP are alternate exchanges for one grant.
 Whichever succeeds first consumes its shared jti;
 the other path cannot be replayed.
+end note
+
+note over Client, SSO
+This flow creates the application's session only.
+Shared browser sign-in uses the separate browser SSO flow;
+application-owned shared sign-in also needs bootstrap.
 end note
 
 @enduml

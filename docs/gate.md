@@ -28,24 +28,31 @@ Production shape:
 Flow:
 
 1. The browser requests `https://private.example.com`.
-2. Gate checks its own `httpOnly` cookie.
-3. Anonymous document requests redirect to `/_magicgate/login` or straight to
-   `https://sso.example.com/signin` when direct-use mode is enabled.
-4. The sign-in flow sends an email containing a magic link and, when enabled, an
-   OTP for the page that initiated sign-in.
-5. The user either follows the email link back to
-   `https://private.example.com/_magicgate/verify-email?...` or enters the OTP
-   in the already-open local or hosted sign-in page.
-6. For a link, Gate previews the token with `GET /verify-email?token=...` and
-   the shared `MAGICSSO_PREVIEW_SECRET`, then exchanges it with
-   `POST /verify-email`. For a local OTP form, Gate exchanges the code
-   server-side with `POST /verify-email/otp`. In direct-use mode, the hosted SSO
-   page accepts the code and redirects through Gate's normal verification
-   callback.
-7. Gate validates the returned JWT locally with `auth.jwtSecret`,
-   `expectedAudience`, and `expectedIssuer`.
-8. Gate stores its own auth cookie and redirects to the original `returnUrl`.
-9. Gate proxies authenticated traffic to the private upstream.
+2. Gate validates its own HttpOnly JWT cookie and checks session revocation.
+3. Without a valid local session, browser SSO mode enters
+   `/_magicgate/sso/start`. After capability discovery, Gate uses
+   [hosted browser sign-in](./authentication-flows.md#hosted-browser-sso) or the
+   opt-in
+   [application-owned bootstrap](./authentication-flows.md#application-owned-browser-sso).
+   A central identity with current target access needs no new email.
+4. With browser SSO off, Gate uses the
+   [email sign-in flow](./authentication-flows.md#email-sign-in):
+   `/_magicgate/login` for its local UI or the issuer's `/signin` when
+   direct-use mode is enabled. Magic links use `/_magicgate/verify-email`; local
+   code entry uses `POST /_magicgate/verify-email/otp`.
+5. Gate verifies the resulting JWT's signature, expected issuer and audience,
+   then stores its own auth cookie and returns to the saved full `returnUrl`.
+   Bootstrap stores that cookie before the issuer continuation; its finish
+   callback retains the existing local JWT.
+6. Gate proxies authenticated traffic with forwarded identity headers. Each
+   subsequent protected request passes the same session checks.
+
+Browser SSO takes precedence over `gate.directUse` when supported. In `auto`
+mode, only HTTP 404 or explicitly disabled/unsupported capabilities select
+legacy login before creating state. Discovery failures show an error. Follow the
+[shared browser SSO setup](../gate/README.md#shared-browser-sso-opt-in) and
+[deployment guide](./browser-sso-deployment.md) for policy and exact callback
+registrations.
 
 When the SSO server enables email OTP, local-login Gate keeps the challenge
 identifier in a signed HTTP-only cookie and replaces the email form with one
@@ -63,7 +70,7 @@ on its own.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./MagicLinkSSO_Gate_Flow_dark.png">
   <source media="(prefers-color-scheme: light)" srcset="./MagicLinkSSO_Gate_Flow_light.png">
-  <img alt="Diagram" src="./MagicLinkSSO_Gate_Flow_light.png">
+  <img alt="Magic Link SSO Gate session checks, sign-in modes, proxying and local sign-out" src="./MagicLinkSSO_Gate_Flow_light.png">
 </picture>
 
 ## Gate namespace
@@ -82,6 +89,18 @@ Canonical endpoints:
 - `GET /_magicgate/session`
 - `GET /_magicgate/healthz`
 
+Browser SSO infrastructure routes:
+
+- `GET /_magicgate/sso/start` (also `POST` for application-owned forms)
+- `GET /_magicgate/sso/callback`
+- `GET /_magicgate/signed-out`
+
+Include the configured namespace and public path prefix in registered URLs; the
+paths above use defaults. Local logout in browser SSO mode ends the Gate session
+and lands on its public signed-out page, retaining central identity. The page
+offers explicit sign-in or the issuer's separate browser SSO sign-out
+confirmation. Ending central SSO preserves other apps' existing JWT policy.
+
 Everything outside that namespace is a protected upstream route candidate.
 
 ## Production example
@@ -94,8 +113,8 @@ this:
 id = "private"
 origins = ["https://private.example.com"]
 allowedRedirectUris = [
-  "https://private.example.com/_magicgate/verify-email",
-  "https://private.example.com/*",
+    "https://private.example.com/_magicgate/verify-email",
+    "https://private.example.com/*",
 ]
 allowedEmails = ["friend@example.com"]
 ```

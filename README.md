@@ -41,10 +41,9 @@ Magic Link SSO can protect private resources two ways:
 - framework integration, where the app owns the callback and session handling
 - Gate reverse proxy, where Gate owns the callback and fronts a private upstream
 
-Either way the server checks an emailed grant instead of a password or HTTP
-Basic Auth. Every email carries a magic link. With optional OTP enabled it also
-carries a short code you can type into the app or hosted page that started
-sign-in.
+First sign-in verifies your email with a magic link or optional short code. With
+shared browser sign-in enabled, another allowed application can reuse that
+verified identity. Each application keeps its own session and permissions.
 
 If you are deciding between Magic Link SSO, Better Auth, Keycloak, or a broader
 identity platform, see
@@ -66,57 +65,30 @@ identity platform, see
 
 ## How it works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/MagicLinkSSO_Flow_dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="./docs/MagicLinkSSO_Flow_light.png">
-  <img alt="Magic Link SSO sign-in flow diagram" src="./docs/MagicLinkSSO_Flow_light.png">
-</picture>
+The app or Gate checks its session before serving protected content. When
+sign-in is needed, you confirm your email on a hosted page or in the
+application's own form. A successful confirmation creates the application's
+session and returns you to the requested page.
 
-Participants:
+Every sign-in email carries a magic link. Optional email OTP adds a short code
+you can enter on the page that started sign-in. The link and code spend the same
+one-time grant; OTP is disabled by default.
 
-- User
-- Client app (Angular, Fastify, Next.js, Nuxt, or Django)
-- SSO server
-- Email server
-- Token service
-
-Flows:
-
-1. Redirect flow: the client checks its auth cookie and redirects
-   unauthenticated users to the hosted `/signin` page. The SSO server resolves
-   the target site, checks access rules, creates one email verification grant,
-   and sends its magic link plus an optional OTP. The link or code consumes the
-   same one-time grant before the client stores the resulting auth cookie.
-2. API flow: the client renders its own login form and posts
-   `{ email, returnUrl, verifyUrl, scope? }` to the SSO server. The remaining
-   flow is the same as the redirect flow. When OTP is enabled, the JSON response
-   includes public challenge metadata so the app can replace the email form with
-   one code field and exchange the code server-side.
-3. Server-managed verify flow: the built-in hosted `/verify-email` page lands on
-   a no-store confirmation page that stores the email token in a temporary
-   `HttpOnly` cookie, removes it from the URL, and completes sign-in with
-   `POST /verify-email` before redirecting back to the trusted return URL.
-   Alternatively, the already-open hosted `/signin` page can submit the email
-   code to `POST /verify-email/otp`.
-
-OTP is disabled by default. It is another way to spend the emailed grant, not a
-second authentication factor. The `rotate` resend policy keeps one active
-challenge per login context, where a context is the combination of normalized
-email, site, scope, return URL, and verify URL. A resend invalidates the
-previous code for that context only. Other contexts keep their own challenges.
+See the [authentication flow diagrams](./docs/authentication-flows.md) for the
+email, shared browser and application-owned flows, or the
+[Gate request flow](./docs/gate.md#request-flow) for private upstreams.
 
 ### Shared browser sign-in
 
 Opt-in browser SSO lets a verified browser enter another allowed application
 without another email. Applications keep separate JWTs, grants and local logout.
-Gate and all SDK examples support hosted link/OTP sign-in and opt-in
-application-owned forms through the browser-bound bootstrap extension. See the
+Gate and all SDK examples support hosted sign-in and opt-in application-owned
+forms. See the
 [deployment, diagnostics and rollback guide](docs/browser-sso-deployment.md) and
 the [versioned protocol contract](docs/browser-sso-contract.md).
 
-An optional **My applications** launcher at `/sso/apps` shows the current
-browser identity and applications allowed by live grants. Configure an explicit
-name, destination and optional scope under `[sites.launcher]`; see
+An optional **My applications** launcher shows the current browser identity and
+applications it can access. See
 [launcher setup and account controls](docs/browser-sso-deployment.md#my-applications-launcher).
 
 ## Getting started
@@ -149,18 +121,18 @@ will connect.
     trustProxy = false
     verifyTokenStoreDir = "/tmp/magic-sso/verification-tokens"
     signInEmailRateLimitStoreDir = "/tmp/magic-sso/signin-email-rate-limit"
-
+    
     [server.securityState]
     # Keep "file" for a single instance. Switch to "redis" so replay
     # protection and sign-in throttling stay enforced across multiple nodes.
     adapter = "file"
     # redisUrl = "redis://127.0.0.1:6379/0"
     keyPrefix = "magic-sso"
-
+    
     # Optional internal reload hook for manager-driven applies.
     # [server.reload]
     # secret = "replace-me-with-a-dedicated-long-random-reload-secret"
-
+    
     [auth]
     jwtSecret = "replace-me-with-a-long-random-jwt-secret"
     jwtExpiration = "1h"
@@ -168,7 +140,7 @@ will connect.
     emailSecret = "replace-me-with-a-different-long-random-email-secret"
     previewSecret = "replace-me-with-a-different-long-random-preview-secret"
     emailExpiration = "15m"
-
+    
     # Optional: lets users type a short email code back into an already-open
     # mobile/PWA session. It remains an alternate exchange for the same grant.
     [auth.otp]
@@ -180,28 +152,31 @@ will connect.
     resendStrategy = "rotate"
     # Required only when enabled; it must be a dedicated 32+ character secret.
     # secret = "replace-me-with-a-dedicated-long-random-otp-secret"
-
+    
     [cookie]
     name = "magic-sso"
     httpOnly = true
     sameSite = "lax"
     secure = false
-
+    
     [email]
     from = "owner@example.com"
     signature = "Magic Link SSO"
-
+    
     [email.smtp]
     host = "smtp.example.com"
     port = 587
     user = "smtp-user"
     pass = "smtp-password"
     secure = false
-
+    
     [[sites]]
     id = "local"
     origins = ["http://localhost:8080"]
-    allowedRedirectUris = ["http://localhost:8080/verify-email", "http://localhost:8080/*"]
+    allowedRedirectUris = [
+        "http://localhost:8080/verify-email",
+        "http://localhost:8080/*",
+    ]
     allowedEmails = ["you@example.com"]
     ```
 
@@ -591,7 +566,10 @@ scope. `[[sites.accessRules]]` can grant narrower per-email scopes:
 [[sites]]
 id = "gallery"
 origins = ["https://gallery.example.com"]
-allowedRedirectUris = ["https://gallery.example.com/verify-email", "https://gallery.example.com/app/*"]
+allowedRedirectUris = [
+    "https://gallery.example.com/verify-email",
+    "https://gallery.example.com/app/*",
+]
 allowedEmails = ["owner@example.com"]
 
 [[sites.accessRules]]

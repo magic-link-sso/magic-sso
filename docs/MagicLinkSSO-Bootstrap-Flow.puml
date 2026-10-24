@@ -1,0 +1,75 @@
+@startuml MagicLinkSSO-Bootstrap-Flow
+
+title Magic Link SSO Application-Owned Browser Sign-In (Bootstrap)
+hide footbox
+
+participant "User's browser" as Browser
+participant "Application\n(SDK or Gate)" as App
+participant "SSO server" as SSO
+
+== Prepare the Application Form ==
+
+Browser -> App: Enter SSO start route
+App -> SSO: GET /sso/capabilities (backend)
+SSO --> App: Browser SSO + bootstrap capability
+App --> Browser: Set encrypted state/PKCE transaction;\nredirect to /sso/authorize?loginUi=app-owned&...
+Browser -> SSO: GET /sso/authorize
+note over Browser, SSO
+An allowed existing central identity takes the normal code/exchange
+flow instead. The sequence below starts without a reusable identity.
+end note
+SSO --> Browser: Set browser binding; redirect to registered\nstart (ssoPrepared=1, state, requestId)
+Browser -> App: GET prepared start
+App -> SSO: POST /sso/bootstrap/inspect (backend)\nrequestId, codeVerifier, redirectUri
+SSO --> App: Validated request context
+App --> Browser: Store encrypted continuation; show local form
+
+== Establish the Local Application Session ==
+
+Browser -> App: Submit email
+App -> SSO: POST /signin (backend)\nemail, trusted URLs, scope, browserSso context
+SSO -> SSO: Check grant; send magic link + optional OTP
+ref over Browser, SSO
+    Local magic-link preview and explicit confirmation,
+    or OTP entry in the application's existing form
+end ref
+App -> SSO: POST /verify-email or /verify-email/otp\nwith matching browserSso context (backend)
+SSO -> SSO: Consume email grant once; issue local JWT;\nissue bootstrap ticket when context is valid
+SSO --> App: { accessToken, browserSso: { bootstrapTicket } }\nor valid accessToken with bootstrap failure
+App -> App: Verify JWT; bind continuation to its exact hash
+App --> Browser: Set local JWT cookie before shared continuation
+
+== Establish the Shared Browser Identity ==
+
+opt Bootstrap ticket available
+    Browser -> SSO: Top-level GET /sso/bootstrap/redeem\nticket, redirectUri, state
+    opt Different/missing browser binding or different central account
+        SSO --> Browser: Show verified account for explicit confirmation
+        Browser -> SSO: Confirm; POST /sso/bootstrap/redeem (CSRF)
+    end
+    SSO -> SSO: Recheck current grants; atomically consume ticket;\nreplace central session
+    SSO --> Browser: Set issuer-only central cookie
+    alt Original browser binding matches
+        SSO --> Browser: Redirect to app callback\nstate, browserSso=complete, HMAC receipt
+        Browser -> App: GET registered SSO callback
+        App -> App: Require transaction + finish continuation;\nverify existing local JWT, exact hash and receipt
+        App --> Browser: Clear transaction/continuation; saved returnUrl
+        note right of App
+            Finish retains the existing local JWT.
+            It sets no authentication cookie
+            and performs no second JWT exchange.
+        end note
+    else Ticket confirmed in another browser
+        SSO --> Browser: Offer registered start URI for fresh app state
+    end
+end
+
+note over Browser, SSO
+Missing/expired ticket, denied bootstrap, or a lost result leaves
+a valid local JWT usable. Offer app entry and fresh hosted sign-in;
+never retry a consumed ticket or email grant.
+Central logout cancels outstanding bootstrap tickets.
+Later entry into another app uses normal state/PKCE authorization.
+end note
+
+@enduml

@@ -1,104 +1,76 @@
 @startuml MagicLinkSSO-Gate-Flow
 
-title Magic Link SSO Gate Flow
+title Magic Link SSO Gate Request Flow
+hide footbox
 
-actor User
-participant "Browser" as Browser
+participant "User's browser" as Browser
 participant "Magic Link SSO Gate" as Gate
-participant "SSO Server" as SSO
-participant "Email Server" as Email
-participant "Private Upstream\n(app or static site)" as Upstream
+participant "SSO server" as SSO
+participant "Private upstream\n(app or static site)" as Upstream
 
-== Anonymous Request ==
+Browser -> Gate: Open protected page
+Gate -> Gate: Validate own JWT cookie\nand check session revocation
 
-User -> Browser: Open https://private.example.com/
-Browser -> Gate: GET /
-Gate -> Gate: Check auth cookie
-
-alt Cookie exists and is valid
-    Gate -> Upstream: Proxy request with forwarded identity headers
-    Upstream --> Gate: HTML / assets / API / SSE / websocket handshake
-    Gate --> Browser: Protected upstream response
-else Cookie missing or invalid
-    alt Direct-use enabled
-        Gate --> Browser: Redirect to https://sso.example.com/signin\nwith normalized returnUrl + verifyUrl
-        Browser -> SSO: GET /signin
-        SSO --> Browser: Hosted sign-in page
-        Browser -> SSO: Submit email address
-    else Local Gate login enabled
-        Gate --> Browser: Redirect to /_magicgate/login?returnUrl=...
-        Browser -> Gate: GET /_magicgate/login
-        Gate --> Browser: Local sign-in page
-        Browser -> Gate: POST /_magicgate/signin
-        Gate -> SSO: POST /signin\n{ email, normalized returnUrl, verifyUrl }
-    end
-
-    SSO -> SSO: Resolve site from returnUrl / verifyUrl\nand authorize email + default scope
-    SSO -> Email: Send magic link + optional OTP
-    opt Local Gate login and email OTP enabled
-        SSO --> Gate: Public OTP challenge metadata
-        Gate -> Gate: Store challenge in signed HttpOnly cookie
-        Gate --> Browser: Replace email form with one OTP field
-    end
-    Email --> User: Receive sign-in email
-
-    alt Magic link
-        User -> Email: Click magic link
-        Email -> Browser: Open /_magicgate/verify-email\n?token=...&returnUrl=...
-        Browser -> Gate: GET /_magicgate/verify-email?token=...
-        Gate -> SSO: GET /verify-email?token=...\n(preview secret, JSON)
-        SSO --> Gate: 200 JSON { email }
-        Gate -> Gate: Set temporary token + signed CSRF cookies
-        Gate --> Browser: No-store confirmation page\nwith token removed from URL
-        Browser -> Gate: POST /_magicgate/verify-email
-        Gate -> SSO: POST /verify-email { token }
-        SSO --> Gate: 200 JSON { accessToken }
-    else OTP on local Gate login
-        User -> Browser: Enter code in existing Gate page
-        Browser -> Gate: POST /_magicgate/verify-email/otp
-        Gate -> Gate: Read signed challenge cookie
-        Gate -> SSO: POST /verify-email/otp\n{ challengeId, code }
-        SSO --> Gate: Access token or generic error
-        alt Invalid or expired code
-            Gate --> Browser: Return to code form;\nuser may start again with another email
-        else Valid code
-            Gate -> Gate: Continue with returned access token
+alt Local session missing or invalid
+    alt Browser SSO selected
+        Gate --> Browser: Redirect to /_magicgate/sso/start\nwith original returnUrl
+        Browser -> Gate: GET /_magicgate/sso/start
+        Gate -> SSO: GET /sso/capabilities (backend)
+        alt Browser SSO supported
+            ref over Browser, SSO
+                Browser SSO flow: hosted email/OTP or central reuse
+                Application-owned forms: bootstrap flow
+                Callback: /_magicgate/sso/callback
+            end ref
+        else auto mode: HTTP 404, disabled or unsupported
+            ref over Browser, SSO: Email sign-in flow (browser SSO off)
+        else Discovery failure or required support missing
+            Gate --> Browser: Sign-in error; offer fresh start
         end
-    else OTP on hosted direct-use page
-        User -> Browser: Enter code in existing hosted SSO page
-        Browser -> SSO: POST /verify-email/otp (CSRF)
-        SSO -> Browser: Redirect to trusted Gate callback\nwith one-time verification token
-        Browser -> Gate: GET /_magicgate/verify-email?token=...
-        Gate -> SSO: Preview then POST /verify-email
-        SSO --> Gate: 200 JSON { accessToken }
+    else Browser SSO off
+        ref over Browser, SSO
+            Email sign-in flow (browser SSO off)
+            Local UI: /_magicgate/login
+            Hosted direct-use UI: SSO /signin
+            Link callback: /_magicgate/verify-email
+            Local OTP: POST /_magicgate/verify-email/otp
+        end ref
     end
 
-    opt Link or code exchange completed successfully
-        Gate -> Gate: Validate JWT locally\n(expected iss + aud + signature)
-        Gate -> Gate: Clear temporary cookies\nand set Gate-managed auth cookie
-        Gate --> Browser: Redirect to original returnUrl
-
-        Browser -> Gate: GET /
-        Gate -> Gate: Check auth cookie
-        Gate -> Upstream: Proxy request with forwarded identity headers
-        Upstream --> Gate: Protected response
-        Gate --> Browser: Protected upstream response
+    opt Sign-in completed successfully
+        Gate -> Gate: Validate returned JWT (iss, aud, signature)\nand set Gate-owned HttpOnly cookie
+        note right of Gate
+            Bootstrap sets this cookie before
+            the issuer continuation; its finish
+            callback retains the existing JWT.
+        end note
+        Gate --> Browser: Redirect to saved returnUrl
+        Browser -> Gate: Request original protected page
+        Gate -> Gate: Validate cookie and revocation
     end
 end
 
-== Authenticated Follow-up ==
-
-Browser -> Gate: Subsequent request for asset / API / static file / SPA route
-Gate -> Gate: Validate auth cookie
-Gate -> Upstream: Proxy request with forwarded identity headers
-Upstream --> Gate: Response
-Gate --> Browser: Response
+opt Local session valid
+    Gate -> Upstream: Proxy with forwarded identity headers
+    Upstream --> Gate: HTML / assets / API / SSE / WebSocket handshake
+    Gate --> Browser: Protected response
+end
 
 note over Gate, Upstream
-The upstream can be a dynamic app-style service (`private1`) or a static site
-(`private2`). In both cases, authentication stays in Gate and the upstream
-remains unaware of the Magic Link SSO flow. Link and OTP completion both end
-with the same Gate-owned, HTTP-only authenticated session.
+Every protected request passes Gate's session check.
+The upstream stays private and does not handle sign-in.
+Auth and SSO transaction cookies are not forwarded upstream.
+end note
+
+== Sign Out ==
+
+Browser -> Gate: POST /_magicgate/logout (same-origin)
+Gate -> SSO: POST /logout (backend, current app JWT)
+Gate --> Browser: Clear local cookie; public signed-out page\n(browser SSO mode enabled)
+note over Browser, SSO
+Central identity is retained. Ending browser SSO requires
+the issuer's separate /sso/signout confirmation.
+Gate paths include any configured namespace and public prefix.
 end note
 
 @enduml

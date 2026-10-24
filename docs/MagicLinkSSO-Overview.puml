@@ -1,32 +1,28 @@
 @startuml MagicLinkSSO-Overview
 
-title Magic Link SSO Overview
+title Magic Link SSO
 
-left to right direction
+top to bottom direction
 
 actor User
-rectangle "Protected App\nor Private Resource" as App
-rectangle "Magic Link SSO" as SSO
-rectangle "Email Inbox" as Email
+rectangle "Magic Link SSO\nVerified email identity" as SSO
+rectangle "Email inbox" as Email
+rectangle "Application A\nOwn application session" as AppA
+rectangle "Application B\nOwn application session" as AppB
 
-User --> App : 1. Open protected page
-App --> SSO : 2. Start sign-in flow\n(framework integration or Gate)
-SSO --> Email : 3. Send magic link\n+ optional short OTP
-Email --> User : 4. Deliver one email verification grant
-User --> App : 5. Complete with link or code\nand return with verified session
-App --> User : 6. Serve protected page,\nAPI, or asset
+User --> SSO : Sign in to an application
+SSO -right-> Email : First sign-in:\nmagic link or optional code
+SSO --> AppA : Verified sign-in
+SSO --> AppB : Optional shared browser sign-in:\nreuse identity without another email
 
-note bottom of App
-The protected target can be:
-- a framework app with direct integration
-- a private upstream behind Magic Link SSO Gate
+note bottom of AppA
+Each application uses a framework
+integration or Magic Link SSO Gate.
 end note
 
-note bottom of SSO
-OTP is disabled by default.
-When enabled, it is an alternate way to
-consume the same one-time email grant,
-not a second authentication factor.
+note bottom of AppB
+Shared browser sign-in is opt-in.
+Each application checks its own access rules.
 end note
 
 @enduml
